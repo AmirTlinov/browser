@@ -10,7 +10,6 @@ from typing import Any
 from ...config import BrowserConfig
 from ..base import SmartToolError, get_session
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step execution handlers
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -29,8 +28,8 @@ def _execute_navigate_step(config: BrowserConfig, step: dict[str, Any]) -> dict[
 
 def _execute_click_step(config: BrowserConfig, step: dict[str, Any]) -> dict[str, Any]:
     """Execute click step."""
-    from .click import click_element
     from ..input import dom_action_click
+    from .click import click_element
 
     if step.get("text") or step.get("role") or step.get("near_text"):
         click_result = click_element(

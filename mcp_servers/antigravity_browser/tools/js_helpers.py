@@ -6,7 +6,6 @@ into pages for element detection, form analysis, and content extraction.
 """
 from __future__ import annotations
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Core DOM helpers
 # ═══════════════════════════════════════════════════════════════════════════════

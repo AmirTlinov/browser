@@ -8,8 +8,8 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from ... import tools as smart_tools
-from ..types import ToolContent, ToolResult
 from ...http_client import http_get
+from ..types import ToolContent, ToolResult
 
 if TYPE_CHECKING:
     from ...config import BrowserConfig
