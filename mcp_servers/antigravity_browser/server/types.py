@@ -55,12 +55,16 @@ class ToolResult:
 
     @classmethod
     def image(cls, data_b64: str, mime_type: str = "image/png") -> ToolResult:
-        """Create result with single image content."""
+        """Create result with single image content. Falls back to text if data is empty."""
+        if not data_b64:
+            return cls.error("Screenshot data is empty")
         return cls(content=[ToolContent(type="image", data=data_b64, mime_type=mime_type)])
 
     @classmethod
     def with_image(cls, text: str, data_b64: str, mime_type: str = "image/png") -> ToolResult:
-        """Create result with text and image content."""
+        """Create result with text and image content. Omits image if data is empty."""
+        if not data_b64:
+            return cls.text(text)
         return cls(
             content=[
                 ToolContent(type="text", text=text),

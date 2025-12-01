@@ -643,3 +643,25 @@ def test_registry_unknown_tool() -> None:
 
     with pytest.raises(KeyError):
         registry.dispatch("nonexistent", cfg, lnchr, {})
+
+
+def test_tool_result_image_empty_fallback() -> None:
+    """Test ToolResult.image returns error when data is empty."""
+    from mcp_servers.antigravity_browser.server.types import ToolResult
+
+    result = ToolResult.image("")
+    assert result.is_error
+    content = result.to_content_list()
+    assert content[0]["type"] == "text"
+    assert "empty" in content[0]["text"].lower()
+
+
+def test_tool_result_with_image_empty_fallback() -> None:
+    """Test ToolResult.with_image returns only text when image is empty."""
+    from mcp_servers.antigravity_browser.server.types import ToolResult
+
+    result = ToolResult.with_image("Some text", "")
+    content = result.to_content_list()
+    assert len(content) == 1
+    assert content[0]["type"] == "text"
+    assert content[0]["text"] == "Some text"
