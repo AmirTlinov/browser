@@ -1,0 +1,49 @@
+---
+assignee: ai
+component: null
+created: 2025-11-23 00:57
+domain: desktop/devtools
+id: TASK-005
+parent: TASK-003
+phase: null
+priority: MEDIUM
+progress: 33
+status: WARN
+tags: []
+title: Подключить MCP MultiTool (MCP-Server-Creator) к Codex CLI
+updated: 2025-11-23 00:59
+---
+
+# Подключить MCP MultiTool (MCP-Server-Creator) к Codex CLI
+
+## Описание
+Добавить локальный сервер mcp-multi-tool (repo /home/amir/Документы/PROJECTS/mcp/MCP-Server-Creator) в конфиг Codex CLI, зафиксировать команду запуска и env, проверить list/get, подготовить к использованию для инспекции MCP.
+
+## Подзадачи
+- [ ] Определить команду запуска mcp-multi-tool и требования
+  - Критерии: Выбрана устойчивая команда stdio (release binary) с корректным cwd/env; Документированы переменные (APP_CONFIG_PROFILE/ALLOW_INSECURE_METRICS_DEV и токены при необходимости)
+  - Тесты: Ручной запуск бинаря --release (ожидаемый silent stdio или лог в stderr)
+  - Блокеры: Нет собранного бинаря или нет доступа к исходникам
+  - Чекпоинты: Критерии=TODO; Тесты=TODO; Блокеры=TODO
+- [x] Прописать [mcp_servers.mcp_multitool] в ~/.codex/config.toml
+  - Критерии: TOML валиден, command/args/cwd/env_vars заданы; Сервер отображается как enabled в codex mcp list
+  - Тесты: codex mcp list; codex mcp get mcp_multitool --json
+  - Блокеры: Нет прав на запись конфигурации или неверный путь к бинарю
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: config.toml: mcp_multitool command/cwd/env_vars/startup_timeout_sec добавлены
+  - Отметки тестов: codex mcp list и codex mcp get mcp_multitool --json успешны
+  - Отметки блокеров: права/путь к ~/.codex/config.toml и бинарю подтверждены
+- [ ] Проверить подключение Codex CLI к mcp_multitool
+  - Критерии: codex mcp list/get выполняются; Сервер стартует без падений (stderr лог допускается); Опционально: при наличии цели можно выполнить list_tools
+  - Тесты: codex mcp list; codex mcp get mcp_multitool --json; Ручной пробный запуск сервера (без токена)
+  - Блокеры: Конфликт версий Rust/бинарь не запускается; Нужны дополнительные токены/конфиги для старта
+  - Чекпоинты: Критерии=OK; Тесты=TODO; Блокеры=TODO
+  - Отметки критериев: config.toml: добавлен блок mcp_multitool (command/cwd/env_vars/startup_timeout_sec)
+
+## Критерии успеха
+- ["codex mcp list","codex mcp get mcp_multitool --json"]
+
+## Риски
+- неверный путь к бинарю
+- требуются токены/конфиги для запуска
+- ошибка TOML

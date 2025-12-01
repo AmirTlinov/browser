@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "antigravity-browser": {
+      "enabled": true,
+      "transport": {
+        "type": "stdio",
+        "command": "./scripts/run_browser_mcp.sh",
+        "args": [],
+        "cwd": ".",
+        "env": {
+          "MCP_QUIET": "1",
+          "MCP_DUMP_FRAMES": "data/outbox/mcp_frames.log"
+        }
+      }
+    }
+  }
+}

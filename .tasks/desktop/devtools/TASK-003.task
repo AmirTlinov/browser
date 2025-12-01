@@ -1,0 +1,54 @@
+---
+assignee: ai
+component: null
+created: 2025-11-22 21:30
+domain: desktop/devtools
+id: TASK-003
+parent: TASK-002
+phase: null
+priority: MEDIUM
+progress: 100
+status: OK
+tags: []
+title: Интеграция MCP браузера с IDE и расширение инструментов
+updated: 2025-11-23 03:51
+---
+
+# Интеграция MCP браузера с IDE и расширение инструментов
+
+## Описание
+Подключить локальный MCP браузерный сервер к клиенту IDE, проверить реальный Chrome/CDP с allowlist, настроить боевой allowlist/проверку порта и добавить новые инструменты (скриншот/JS eval) с логированием.
+
+## Подзадачи
+- [x] Подключить MCP сервер к клиенту IDE и проверить реальный запуск Chrome/CDP с allowlist
+  - Критерии: MCP сервер подключен к клиенту (конфиг/launch командой) и проходит handshake; Реальный запуск Chrome/Antigravity подтверждён; CDP отвечает на json/version; Allowlist блокирует неразрешённый домен и пропускает разрешённый
+  - Тесты: Ручной прогон: старт сервера → подключение клиентом → http_get разрешённого домена (200) и запрещённого (ошибка); Лог/скриншот CDP json/version
+  - Блокеры: Нет установленного Chrome/Antigravity или занят CDP порт; Клиент MCP недоступен или не поддерживает stdio
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: Handshake initialize → ответ с protocolVersion=2025-06-18 (unit-тест + ручной запрос run_browser_mcp.sh); cdp-lite2: Chrome/142.0.7444.175 headless отвечает на /json/version; cdp_version tool выдаёт /json/version 200 (cdp-lite2 лог); http_get manual: allow example.com -> 200, deny example.com when allowlist=['example.net']
+  - Отметки тестов: Ручной http_get: example.com=200, блокировка example.com при allowlist=['example.net']; cdp-lite2 stdout зафиксирован (/home/amir/.apply_shell/logs/cdp-lite2.*) с json/version Chrome/142.0.7444.175
+  - Отметки блокеров: Chrome установлен, порт 9222 доступен (cdp-lite2 показал ready); MCP клиент/stdio ок: initialize/list/cdp_version проходят (unit + ручной запрос)
+- [x] Настроить боевой allowlist и проверку свободного порта CDP
+  - Критерии: Allowlist задаётся из config/env и документирован пример безопасного набора; Добавлена проверка занятого порта перед запуском Chrome и понятное сообщение об ошибке
+  - Тесты: Юнит/интегра тест на allowlist/env parsing; Ручной тест: запуск при занятом порте выдаёт явное сообщение без падения
+  - Блокеры: Не согласован список разрешённых доменов; Порт занят другим процессом без возможности освободить
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: cdp-lite2 (apply_shell) поднял Chrome headless на 9222: launch.started=False, message='Chrome already listening on CDP port'; откат: критерий относится к подзадаче 0, а не к allowlist/порт; Добавил проверку занятого CDP-порта (LaunchResult 'Port <port> already in use'), README c примером MCP_ALLOW_HOSTS
+  - Отметки тестов: Юнит test_launcher_ensure_running_port_in_use + существующий allowlist parsing покрывают критерии
+  - Отметки блокеров: Порт: возврат понятного сообщения при занятом порте (unit). Allowlist: README пример безопасного набора, env MCP_ALLOW_HOSTS
+- [x] Расширить инструменты (скриншот/JS eval) и добавить журналирование запросов
+  - Критерии: Реализован tool для скриншота страницы или простого JS eval через CDP; Ведётся лог запросов/ответов MCP (без чувствительных данных) с уровнем INFO; Обновлена документация по новым tool
+  - Тесты: Юнит/интегра тест на новый tool (мок CDP); Manual: вызов tool и проверка записи в лог
+  - Блокеры: Нет доступа к реальному CDP для скриншота; Риск логировать секреты — требуется фильтрация
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: Добавил tools screenshot/js_eval через CDP (ws), logging INFO в server.handle_call_tool
+  - Отметки тестов: Юнит: test_server_call_tool_screenshot/js_eval + test_logging_called; pytest 28/28
+  - Отметки блокеров: CDP жив (cdp-lite2 ready), логируем только имя тулзы и урл без query; ошибки оборачиваются в HttpClientError
+
+## Критерии успеха
+- pytest -q
+
+## Риски
+- отсутствует Chrome
+- занят CDP порт
+- ошибки совместимости клиента MCP

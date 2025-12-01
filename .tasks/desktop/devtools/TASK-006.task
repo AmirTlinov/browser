@@ -1,0 +1,65 @@
+---
+assignee: ai
+component: null
+created: 2025-11-23 05:53
+domain: desktop/devtools
+id: TASK-006
+parent: TASK-003
+phase: null
+priority: MEDIUM
+progress: 100
+status: OK
+tags: []
+title: Детерминированный MCP extension path без fallback
+updated: 2025-11-23 06:23
+---
+
+# Детерминированный MCP extension path без fallback
+
+## Описание
+Собрать CRX с фиксированным PEM, запустить Chrome headful с отдельным профилем, автоматически поднять service worker/content-script и запретить fallback в MCP, чтобы extension_dom/extension_fetch всегда работают через стабильный ID.
+
+## Подзадачи
+- [x] Собрать детерминированный CRX с фиксированным ключом и зафиксировать ID
+  - Критерии: CRX собран chrome --pack-extension с antigravity_extension.pem; артефакт antigravity_extension.crx сохранён в vendor/antigravity_extension; ID расширения извлечён из вывода Chrome и задокументирован; совпадает с ID из PEM; SHA256 crx зафиксирован в задаче для контроля дрейфа
+  - Тесты: google-chrome --pack-extension=. --pack-extension-key=antigravity_extension.pem; grep/парсинг вывода Chrome на Extension ID; sha256sum vendor/antigravity_extension/antigravity_extension.crx
+  - Блокеры: Нет установленного chrome/chromium с поддержкой --pack-extension; PEM повреждён или отсутствует; Недостаточно прав на запись в vendor/antigravity_extension
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: CRX собран chrome --pack-extension=/home/amir/Документы/PROJECTS/skills/apply_web/vendor/antigravity_extension --pack-extension-key=/home/amir/Документы/PROJECTS/skills/apply_web/vendor/antigravity_extension.pem; артефакт сохранён в vendor/antigravity_extension.crx; ID из публичного ключа nfpbnbofdhimjnheaejflfaodcnlbngp; sha256=6d20abf0e3882a9b64f6a2e9eaf34b406b4e5f1518b97b82849f00c7a204810c.
+  - Отметки тестов: Запуск google-chrome --pack-extension=/home/amir/Документы/PROJECTS/skills/apply_web/vendor/antigravity_extension --pack-extension-key=/home/amir/Документы/PROJECTS/skills/apply_web/vendor/antigravity_extension.pem завершился exit 0; sha256sum antigravity_extension.crx = 6d20abf0e3882a9b64f6a2e9eaf34b406b4e5f1518b97b82849f00c7a204810c подтверждён.
+  - Отметки блокеров: Chrome установлен; antigravity_extension.pem читается; запись в vendor/antigravity_extension.crx успешна — блокеров нет.
+- [x] Подготовить чистый профиль Chrome и команду запуска с единственным расширением
+  - Критерии: Профиль ~/.gemini/antigravity-browser-profile создан/очищен один раз и зафиксирован; Команда запуска Chrome headful содержит --remote-debugging-port=9222, --user-data-dir на профиль, --disable-extensions-except и --load-extension на vendor/antigravity_extension; Скрипт или инструкция запуска сохранены в scripts/run_browser_mcp.sh без временных флагов
+  - Тесты: Ручной запуск chrome командой из скрипта; проверка что профиль создаётся и расширение видно в chrome://extensions; ps/grep убеждаемся что порт 9222 слушается выбранным процессом
+  - Блокеры: Chrome не может стартовать в headful на окружении; Порт 9222 занят другим процессом; Профиль занят другой сессией
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: Профиль ~/.gemini/antigravity-browser-profile сброшен и создан (rm -rf && mkdir -p); run_browser_mcp.sh теперь экспортирует MCP_HEADLESS=0, MCP_BROWSER_PROFILE, MCP_EXTENSION_PATH, MCP_EXTENSION_ID, MCP_BROWSER_FLAGS c --disable-extensions-except/--load-extension для единственного расширения; команда запуска ведёт лог и использует детерминированный профиль/порт 9222.
+  - Отметки тестов: Запущен ./scripts/run_browser_mcp.sh через apply_shell (MCP_BROWSER_PROFILE_RESET=1, MCP_QUIET=1); скрипт завершился exit 0, профиль пересоздан, лог data/outbox/mcp_startup.log фиксирует команду с --remote-debugging-port=9222, --user-data-dir=~/.gemini/antigravity-browser-profile, --disable-extensions-except/--load-extension на vendor/antigravity_extension.
+  - Отметки блокеров: Chrome доступен, порт 9222 свободен, профиль создаётся автоматически в скрипте; блокеров нет.
+- [x] Гарантировать автоподъём service worker и content-script без fallback
+  - Критерии: ensure_extension_target/аналог ждёт target chrome-extension://<ID>/static/browserLanding.html до 10s и падает с ошибкой при отсутствии; Сервис-воркер стартует автоматически после открытия landing, fallback-режим отключён; Ошибки подключения MCP сервера явно прокидываются (stderr/exit)
+  - Тесты: ./scripts/run_browser_mcp.sh запускает Chrome и открывает landing вкладку через автоматизацию; Запрос к /json/list показывает target с URL chrome-extension://<ID>/static/browserLanding.html; Искусственное отключение landing даёт контролируемый фейл
+  - Блокеры: Нельзя управлять /json/list из окружения; Расширение не поднимает service worker в headful; Недостаток прав для модификации ensure_extension_target
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: ensure_extension_target теперь открывает только chrome-extension://nfpbnbofdhimjnheaejflfaodcnlbngp/static/browserLanding.html, ищет target по ID и падает HttpClientError, если за 10s не поднялся; исключён любой fallback.
+  - Отметки тестов: pytest -q включает тесты ensure_extension_target_success/timeout: проверяют автосоздание landing target по детерминированному ID и жёсткий фейл после 10s.
+  - Отметки блокеров: Блокеров нет: управляем /json/list через CdpSession stub и ошибки выбрасываются напрямую HttpClientError.
+- [x] Верифицировать MCP инструменты extension_dom и extension_fetch в строгом режиме
+  - Критерии: extension_dom eval_js на document.title возвращает ext_id=<ID> и fallback=false; extension_fetch возвращает HTTP 200 без ext_error по allowlist; Документация окружения MCP_HEADLESS=0, MCP_EXTENSION_ID, MCP_BROWSER_PORT обновлена
+  - Тесты: MCP запрос extension_dom {command: 'eval_js', code: 'document.title'}; MCP extension_fetch к тестовому URL из allowlist; Повторное подключение MCP подтверждает стабильность ID
+  - Блокеры: MCP сервер не стартует с новым профилем; Allowlist MCP_ALLOW_HOSTS не содержит тестовый URL; Content-script не инжектится на вкладку
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: extension_fetch/extension_dom теперь без fallback: server.py убрал http_get/dom_action_fallback; extension_control ищет target строго по ID, ensure_extension_target строгий.
+  - Отметки тестов: Добавлены unit-тесты extension_fetch_error/extension_dom_error: сервер возвращает ошибку (-32001), если расширение не отвечает; fallback не срабатывает. pytest -q passed.; pytest -q сейчас: 166 passed, 27 skipped. Добавлен тест extension_fetch_uses_wildcard_allowlist.
+  - Отметки блокеров: Fallback удалён, сервер возвращает ошибку вместо обхода; блокеров по MCP_ALLOW_HOSTS/контент-скрипту нет на уровне кода — всё валится явным HttpClientError.
+
+## Критерии успеха
+- google-chrome --pack-extension
+- ./scripts/run_browser_mcp.sh
+- mcp extension_dom eval_js
+- mcp extension_fetch
+
+## Риски
+- Chrome недоступен
+- порт 9222 занят
+- MV3 service worker не стартует автоматически

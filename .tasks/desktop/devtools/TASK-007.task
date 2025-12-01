@@ -1,0 +1,45 @@
+---
+assignee: ai
+component: null
+created: 2025-11-23 06:18
+domain: desktop/devtools
+id: TASK-007
+parent: TASK-006
+phase: null
+priority: MEDIUM
+progress: 0
+status: FAIL
+tags: []
+title: Ретест extension_dom/extension_fetch после перезапуска
+updated: 2025-11-23 06:18
+---
+
+# Ретест extension_dom/extension_fetch после перезапуска
+
+## Описание
+Перезапустить MCP сервер, удостовериться что antigravity extension подключено без fallback; проверить extension_dom и extension_fetch; собрать логи и зафиксировать результат.
+
+## Подзадачи
+- [ ] Поднять MCP сервер и убедиться в handshake
+  - Критерии: initialize возвращает result; tools/list не пуст
+  - Тесты: pytest -q
+  - Блокеры: порт 9222 занят
+  - Чекпоинты: Критерии=TODO; Тесты=TODO; Блокеры=TODO
+- [ ] Проверить extension_dom без fallback
+  - Критерии: extension_dom возвращает ext_id; нет fallback
+  - Тесты: mcp_tools extension_dom
+  - Блокеры: extension target не найден
+  - Чекпоинты: Критерии=TODO; Тесты=TODO; Блокеры=TODO
+- [ ] Проверить extension_fetch без fallback
+  - Критерии: extension_fetch использует extension; код ответа 200
+  - Тесты: mcp_tools extension_fetch
+  - Блокеры: service worker не активен
+  - Чекпоинты: Критерии=TODO; Тесты=TODO; Блокеры=TODO
+
+## Критерии успеха
+- ["pytest -q","mcp_tools extension_dom","mcp_tools extension_fetch"]
+
+## Риски
+- порт 9222 занят
+- расширение не активировалось
+- несовпадение extension_id

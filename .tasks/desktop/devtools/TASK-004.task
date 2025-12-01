@@ -1,0 +1,49 @@
+---
+assignee: ai
+component: null
+created: 2025-11-23 00:53
+domain: desktop/devtools
+id: TASK-004
+parent: TASK-003
+phase: null
+priority: MEDIUM
+progress: 33
+status: WARN
+tags: []
+title: Подключить GitHub MCP сервер к Codex CLI
+updated: 2025-11-23 00:56
+---
+
+# Подключить GitHub MCP сервер к Codex CLI
+
+## Описание
+Настроить Codex CLI на использование локального github-mcp-server (/home/amir/Документы/PROJECTS/mcp/github-mcp-server) через mcp_servers, проверить запуск/handshake и задокументировать переменные окружения.
+
+## Подзадачи
+- [ ] Разобрать запуск /home/amir/Документы/PROJECTS/mcp/github-mcp-server и зависимости
+  - Критерии: Есть рабочая команда stdio запуска с указанием env/cwd; Документация по требуемым токенам/версиям ясна
+  - Тесты: Ручной запуск сервера с --help или list_tools без падения
+  - Блокеры: Неустановлены node deps или нет доступа к GITHUB_TOKEN
+  - Чекпоинты: Критерии=TODO; Тесты=TODO; Блокеры=TODO
+- [x] Прописать в ~/.codex/config.toml блок [mcp_servers.github_local] с command/cwd/env
+  - Критерии: TOML валиден и содержит command/cwd/env_vars для github-mcp-server; Имя сервера согласовано (github_local) и включено
+  - Тесты: codex mcp list показывает github_local; codex mcp get github_local --json возвращает конфиг
+  - Блокеры: Ошибка пути к серверу или нет прав на файл конфигурации
+  - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
+  - Отметки критериев: config.toml содержит github_local command/args/env_vars
+  - Отметки тестов: codex mcp list и codex mcp get github_local --json прошли
+  - Отметки блокеров: путь и права на ~/.codex/config.toml проверены; блокеров нет
+- [ ] Проверить подключение Codex CLI к github_mcp и базовые вызовы
+  - Критерии: codex mcp list/get выполняются без ошибок; Сервер поднимается из CLI (stdout лог запуска); При наличии токена выполняется пробный вызов list_tools
+  - Тесты: codex mcp list; codex mcp get github_local --json; Ручной старт сервера через codex exec с MCP, убедиться что инициализация успешна
+  - Блокеры: Сервер не стартует из-за конфликтующих версий node; Нет токена/сети для обращения к GitHub API
+  - Чекпоинты: Критерии=OK; Тесты=TODO; Блокеры=TODO
+  - Отметки критериев: criteria: config github_local в ~/.codex/config.toml
+
+## Критерии успеха
+- ["codex mcp list","codex mcp get github_local --json"]
+
+## Риски
+- нет доступа к GITHUB_TOKEN
+- несовместимые зависимости github-mcp-server
+- ошибка конфигурации TOML

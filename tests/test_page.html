@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Automation Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        input, select, button, textarea {
+            margin: 10px 0;
+            padding: 8px;
+            font-size: 14px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 10px 20px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .click-target {
+            width: 200px;
+            height: 100px;
+            background: #28a745;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .click-target:hover {
+            background: #218838;
+        }
+        #output {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            min-height: 50px;
+            font-family: monospace;
+        }
+        .draggable {
+            width: 100px;
+            height: 100px;
+            background: #ffc107;
+            border: 2px solid #ff9800;
+            border-radius: 4px;
+            display: inline-block;
+            margin: 10px;
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .drop-zone {
+            width: 300px;
+            height: 150px;
+            border: 3px dashed #ccc;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+            color: #999;
+        }
+        .drop-zone.active {
+            border-color: #007bff;
+            background: #e7f3ff;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Browser Automation Test Page</h1>
+    <p>This page contains various elements to test browser automation tools.</p>
+
+    <div class="section">
+        <h2>Text Inputs</h2>
+        <input type="text" id="text-input" placeholder="Type something here" />
+        <input type="password" id="password-input" placeholder="Password" />
+        <input type="email" id="email-input" placeholder="email@example.com" />
+        <textarea id="textarea" rows="3" placeholder="Multi-line text"></textarea>
+    </div>
+
+    <div class="section">
+        <h2>Select Dropdown</h2>
+        <select id="dropdown">
+            <option value="">-- Select an option --</option>
+            <option value="option1">Option 1</option>
+            <option value="option2">Option 2</option>
+            <option value="option3">Option 3</option>
+            <option value="special">Special Option</option>
+        </select>
+        <select id="multi-select" multiple size="4">
+            <option value="a">Alpha</option>
+            <option value="b">Beta</option>
+            <option value="c">Gamma</option>
+            <option value="d">Delta</option>
+        </select>
+    </div>
+
+    <div class="section">
+        <h2>Buttons & Clicks</h2>
+        <button id="click-button" onclick="handleClick('button')">Click Me</button>
+        <button id="double-click-button" ondblclick="handleClick('double-click')">Double-Click Me</button>
+        <div class="click-target" id="click-target" onclick="handleClick('div')">
+            Click Target Area
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Hover Test</h2>
+        <div id="hover-target"
+             style="padding: 20px; background: #6c757d; color: white; border-radius: 4px; text-align: center;"
+             onmouseenter="this.style.background='#5a6268'; this.textContent='Hovering!'"
+             onmouseleave="this.style.background='#6c757d'; this.textContent='Hover over me'">
+            Hover over me
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Drag & Drop</h2>
+        <div class="draggable" draggable="true" ondragstart="drag(event)" id="drag-item">
+            Drag me
+        </div>
+        <div class="drop-zone" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" id="drop-zone">
+            Drop here
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Scroll Test</h2>
+        <div style="height: 500px; background: linear-gradient(to bottom, #007bff, #28a745); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            Scroll down to see more
+        </div>
+        <div id="scroll-target" style="padding: 20px; background: #ffc107; text-align: center; margin: 20px 0;">
+            You scrolled here! 🎯
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Checkboxes & Radio</h2>
+        <label><input type="checkbox" id="checkbox1" /> Checkbox 1</label><br>
+        <label><input type="checkbox" id="checkbox2" /> Checkbox 2</label><br>
+        <label><input type="checkbox" id="checkbox3" /> Checkbox 3</label><br>
+        <br>
+        <label><input type="radio" name="radio" value="r1" id="radio1" /> Radio 1</label><br>
+        <label><input type="radio" name="radio" value="r2" id="radio2" /> Radio 2</label><br>
+        <label><input type="radio" name="radio" value="r3" id="radio3" /> Radio 3</label>
+    </div>
+
+    <div class="section">
+        <h2>Focus Test</h2>
+        <input type="text" id="focus-input" placeholder="Focus will be set here"
+               onfocus="this.style.background='#fff3cd'"
+               onblur="this.style.background='white'" />
+    </div>
+
+    <div class="section">
+        <h2>Output Log</h2>
+        <div id="output">Actions will be logged here...</div>
+        <button onclick="clearOutput()">Clear Log</button>
+    </div>
+
+    <script>
+        function log(message) {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.innerHTML += `[${timestamp}] ${message}<br>`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function handleClick(source) {
+            log(`Clicked: ${source}`);
+        }
+
+        function clearOutput() {
+            document.getElementById('output').innerHTML = '';
+        }
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+            document.getElementById('drop-zone').classList.add('active');
+        }
+
+        function dragLeave(ev) {
+            document.getElementById('drop-zone').classList.remove('active');
+        }
+
+        function drag(ev) {
+            ev.dataTransfer.setData("text", ev.target.id);
+            log('Started dragging');
+        }
+
+        function drop(ev) {
+            ev.preventDefault();
+            const data = ev.dataTransfer.getData("text");
+            const dragItem = document.getElementById(data);
+            ev.target.appendChild(dragItem);
+            ev.target.classList.remove('active');
+            log('Dropped successfully');
+        }
+
+        // Log input changes
+        document.querySelectorAll('input, select, textarea').forEach(element => {
+            element.addEventListener('change', (e) => {
+                log(`Changed ${e.target.id || e.target.tagName}: ${e.target.value}`);
+            });
+        });
+
+        // Log page events
+        window.addEventListener('load', () => {
+            log('Page loaded successfully');
+        });
+
+        // Add keyboard listener
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === 'Tab' || e.key === 'Escape') {
+                log(`Key pressed: ${e.key}`);
+            }
+        });
+    </script>
+</body>
+</html>

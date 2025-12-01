@@ -1,0 +1,20 @@
+fields:
+  domain:
+    name: Domain
+  progress:
+    name: Progress
+  status:
+    name: Status
+    options:
+      FAIL: Backlog
+      OK: Done
+      WARN: In progress
+  subtasks:
+    name: Subtasks
+project:
+  enabled: true
+  number: null
+  owner: ''
+  repo: ''
+  type: repository
+  workers: 0

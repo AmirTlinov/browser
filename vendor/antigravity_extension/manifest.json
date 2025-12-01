@@ -1,0 +1,63 @@
+{
+  "name": "Antigravity Browser Extension",
+  "description": "Local web-access bridge for Antigravity/MCP without IDE.",
+  "version": "1.11.3",
+  "manifest_version": 3,
+  "background": {
+    "service_worker": "service_worker.js"
+  },
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "webRequest",
+    "storage",
+    "scripting"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; frame-src http://localhost:*;"
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "<all_urls>"
+    ]
+  },
+  "action": {
+    "default_title": "Open Agent"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content_script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "static/*",
+        "content_script.js",
+        "service_worker.js",
+        "offscreen_binary.js",
+        "content_script_binary.js",
+        "service_worker_binary.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "static/icons/16x16.png",
+    "32": "static/icons/32x32.png",
+    "48": "static/icons/48x48.png",
+    "128": "static/icons/128x128.png"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArOk31jwVqTmiTgyiP8J2jK1duDyVUhgEAyo4Wuou+qknKAQxrheFX4mjZkQQDp0DooVP3kaBnLjF6O+V6tg/Y8SjMi3tcrjYjQ39YL0jXfMSqXcmMtUCd84DUxK/RHSHLiVvJpDMOUb48Onri8ZOHj3c12KG8MQJ55JgT9uZpN4xiDMWm4TN7zJm5s5MLfLeFrX/7WIDerDo1oO0Xs2ZZbwf1plq0uTvj9xKWxI39E4IbHQ7uRwk4IarLvMbRRERvSr3lPb5yC01mp4onQpPuCZtrwvOmbUZq1EZv8LkOVjCYH0kHurDT5ATH66DInmpwRJad1ofPTbkv8RasFcUAQIDAQAB"
+}
