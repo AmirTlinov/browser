@@ -3,6 +3,8 @@ Browser automation tools organized by domain.
 
 Each module provides focused functionality:
 - base: Common utilities, errors, session management
+- types: TypedDict definitions for responses
+- js_helpers: Reusable JavaScript helper functions
 - navigation: Page navigation and history
 - dom: DOM operations and screenshots
 - page: Page analysis, content extraction
