@@ -494,7 +494,9 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
 def handle_screenshot(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     """Take screenshot."""
     result = tools.screenshot(config)
-    return ToolResult.image(result.get("data", ""), result.get("target", ""))
+    # screenshot() returns content_b64, not data
+    data = result.get("content_b64") or result.get("data", "")
+    return ToolResult.image(data, "image/png")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

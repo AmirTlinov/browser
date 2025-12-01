@@ -104,6 +104,25 @@ def _build_click_js(text: str | None, role: str | None, near_text: str | None, i
             return (clone.textContent || '').replace(/\\s+/g, ' ').trim();
         }};
 
+        // Helper: Get label text for an input element
+        const getLabelText = (input) => {{
+            if (!input) return '';
+            // Check for associated label via for/id
+            if (input.id) {{
+                const label = document.querySelector(`label[for="${{input.id}}"]`);
+                if (label) return getCleanText(label);
+            }}
+            // Check for wrapping label
+            const parentLabel = input.closest('label');
+            if (parentLabel) return getCleanText(parentLabel);
+            // Check for adjacent label (sibling)
+            const prevSibling = input.previousElementSibling;
+            if (prevSibling && prevSibling.tagName === 'LABEL') return getCleanText(prevSibling);
+            const nextSibling = input.nextElementSibling;
+            if (nextSibling && nextSibling.tagName === 'LABEL') return getCleanText(nextSibling);
+            return '';
+        }};
+
         // Helper: Find elements matching criteria
         const findMatches = () => {{
             let candidates = [];
@@ -121,8 +140,9 @@ def _build_click_js(text: str | None, role: str | None, near_text: str | None, i
             if (searchRole && roleSelectors[searchRole]) {{
                 candidates = Array.from(document.querySelectorAll(roleSelectors[searchRole]));
             }} else if (searchText) {{
-                // Search all clickable elements
+                // Search all clickable elements including inputs with labels
                 const clickableSelector = 'a, button, input[type="button"], input[type="submit"], ' +
+                    'input[type="checkbox"], input[type="radio"], ' +
                     '[role="button"], [role="link"], [onclick], [tabindex]';
                 candidates = Array.from(document.querySelectorAll(clickableSelector));
             }}
@@ -137,15 +157,17 @@ def _build_click_js(text: str | None, role: str | None, near_text: str | None, i
                     const elText = getCleanText(el).toLowerCase();
                     const value = (el.value || '').toLowerCase();
                     const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+                    const labelText = getLabelText(el).toLowerCase();
                     return elText.includes(searchLower) ||
                            value.includes(searchLower) ||
-                           ariaLabel.includes(searchLower);
+                           ariaLabel.includes(searchLower) ||
+                           labelText.includes(searchLower);
                 }});
 
                 // Sort by exact match first, then by text length (shorter = more specific)
                 candidates.sort((a, b) => {{
-                    const aText = getCleanText(a).toLowerCase();
-                    const bText = getCleanText(b).toLowerCase();
+                    const aText = getCleanText(a).toLowerCase() || getLabelText(a).toLowerCase();
+                    const bText = getCleanText(b).toLowerCase() || getLabelText(b).toLowerCase();
                     const aExact = aText === searchLower ? 0 : 1;
                     const bExact = bText === searchLower ? 0 : 1;
                     if (aExact !== bExact) return aExact - bExact;

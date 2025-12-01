@@ -63,8 +63,16 @@ def browser_fetch(
             fetch_code = f"""
             (async () => {{
                 try {{
-                    const resp = await fetch({json.dumps(url)}, {json.dumps(fetch_options)});
-                    const text = await resp.text();
+                    const options = {json.dumps(fetch_options)};
+                    // Add mode for cross-origin requests
+                    if (!options.mode) options.mode = 'cors';
+                    const resp = await fetch({json.dumps(url)}, options);
+                    let text = '';
+                    try {{
+                        text = await resp.text();
+                    }} catch (textErr) {{
+                        text = '[Unable to read response body: ' + textErr.message + ']';
+                    }}
                     const truncated = text.length > {max_body_size};
                     return {{
                         ok: resp.ok,
@@ -76,7 +84,12 @@ def browser_fetch(
                         bodyLength: text.length
                     }};
                 }} catch(e) {{
-                    return {{ ok: false, error: e.message, errorType: e.name }};
+                    // Provide more context for CORS errors
+                    let suggestion = 'Check URL and network connectivity';
+                    if (e.message.includes('CORS') || e.message.includes('cross-origin') || e.name === 'TypeError') {{
+                        suggestion = 'CORS blocked. Navigate to the target domain first, or use http() tool for external requests';
+                    }}
+                    return {{ ok: false, error: e.message, errorType: e.name, suggestion: suggestion }};
                 }}
             }})()
             """
@@ -87,14 +100,16 @@ def browser_fetch(
                     tool="browser_fetch",
                     action="fetch",
                     reason="Fetch returned no result",
-                    suggestion="Check URL and CORS settings",
+                    suggestion="Check URL and CORS settings. Use http() tool for external requests.",
                 )
-            if not result.get("ok", False) and result.get("error"):
+            if result.get("error"):
                 raise SmartToolError(
                     tool="browser_fetch",
                     action="fetch",
                     reason=f"Fetch failed: {result.get('error')}",
-                    suggestion="Check URL, CORS, and network connectivity",
+                    suggestion=result.get(
+                        "suggestion", "Check URL, CORS, and network connectivity. Use http() for external APIs."
+                    ),
                 )
 
             return {
