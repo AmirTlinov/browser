@@ -19,16 +19,12 @@ if TYPE_CHECKING:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def handle_browser_click(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_click(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.dom_action_click(config, args["selector"])
     return ToolResult.json(result)
 
 
-def handle_browser_click_pixel(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_click_pixel(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.click_at_pixel(
         config,
         x=float(args["x"]),
@@ -38,9 +34,7 @@ def handle_browser_click_pixel(
     return ToolResult.json(result)
 
 
-def handle_browser_double_click(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_double_click(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.double_click_at_pixel(
         config,
         x=float(args["x"]),
@@ -54,9 +48,7 @@ def handle_browser_double_click(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def handle_browser_move_mouse(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_move_mouse(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.move_mouse_to(
         config,
         x=float(args["x"]),
@@ -65,16 +57,12 @@ def handle_browser_move_mouse(
     return ToolResult.json(result)
 
 
-def handle_browser_hover(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_hover(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.hover_element(config, args["selector"])
     return ToolResult.json(result)
 
 
-def handle_browser_drag(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_drag(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.drag_from_to(
         config,
         from_x=float(args["from_x"]),
@@ -91,9 +79,7 @@ def handle_browser_drag(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def handle_browser_type(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_type(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.dom_action_type(
         config,
         selector=args["selector"],
@@ -103,9 +89,7 @@ def handle_browser_type(
     return ToolResult.json(result)
 
 
-def handle_browser_press_key(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_press_key(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.press_key(
         config,
         key=args["key"],
@@ -114,9 +98,7 @@ def handle_browser_press_key(
     return ToolResult.json(result)
 
 
-def handle_browser_type_text(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_type_text(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.type_text(config, args["text"])
     return ToolResult.json(result)
 
@@ -126,9 +108,7 @@ def handle_browser_type_text(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def handle_browser_scroll(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_scroll(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.scroll_page(
         config,
         delta_x=float(args.get("delta_x", 0)),
@@ -137,17 +117,13 @@ def handle_browser_scroll(
     return ToolResult.json(result)
 
 
-def handle_browser_scroll_down(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_scroll_down(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     amount = float(args.get("amount", 300))
     result = smart_tools.scroll_page(config, 0, amount)
     return ToolResult.json(result)
 
 
-def handle_browser_scroll_up(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_scroll_up(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     amount = float(args.get("amount", 300))
     result = smart_tools.scroll_page(config, 0, -amount)
     return ToolResult.json(result)
@@ -165,9 +141,7 @@ def handle_browser_scroll_to_element(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def handle_browser_select_option(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_select_option(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.select_option(
         config,
         selector=args["selector"],
@@ -177,16 +151,12 @@ def handle_browser_select_option(
     return ToolResult.json(result)
 
 
-def handle_browser_focus(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_focus(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.focus_element(config, args["selector"])
     return ToolResult.json(result)
 
 
-def handle_browser_clear_input(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_clear_input(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.clear_input(config, args["selector"])
     return ToolResult.json(result)
 
@@ -207,9 +177,7 @@ def handle_browser_resize_viewport(
     return ToolResult.json(result)
 
 
-def handle_browser_resize_window(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_resize_window(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.resize_window(
         config,
         width=int(args["width"]),

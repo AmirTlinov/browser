@@ -26,18 +26,25 @@ def _import_websocket():
     """Import websocket-client with fallback paths."""
     try:
         import websocket
+
         return websocket
     except ImportError:
         import sys
         from pathlib import Path
+
         candidates = [
             Path(__file__).resolve().parent.parent / "vendor" / "python",
-            Path.home() / ".local" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages",
+            Path.home()
+            / ".local"
+            / "lib"
+            / f"python{sys.version_info.major}.{sys.version_info.minor}"
+            / "site-packages",
         ]
         for path in candidates:
             if path.exists() and str(path) not in sys.path:
                 sys.path.insert(0, str(path))
         import websocket
+
         return websocket
 
 
@@ -45,6 +52,7 @@ def _http_get_json(url: str, timeout: float = 2.0) -> Any:
     """Fetch JSON from URL."""
     from urllib.error import URLError
     from urllib.request import urlopen
+
     try:
         with urlopen(url, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
@@ -192,12 +200,15 @@ class BrowserSession:
     def eval_js(self, expression: str) -> Any:
         """Evaluate JavaScript and return result."""
         self.enable_runtime()
-        result = self.conn.send("Runtime.evaluate", {
-            "expression": expression,
-            "returnByValue": True,
-            "awaitPromise": True,
-            "replMode": True,
-        })
+        result = self.conn.send(
+            "Runtime.evaluate",
+            {
+                "expression": expression,
+                "returnByValue": True,
+                "awaitPromise": True,
+                "replMode": True,
+            },
+        )
         if "result" not in result:
             return None
         value = result["result"]
@@ -241,23 +252,29 @@ class BrowserSession:
 
     def scroll(self, delta_x: float = 0, delta_y: float = 0, x: float = 0, y: float = 0) -> None:
         """Scroll the page."""
-        self.conn.send("Input.dispatchMouseEvent", {
-            "type": "mouseWheel",
-            "x": x,
-            "y": y,
-            "deltaX": delta_x,
-            "deltaY": delta_y,
-        })
+        self.conn.send(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseWheel",
+                "x": x,
+                "y": y,
+                "deltaX": delta_x,
+                "deltaY": delta_y,
+            },
+        )
 
     def _mouse_event(self, event_type: str, x: float, y: float, button: str, click_count: int) -> None:
         """Dispatch mouse event."""
-        self.conn.send("Input.dispatchMouseEvent", {
-            "type": event_type,
-            "x": x,
-            "y": y,
-            "button": button,
-            "clickCount": click_count,
-        })
+        self.conn.send(
+            "Input.dispatchMouseEvent",
+            {
+                "type": event_type,
+                "x": x,
+                "y": y,
+                "button": button,
+                "clickCount": click_count,
+            },
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Keyboard Input
@@ -267,28 +284,44 @@ class BrowserSession:
         """Press a keyboard key."""
         # Key codes for special keys
         key_codes = {
-            "Enter": 13, "Tab": 9, "Escape": 27, "Backspace": 8, "Delete": 46,
-            "ArrowUp": 38, "ArrowDown": 40, "ArrowLeft": 37, "ArrowRight": 39,
-            "Home": 36, "End": 35, "PageUp": 33, "PageDown": 34,
+            "Enter": 13,
+            "Tab": 9,
+            "Escape": 27,
+            "Backspace": 8,
+            "Delete": 46,
+            "ArrowUp": 38,
+            "ArrowDown": 40,
+            "ArrowLeft": 37,
+            "ArrowRight": 39,
+            "Home": 36,
+            "End": 35,
+            "PageUp": 33,
+            "PageDown": 34,
         }
         key_code = key_codes.get(key, ord(key[0].upper()) if len(key) == 1 else 0)
 
         for event_type in ["keyDown", "keyUp"]:
-            self.conn.send("Input.dispatchKeyEvent", {
-                "type": event_type,
-                "key": key,
-                "code": f"Key{key.upper()}" if len(key) == 1 else key,
-                "windowsVirtualKeyCode": key_code,
-                "modifiers": modifiers,
-            })
+            self.conn.send(
+                "Input.dispatchKeyEvent",
+                {
+                    "type": event_type,
+                    "key": key,
+                    "code": f"Key{key.upper()}" if len(key) == 1 else key,
+                    "windowsVirtualKeyCode": key_code,
+                    "modifiers": modifiers,
+                },
+            )
 
     def type_text(self, text: str) -> None:
         """Type text character by character."""
         for char in text:
-            self.conn.send("Input.dispatchKeyEvent", {
-                "type": "char",
-                "text": char,
-            })
+            self.conn.send(
+                "Input.dispatchKeyEvent",
+                {
+                    "type": "char",
+                    "text": char,
+                },
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Screenshots & DOM
@@ -442,12 +475,14 @@ class SessionManager:
         tabs = []
         for t in targets:
             if t.get("type") == "page":
-                tabs.append({
-                    "id": t.get("id"),
-                    "url": t.get("url", ""),
-                    "title": t.get("title", ""),
-                    "current": t.get("id") == self._session_tab_id,
-                })
+                tabs.append(
+                    {
+                        "id": t.get("id"),
+                        "url": t.get("url", ""),
+                        "title": t.get("title", ""),
+                        "current": t.get("id") == self._session_tab_id,
+                    }
+                )
         return tabs
 
     def new_tab(self, config: BrowserConfig, url: str = "about:blank") -> str:

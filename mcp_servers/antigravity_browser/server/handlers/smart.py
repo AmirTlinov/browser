@@ -14,9 +14,7 @@ if TYPE_CHECKING:
     from ...launcher import BrowserLauncher
 
 
-def handle_analyze_page(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_analyze_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.analyze_page(
         config,
         detail=args.get("detail"),
@@ -28,9 +26,7 @@ def handle_analyze_page(
     return ToolResult.json(result)
 
 
-def handle_click_element(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_click_element(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.click_element(
         config,
         text=args.get("text"),
@@ -41,9 +37,7 @@ def handle_click_element(
     return ToolResult.json(result)
 
 
-def handle_fill_form(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_fill_form(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.fill_form(
         config,
         data=args.get("data", {}),
@@ -53,9 +47,7 @@ def handle_fill_form(
     return ToolResult.json(result)
 
 
-def handle_search_page(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_search_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.search_page(
         config,
         query=args["query"],
@@ -64,9 +56,7 @@ def handle_search_page(
     return ToolResult.json(result)
 
 
-def handle_extract_content(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.extract_content(
         config,
         content_type=args.get("content_type", "overview"),
@@ -78,9 +68,7 @@ def handle_extract_content(
     return ToolResult.json(result)
 
 
-def handle_wait_for(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_wait_for(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.wait_for(
         config,
         condition=args["condition"],
@@ -91,9 +79,7 @@ def handle_wait_for(
     return ToolResult.json(result)
 
 
-def handle_execute_workflow(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_execute_workflow(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     import json
 
     include_screenshots = args.get("include_screenshots", False)
@@ -123,9 +109,7 @@ def handle_execute_workflow(
     return ToolResult(content=content_list)
 
 
-def handle_upload_file(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_upload_file(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.upload_file(
         config,
         file_paths=args.get("file_paths", []),
@@ -134,9 +118,7 @@ def handle_upload_file(
     return ToolResult.json(result)
 
 
-def handle_dialog(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_dialog(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.handle_dialog(
         config,
         accept=args.get("accept", True),
@@ -145,9 +127,7 @@ def handle_dialog(
     return ToolResult.json(result)
 
 
-def handle_generate_totp(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_generate_totp(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.generate_totp(
         secret=args["secret"],
         digits=args.get("digits", 6),

@@ -4,13 +4,14 @@ JavaScript helper functions for browser automation.
 This module contains reusable JavaScript code snippets that are injected
 into pages for element detection, form analysis, and content extraction.
 """
+
 from __future__ import annotations
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Core DOM helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
-IS_VISIBLE = '''
+IS_VISIBLE = """
 const isVisible = (el) => {
     if (!el) return false;
     const style = getComputedStyle(el);
@@ -20,9 +21,9 @@ const isVisible = (el) => {
            el.offsetWidth > 0 &&
            el.offsetHeight > 0;
 };
-'''
+"""
 
-LOOKS_LIKE_CODE = '''
+LOOKS_LIKE_CODE = """
 const looksLikeCode = (text) => {
     if (!text || text.length < 5) return false;
     if (text.match(/[.#][a-zA-Z_-]+\\s*\\{/)) return true;
@@ -32,9 +33,9 @@ const looksLikeCode = (text) => {
     if (text.match(/^(function|const |let |var |=>|\\(\\))/)) return true;
     return false;
 };
-'''
+"""
 
-GET_CLEAN_TEXT = '''
+GET_CLEAN_TEXT = """
 const getCleanText = (el) => {
     if (!el) return '';
     const clone = el.cloneNode(true);
@@ -44,9 +45,9 @@ const getCleanText = (el) => {
     if (looksLikeCode(text)) return '';
     return text;
 };
-'''
+"""
 
-DEDUPE = '''
+DEDUPE = """
 const dedupe = (arr, keyFn) => {
     const seen = new Set();
     return arr.filter(item => {
@@ -56,9 +57,9 @@ const dedupe = (arr, keyFn) => {
         return true;
     });
 };
-'''
+"""
 
-GET_ALL_ELEMENTS = '''
+GET_ALL_ELEMENTS = """
 const getAllElements = (root, selector) => {
     const elements = [];
     const collect = (node) => {
@@ -75,14 +76,14 @@ const getAllElements = (root, selector) => {
     collect(root);
     return elements;
 };
-'''
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Element selection helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
-GET_SELECTOR = '''
+GET_SELECTOR = """
 const getSelector = (el) => {
     if (!el) return '';
     if (el.id) return '#' + el.id;
@@ -110,10 +111,10 @@ const getSelector = (el) => {
     }
     return path.join(' > ');
 };
-'''
+"""
 
 
-FIND_ELEMENT_BY_TEXT = '''
+FIND_ELEMENT_BY_TEXT = """
 const findElementByText = (text, role, nearText, index) => {
     text = text ? text.toLowerCase().trim() : '';
     role = role || null;
@@ -163,14 +164,14 @@ const findElementByText = (text, role, nearText, index) => {
 
     return candidates[index] || null;
 };
-'''
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Form analysis helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
-MATCH_FIELD = '''
+MATCH_FIELD = """
 const matchField = (fieldKey, inputs) => {
     const key = fieldKey.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
     let best = null;
@@ -215,10 +216,10 @@ const matchField = (fieldKey, inputs) => {
     });
     return best;
 };
-'''
+"""
 
 
-EXTRACT_FORM_DETAILS = '''
+EXTRACT_FORM_DETAILS = """
 const extractFormDetails = (form, idx) => {
     const fields = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
     const visibleFields = Array.from(fields).filter(f => isVisible(f));
@@ -249,7 +250,7 @@ const extractFormDetails = (form, idx) => {
         })()
     };
 };
-'''
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -274,9 +275,9 @@ def build_js_with_helpers(helpers: str, body: str) -> str:
     Returns:
         Complete JavaScript wrapped in IIFE
     """
-    return f'''
+    return f"""
 (() => {{
     {helpers}
     {body}
 }})()
-'''
+"""

@@ -14,9 +14,7 @@ if TYPE_CHECKING:
     from ...launcher import BrowserLauncher
 
 
-def handle_browser_navigate(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_navigate(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.navigate_to(
         config,
         url=args["url"],
@@ -25,23 +23,17 @@ def handle_browser_navigate(
     return ToolResult.json(result)
 
 
-def handle_browser_back(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_back(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.go_back(config)
     return ToolResult.json(result)
 
 
-def handle_browser_forward(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_forward(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.go_forward(config)
     return ToolResult.json(result)
 
 
-def handle_browser_reload(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_reload(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.reload_page(
         config,
         ignore_cache=args.get("ignore_cache", False),

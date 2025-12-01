@@ -16,7 +16,7 @@ from typing import Any
 from .config import BrowserConfig
 from .http_client import HttpClientError
 from .launcher import BrowserLauncher
-from .server.definitions import get_all_tool_definitions
+from .server.definitions_unified import UNIFIED_TOOL_DEFINITIONS
 from .server.registry import create_default_registry
 
 SUPPORTED_PROTOCOL_VERSIONS = ["0.1.0", "2025-06-18", "2024-11-05"]
@@ -98,11 +98,13 @@ class McpServer:
 
     def handle_list_tools(self, request_id: Any) -> None:
         """Handle tools/list request."""
-        _write_message({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {"tools": get_all_tool_definitions()},
-        })
+        _write_message(
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"tools": UNIFIED_TOOL_DEFINITIONS},
+            }
+        )
 
     def _log_call(self, name: str, arguments: dict[str, Any]) -> None:
         """Log tool call with sanitized arguments."""
@@ -126,19 +128,23 @@ class McpServer:
             result = self.registry.dispatch(name, self.config, self.launcher, arguments)
             content = result.to_content_list()
 
-            _write_message({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {"content": content},
-            })
+            _write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"content": content},
+                }
+            )
 
         except Exception as exc:
             logger.exception("tool_call_failed")
-            _write_message({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "error": {"code": -32001, "message": str(exc)},
-            })
+            _write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32001, "message": str(exc)},
+                }
+            )
 
     def dispatch(self, message: dict[str, Any]) -> None:
         """Dispatch incoming JSON-RPC message to appropriate handler."""
@@ -162,11 +168,13 @@ class McpServer:
         elif method == "ping":
             _write_message({"jsonrpc": "2.0", "id": request_id, "result": {"pong": True}})
         else:
-            _write_message({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "error": {"code": -32601, "message": f"Method {method} not found"},
-            })
+            _write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32601, "message": f"Method {method} not found"},
+                }
+            )
 
 
 def main() -> None:

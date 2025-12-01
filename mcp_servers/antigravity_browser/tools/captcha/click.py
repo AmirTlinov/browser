@@ -3,6 +3,7 @@ CAPTCHA click operations.
 
 Click blocks in CAPTCHA grid or interactive areas.
 """
+
 from __future__ import annotations
 
 import time
@@ -16,10 +17,7 @@ from .screenshot import get_captcha_screenshot
 
 
 def click_captcha_blocks(
-    config: BrowserConfig,
-    blocks: list[int],
-    delay: float = 0.3,
-    grid_size: int = 0
+    config: BrowserConfig, blocks: list[int], delay: float = 0.3, grid_size: int = 0
 ) -> dict[str, Any]:
     """
     Click specific blocks in a CAPTCHA grid by their numbers.
@@ -58,7 +56,7 @@ def click_captcha_blocks(
                 tool="click_captcha_blocks",
                 action="find_captcha",
                 reason=screenshot_result["error"],
-                suggestion=screenshot_result.get("suggestion", "")
+                suggestion=screenshot_result.get("suggestion", ""),
             )
 
         grid = screenshot_result.get("grid")
@@ -67,7 +65,7 @@ def click_captcha_blocks(
                 tool="click_captcha_blocks",
                 action="get_grid",
                 reason="Could not determine CAPTCHA grid",
-                suggestion="Use get_captcha_screenshot() first to see the grid"
+                suggestion="Use get_captcha_screenshot() first to see the grid",
             )
 
         grid_blocks = grid["blocks"]
@@ -84,25 +82,12 @@ def click_captcha_blocks(
             y = block_info["y"]
 
             # Click the block
-            session.send("Input.dispatchMouseEvent", {
-                "type": "mousePressed",
-                "x": x,
-                "y": y,
-                "button": "left",
-                "clickCount": 1
-            })
-            session.send("Input.dispatchMouseEvent", {
-                "type": "mouseReleased",
-                "x": x,
-                "y": y,
-                "button": "left"
-            })
+            session.send(
+                "Input.dispatchMouseEvent", {"type": "mousePressed", "x": x, "y": y, "button": "left", "clickCount": 1}
+            )
+            session.send("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": x, "y": y, "button": "left"})
 
-            clicked.append({
-                "block": block_num,
-                "x": x,
-                "y": y
-            })
+            clicked.append({"block": block_num, "x": x, "y": y})
 
             if delay > 0 and block_num != blocks[-1]:
                 time.sleep(delay)
@@ -112,9 +97,9 @@ def click_captcha_blocks(
                 "success": len(errors) == 0,
                 "clicked": clicked,
                 "errors": errors if errors else None,
-                "total_clicked": len(clicked)
+                "total_clicked": len(clicked),
             },
-            "target": target.get("id", "")
+            "target": target.get("id", ""),
         }
 
     except SmartToolError:
@@ -124,7 +109,7 @@ def click_captcha_blocks(
             tool="click_captcha_blocks",
             action="click",
             reason=str(e),
-            suggestion="Ensure CAPTCHA is visible and grid is correct"
+            suggestion="Ensure CAPTCHA is visible and grid is correct",
         ) from e
     finally:
         session.close()
@@ -158,7 +143,7 @@ def click_captcha_area(config: BrowserConfig, area_id: int = 1) -> dict[str, Any
                 tool="click_captcha_area",
                 action="find_captcha",
                 reason="No CAPTCHA detected",
-                suggestion="Navigate to a page with CAPTCHA"
+                suggestion="Navigate to a page with CAPTCHA",
             )
 
         clickable = captcha.get("clickableAreas", [])
@@ -167,11 +152,7 @@ def click_captcha_area(config: BrowserConfig, area_id: int = 1) -> dict[str, Any
         if not clickable:
             bounds = captcha.get("bounds")
             if bounds:
-                clickable = [{
-                    "id": 1,
-                    "name": "captcha_center",
-                    "bounds": bounds
-                }]
+                clickable = [{"id": 1, "name": "captcha_center", "bounds": bounds}]
 
         area = next((a for a in clickable if a.get("id") == area_id), None)
         if not area:
@@ -179,7 +160,7 @@ def click_captcha_area(config: BrowserConfig, area_id: int = 1) -> dict[str, Any
                 tool="click_captcha_area",
                 action="find_area",
                 reason=f"Area {area_id} not found",
-                suggestion=f"Available areas: {[a.get('id') for a in clickable]}"
+                suggestion=f"Available areas: {[a.get('id') for a in clickable]}",
             )
 
         bounds = area.get("bounds", {})
@@ -187,27 +168,19 @@ def click_captcha_area(config: BrowserConfig, area_id: int = 1) -> dict[str, Any
         y = bounds.get("centerY") or (bounds.get("y", 0) + bounds.get("height", 0) / 2)
 
         # Click
-        session.send("Input.dispatchMouseEvent", {
-            "type": "mousePressed",
-            "x": int(x),
-            "y": int(y),
-            "button": "left",
-            "clickCount": 1
-        })
-        session.send("Input.dispatchMouseEvent", {
-            "type": "mouseReleased",
-            "x": int(x),
-            "y": int(y),
-            "button": "left"
-        })
+        session.send(
+            "Input.dispatchMouseEvent",
+            {"type": "mousePressed", "x": int(x), "y": int(y), "button": "left", "clickCount": 1},
+        )
+        session.send("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": int(x), "y": int(y), "button": "left"})
 
         return {
             "result": {
                 "success": True,
                 "area": area.get("name", f"area_{area_id}"),
-                "clicked": {"x": int(x), "y": int(y)}
+                "clicked": {"x": int(x), "y": int(y)},
             },
-            "target": target.get("id", "")
+            "target": target.get("id", ""),
         }
 
     except SmartToolError:
@@ -217,7 +190,7 @@ def click_captcha_area(config: BrowserConfig, area_id: int = 1) -> dict[str, Any
             tool="click_captcha_area",
             action="click",
             reason=str(e),
-            suggestion="Try using click coordinates directly with browser_click_pixel"
+            suggestion="Try using click coordinates directly with browser_click_pixel",
         ) from e
     finally:
         session.close()

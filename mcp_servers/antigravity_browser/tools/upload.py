@@ -4,6 +4,7 @@ File upload tools for browser automation.
 Provides:
 - upload_file: Upload files to file input elements
 """
+
 from __future__ import annotations
 
 from pathlib import Path

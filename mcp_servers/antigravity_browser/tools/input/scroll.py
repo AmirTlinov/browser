@@ -3,6 +3,7 @@ Scroll operations for browser automation.
 
 Provides page scrolling and element scrolling into view.
 """
+
 from __future__ import annotations
 
 import json

@@ -3,6 +3,7 @@ Page analysis tool with Overview + Detail pattern.
 
 Primary tool for understanding page structure.
 """
+
 from __future__ import annotations
 
 import time
@@ -73,7 +74,7 @@ def analyze_page(
             tool="analyze_page",
             action="validate",
             reason=f"Invalid detail: {detail}",
-            suggestion=f"Use one of: {', '.join(str(d) for d in valid_details)}"
+            suggestion=f"Use one of: {', '.join(str(d) for d in valid_details)}",
         )
 
     limit = min(limit, MAX_LIMIT)
@@ -87,7 +88,7 @@ def analyze_page(
                 tool="analyze_page",
                 action="evaluate",
                 reason="Page analysis returned null",
-                suggestion="Page may still be loading. Try wait_for(condition='load') first"
+                suggestion="Page may still be loading. Try wait_for(condition='load') first",
             )
 
         if result.get("error"):
@@ -95,22 +96,24 @@ def analyze_page(
                 tool="analyze_page",
                 action="analyze",
                 reason=result.get("reason", "Unknown error"),
-                suggestion=result.get("suggestion", "Check page state")
+                suggestion=result.get("suggestion", "Check page state"),
             )
 
         # Cache context for overview mode
         if detail is None and "overview" in result:
             overview = result["overview"]
-            set_page_context(PageContext(
-                url=overview.get("url", ""),
-                title=overview.get("title", ""),
-                forms=[],
-                links=[],
-                buttons=[],
-                inputs=[],
-                text_content="",
-                timestamp=time.time()
-            ))
+            set_page_context(
+                PageContext(
+                    url=overview.get("url", ""),
+                    title=overview.get("title", ""),
+                    forms=[],
+                    links=[],
+                    buttons=[],
+                    inputs=[],
+                    text_content="",
+                    timestamp=time.time(),
+                )
+            )
 
         result["target"] = target["id"]
         return result

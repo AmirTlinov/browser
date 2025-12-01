@@ -3,6 +3,7 @@ CAPTCHA screenshot with numbered grid overlay.
 
 Captures CAPTCHA area and draws numbered grid for block selection.
 """
+
 from __future__ import annotations
 
 import base64
@@ -15,9 +16,7 @@ from .analyze import analyze_captcha
 
 
 def get_captcha_screenshot(
-    config: BrowserConfig,
-    draw_grid: bool = True,
-    grid_size: int | None = None
+    config: BrowserConfig, draw_grid: bool = True, grid_size: int | None = None
 ) -> dict[str, Any]:
     """
     Get a screenshot of the CAPTCHA area with numbered grid overlay.
@@ -47,7 +46,7 @@ def get_captcha_screenshot(
             return {
                 "error": "No CAPTCHA detected",
                 "suggestion": "Navigate to a page with CAPTCHA first",
-                "target": target.get("id", "")
+                "target": target.get("id", ""),
             }
 
         bounds = captcha.get("bounds")
@@ -57,7 +56,7 @@ def get_captcha_screenshot(
                 "screenshot_b64": screenshot_data.get("data"),
                 "captcha": captcha,
                 "grid": None,
-                "target": target.get("id", "")
+                "target": target.get("id", ""),
             }
 
         # Capture specific area with padding
@@ -67,13 +66,10 @@ def get_captcha_screenshot(
             "y": max(0, bounds["y"] - padding),
             "width": bounds["width"] + padding * 2,
             "height": bounds["height"] + padding * 2,
-            "scale": 1
+            "scale": 1,
         }
 
-        screenshot_data = session.send("Page.captureScreenshot", {
-            "format": "png",
-            "clip": clip
-        })
+        screenshot_data = session.send("Page.captureScreenshot", {"format": "png", "clip": clip})
 
         # Determine grid dimensions
         grid_info = captcha.get("grid")
@@ -98,14 +94,9 @@ def get_captcha_screenshot(
         return {
             "screenshot_b64": screenshot_data.get("data"),
             "captcha": captcha,
-            "grid": {
-                "rows": rows,
-                "cols": cols,
-                "total": rows * cols,
-                "blocks": grid_map
-            },
+            "grid": {"rows": rows, "cols": cols, "total": rows * cols, "blocks": grid_map},
             "usage": "To click blocks 1, 4, 7: click_captcha_blocks([1, 4, 7])",
-            "target": target.get("id", "")
+            "target": target.get("id", ""),
         }
 
     finally:
@@ -132,8 +123,8 @@ def _build_grid_map(grid_bounds: dict, rows: int, cols: int) -> dict[int, dict]:
                     "x": int(grid_bounds["x"] + col * cell_width),
                     "y": int(grid_bounds["y"] + row * cell_height),
                     "width": int(cell_width),
-                    "height": int(cell_height)
-                }
+                    "height": int(cell_height),
+                },
             }
             block_num += 1
 

@@ -3,6 +3,7 @@ CAPTCHA detection and analysis.
 
 Detects CAPTCHA type, bounds, grid info and clickable areas.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -30,7 +31,7 @@ def analyze_captcha(config: BrowserConfig, force_grid_size: int = 0) -> dict[str
         return {
             "captcha": analysis,
             "target": target.get("id", ""),
-            "suggestion": _get_captcha_suggestion(analysis) if analysis.get("detected") else "No CAPTCHA detected"
+            "suggestion": _get_captcha_suggestion(analysis) if analysis.get("detected") else "No CAPTCHA detected",
         }
     finally:
         session.close()
@@ -54,7 +55,7 @@ def _get_captcha_suggestion(analysis: dict[str, Any]) -> str:
 
 def _build_analyze_js(force_grid_size: int) -> str:
     """Build JavaScript for CAPTCHA analysis."""
-    return f'''
+    return f"""
     (() => {{
         const forceGridSize = {force_grid_size};
         const result = {{
@@ -252,4 +253,4 @@ def _build_analyze_js(force_grid_size: int) -> str:
 
         return result;
     }})()
-    '''
+    """

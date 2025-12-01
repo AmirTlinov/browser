@@ -94,10 +94,10 @@ class ToolRegistry:
 
 
 def create_default_registry() -> ToolRegistry:
-    """Create registry with all default handlers."""
-    from .handlers import ALL_HANDLERS
+    """Create registry with unified handlers."""
+    from .handlers.unified import UNIFIED_HANDLERS
 
     registry = ToolRegistry()
-    registry.register_many(ALL_HANDLERS)
+    registry.register_many(UNIFIED_HANDLERS)
     logger.info("Registered %d tool handlers", len(registry))
     return registry

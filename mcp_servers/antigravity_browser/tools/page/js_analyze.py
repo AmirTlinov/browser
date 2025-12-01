@@ -3,10 +3,11 @@ JavaScript builders for page analysis.
 
 Contains JS code generation for analyze_page function.
 """
+
 from __future__ import annotations
 
 # Common JavaScript helper functions used across analysis
-JS_HELPERS = '''
+JS_HELPERS = """
 const isVisible = (el) => {
     if (!el) return false;
     const style = getComputedStyle(el);
@@ -63,16 +64,10 @@ const getAllElements = (root, selector) => {
     collect(root);
     return elements;
 };
-'''
+"""
 
 
-def build_analyze_js(
-    detail: str | None,
-    offset: int,
-    limit: int,
-    form_index: int | None,
-    include_content: bool
-) -> str:
+def build_analyze_js(detail: str | None, offset: int, limit: int, form_index: int | None, include_content: bool) -> str:
     """Build JavaScript for page analysis based on mode."""
     if detail is None:
         return _build_overview_js(include_content)
@@ -91,8 +86,8 @@ def build_analyze_js(
 
 def _build_overview_js(include_content: bool) -> str:
     """Build JavaScript for overview mode."""
-    content_block = 'if (true) {' if include_content else 'if (false) {'
-    return f'''
+    content_block = "if (true) {" if include_content else "if (false) {"
+    return f"""
     (() => {{
         {JS_HELPERS}
 
@@ -207,13 +202,13 @@ def _build_overview_js(include_content: bool) -> str:
 
         return result;
     }})()
-    '''
+    """
 
 
 def _build_forms_js(form_index: int | None) -> str:
     """Build JavaScript for forms detail mode."""
     if form_index is not None:
-        return f'''
+        return f"""
         (() => {{
             {JS_HELPERS}
             const forms = document.querySelectorAll('form');
@@ -276,9 +271,9 @@ def _build_forms_js(form_index: int | None) -> str:
                 }}
             }};
         }})()
-        '''
+        """
     else:
-        return f'''
+        return f"""
         (() => {{
             {JS_HELPERS}
             const forms = document.querySelectorAll('form');
@@ -314,12 +309,12 @@ def _build_forms_js(form_index: int | None) -> str:
                 hint: items.length > 0 ? "Use form_index=N to see all fields of form N" : null
             }};
         }})()
-        '''
+        """
 
 
 def _build_links_js(offset: int, limit: int) -> str:
     """Build JavaScript for links detail mode."""
-    return f'''
+    return f"""
     (() => {{
         {JS_HELPERS}
         const offset = {offset};
@@ -368,12 +363,12 @@ def _build_links_js(offset: int, limit: int) -> str:
 
         return result;
     }})()
-    '''
+    """
 
 
 def _build_buttons_js() -> str:
     """Build JavaScript for buttons detail mode."""
-    return f'''
+    return f"""
     (() => {{
         {JS_HELPERS}
 
@@ -405,12 +400,12 @@ def _build_buttons_js() -> str:
             items: items
         }};
     }})()
-    '''
+    """
 
 
 def _build_inputs_js() -> str:
     """Build JavaScript for inputs detail mode."""
-    return f'''
+    return f"""
     (() => {{
         {JS_HELPERS}
 
@@ -436,12 +431,12 @@ def _build_inputs_js() -> str:
             items: items
         }};
     }})()
-    '''
+    """
 
 
 def _build_content_js(offset: int, limit: int) -> str:
     """Build JavaScript for content detail mode."""
-    return f'''
+    return f"""
     (() => {{
         {JS_HELPERS}
         const offset = {offset};
@@ -501,4 +496,4 @@ def _build_content_js(offset: int, limit: int) -> str:
 
         return result;
     }})()
-    '''
+    """

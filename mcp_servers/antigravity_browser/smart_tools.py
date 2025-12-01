@@ -25,6 +25,7 @@ Module organization:
 - tools/upload.py: File upload
 - tools/totp.py: 2FA code generation
 """
+
 from __future__ import annotations
 
 # These may not be available if dependencies are missing

@@ -16,9 +16,7 @@ if TYPE_CHECKING:
     from ...launcher import BrowserLauncher
 
 
-def handle_http_get(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_http_get(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     url = args["url"]
     resp = http_get(url, config)
     return ToolResult(
@@ -32,9 +30,7 @@ def handle_http_get(
     )
 
 
-def handle_browser_fetch(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_fetch(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     resp = smart_tools.browser_fetch(
         config,
         url=args["url"],
@@ -54,24 +50,18 @@ def handle_browser_fetch(
     )
 
 
-def handle_js_eval(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_js_eval(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.eval_js(config, args["expression"])
     return ToolResult.json(result)
 
 
-def handle_launch_browser(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_launch_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = launcher.ensure_running()
     status = "started" if result.started else "skipped"
     return ToolResult.text(f"{status}: {result.message}")
 
 
-def handle_cdp_version(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_cdp_version(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     should_start = args.get("start", True)
     launch_result = launcher.ensure_running() if should_start else None
     version = launcher.cdp_version()

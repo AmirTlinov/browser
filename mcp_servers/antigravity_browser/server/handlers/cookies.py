@@ -14,9 +14,7 @@ if TYPE_CHECKING:
     from ...launcher import BrowserLauncher
 
 
-def handle_browser_set_cookie(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_set_cookie(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.set_cookie(
         config=config,
         name=args["name"],
@@ -31,16 +29,12 @@ def handle_browser_set_cookie(
     return ToolResult.json(result)
 
 
-def handle_browser_set_cookies(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_set_cookies(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.set_cookies_batch(config, args["cookies"])
     return ToolResult.json(result)
 
 
-def handle_browser_get_cookies(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_get_cookies(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.get_all_cookies(
         config,
         urls=args.get("urls"),
@@ -51,9 +45,7 @@ def handle_browser_get_cookies(
     return ToolResult.json(result)
 
 
-def handle_browser_delete_cookie(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_delete_cookie(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.delete_cookie(
         config=config,
         name=args["name"],

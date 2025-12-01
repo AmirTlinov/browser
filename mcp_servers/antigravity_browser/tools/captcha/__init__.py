@@ -8,6 +8,7 @@ Provides:
 - click_captcha_area: Click interactive areas (checkbox, buttons)
 - submit_captcha: Find and click verify/submit button
 """
+
 from .analyze import analyze_captcha
 from .click import click_captcha_area, click_captcha_blocks
 from .screenshot import get_captcha_screenshot

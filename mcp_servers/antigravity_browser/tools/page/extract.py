@@ -3,6 +3,7 @@ Content extraction tool with pagination support.
 
 Extract structured content like paragraphs, tables, links, headings, images.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -68,7 +69,7 @@ def extract_content(
             tool="extract_content",
             action="validate",
             reason=f"Invalid content_type: {content_type}",
-            suggestion=f"Use one of: {', '.join(valid_types)}"
+            suggestion=f"Use one of: {', '.join(valid_types)}",
         )
 
     limit = min(limit, MAX_LIMIT)
@@ -82,7 +83,7 @@ def extract_content(
                 tool="extract_content",
                 action="evaluate",
                 reason="Extraction returned null",
-                suggestion="Check page has loaded completely"
+                suggestion="Check page has loaded completely",
             )
 
         if result.get("error"):
@@ -90,7 +91,7 @@ def extract_content(
                 tool="extract_content",
                 action="extract",
                 reason=result.get("reason", "Unknown error"),
-                suggestion=result.get("suggestion", "Check parameters")
+                suggestion=result.get("suggestion", "Check parameters"),
             )
 
         result["target"] = target["id"]

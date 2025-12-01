@@ -3,6 +3,7 @@ DOM-based input actions for browser automation.
 
 Provides programmatic click and type operations via JavaScript.
 """
+
 from __future__ import annotations
 
 import json

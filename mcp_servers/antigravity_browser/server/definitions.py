@@ -681,9 +681,7 @@ NETWORK_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "expression": {"type": "string", "description": "JavaScript expression"}
-            },
+            "properties": {"expression": {"type": "string", "description": "JavaScript expression"}},
             "required": ["expression"],
             "additionalProperties": False,
         },
@@ -888,9 +886,7 @@ DOM_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "Optional URL to navigate to first"}
-            },
+            "properties": {"url": {"type": "string", "description": "Optional URL to navigate to first"}},
             "required": [],
             "additionalProperties": False,
         },
@@ -987,9 +983,7 @@ INPUT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "selector": {"type": "string", "description": "CSS selector of element to click"}
-            },
+            "properties": {"selector": {"type": "string", "description": "CSS selector of element to click"}},
             "required": ["selector"],
             "additionalProperties": False,
         },
@@ -1048,9 +1042,7 @@ INPUT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "selector": {"type": "string", "description": "CSS selector of element to hover"}
-            },
+            "properties": {"selector": {"type": "string", "description": "CSS selector of element to hover"}},
             "required": ["selector"],
             "additionalProperties": False,
         },
@@ -1149,9 +1141,7 @@ INPUT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "amount": {"type": "number", "description": "Pixels to scroll (default: 300)"}
-            },
+            "properties": {"amount": {"type": "number", "description": "Pixels to scroll (default: 300)"}},
             "required": [],
             "additionalProperties": False,
         },
@@ -1162,9 +1152,7 @@ INPUT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "amount": {"type": "number", "description": "Pixels to scroll (default: 300)"}
-            },
+            "properties": {"amount": {"type": "number", "description": "Pixels to scroll (default: 300)"}},
             "required": [],
             "additionalProperties": False,
         },
@@ -1175,9 +1163,7 @@ INPUT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "selector": {"type": "string", "description": "CSS selector of element to scroll to"}
-            },
+            "properties": {"selector": {"type": "string", "description": "CSS selector of element to scroll to"}},
             "required": ["selector"],
             "additionalProperties": False,
         },
@@ -1208,9 +1194,7 @@ INPUT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "selector": {"type": "string", "description": "CSS selector of element to focus"}
-            },
+            "properties": {"selector": {"type": "string", "description": "CSS selector of element to focus"}},
             "required": ["selector"],
             "additionalProperties": False,
         },
@@ -1221,9 +1205,7 @@ INPUT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "properties": {
-                "selector": {"type": "string", "description": "CSS selector of input element"}
-            },
+            "properties": {"selector": {"type": "string", "description": "CSS selector of input element"}},
             "required": ["selector"],
             "additionalProperties": False,
         },

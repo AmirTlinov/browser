@@ -7,6 +7,7 @@ Provides:
 - go_forward: Browser history forward
 - reload_page: Reload current page
 """
+
 from __future__ import annotations
 
 import time

@@ -10,6 +10,7 @@ Provides:
 These tools operate on the session level, managing multiple tabs
 without requiring the get_session context manager.
 """
+
 from __future__ import annotations
 
 from typing import Any

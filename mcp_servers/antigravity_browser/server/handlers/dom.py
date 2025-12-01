@@ -15,9 +15,7 @@ if TYPE_CHECKING:
     from ...launcher import BrowserLauncher
 
 
-def handle_screenshot(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_screenshot(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     url = args.get("url")
     if url:
         smart_tools.navigate_to(config, url)
@@ -45,9 +43,7 @@ def handle_screenshot(
     )
 
 
-def handle_dump_dom(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_dump_dom(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     dom = smart_tools.dump_dom_html(
         config,
         url=args["url"],
@@ -56,9 +52,7 @@ def handle_dump_dom(
     return ToolResult.json(dom)
 
 
-def handle_browser_get_dom(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_get_dom(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.get_dom(
         config,
         selector=args.get("selector"),
@@ -68,16 +62,12 @@ def handle_browser_get_dom(
     return ToolResult.json(result)
 
 
-def handle_browser_get_element(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_get_element(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.get_element_info(config, args["selector"])
     return ToolResult.json(result)
 
 
-def handle_browser_get_page_info(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_browser_get_page_info(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.get_page_info(config)
     return ToolResult.json(result)
 

@@ -5,6 +5,7 @@ Provides:
 - resize_viewport: Resize browser viewport (content area)
 - resize_window: Resize browser window
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -56,7 +57,9 @@ def resize_window(config: BrowserConfig, width: int, height: int) -> dict[str, A
             window_info = session.send("Browser.getWindowForTarget", {"targetId": target["id"]})
             window_id = window_info.get("windowId")
             if window_id:
-                session.send("Browser.setWindowBounds", {"windowId": window_id, "bounds": {"width": width, "height": height}})
+                session.send(
+                    "Browser.setWindowBounds", {"windowId": window_id, "bounds": {"width": width, "height": height}}
+                )
             return {"width": width, "height": height, "windowId": window_id, "target": target["id"]}
         except Exception as e:
             raise SmartToolError(

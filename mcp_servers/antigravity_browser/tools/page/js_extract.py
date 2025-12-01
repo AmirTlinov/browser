@@ -3,12 +3,13 @@ JavaScript builders for content extraction.
 
 Contains JS code generation for extract_content function.
 """
+
 from __future__ import annotations
 
 import json
 
 # Common JavaScript helper functions
-JS_HELPERS = '''
+JS_HELPERS = """
 const isVisible = (el) => {
     if (!el) return false;
     const style = getComputedStyle(el);
@@ -31,24 +32,18 @@ const dedupe = (arr, keyFn) => {
         return true;
     });
 };
-'''
+"""
 
 
-def build_extract_js(
-    content_type: str,
-    selector: str | None,
-    offset: int,
-    limit: int,
-    table_index: int | None
-) -> str:
+def build_extract_js(content_type: str, selector: str | None, offset: int, limit: int, table_index: int | None) -> str:
     """Build JavaScript for content extraction."""
-    scope_js = f'''
+    scope_js = f"""
     const customSelector = {json.dumps(selector)};
     const scope = customSelector ? document.querySelector(customSelector) : document.body;
     if (!scope) {{
         return {{ error: true, reason: 'Selector not found: ' + customSelector }};
     }}
-    '''
+    """
 
     if content_type == "overview":
         return _build_overview_js(scope_js)
@@ -68,7 +63,7 @@ def build_extract_js(
 
 def _build_overview_js(scope_js: str) -> str:
     """Build JavaScript for content overview."""
-    return f'''
+    return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
@@ -135,12 +130,12 @@ def _build_overview_js(scope_js: str) -> str:
 
         return result;
     }})()
-    '''
+    """
 
 
 def _build_main_js(scope_js: str, offset: int, limit: int) -> str:
     """Build JavaScript for main content extraction."""
-    return f'''
+    return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
@@ -191,13 +186,13 @@ def _build_main_js(scope_js: str, offset: int, limit: int) -> str:
 
         return result;
     }})()
-    '''
+    """
 
 
 def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | None) -> str:
     """Build JavaScript for table extraction."""
     if table_index is not None:
-        return f'''
+        return f"""
         (() => {{
             {scope_js}
             {JS_HELPERS}
@@ -252,9 +247,9 @@ def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | N
 
             return result;
         }})()
-        '''
+        """
     else:
-        return f'''
+        return f"""
         (() => {{
             {scope_js}
             {JS_HELPERS}
@@ -286,12 +281,12 @@ def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | N
                 hint: items.length > 0 ? "Use table_index=N offset=0 limit=20 to get table rows" : null
             }};
         }})()
-        '''
+        """
 
 
 def _build_links_js(scope_js: str, offset: int, limit: int) -> str:
     """Build JavaScript for links extraction."""
-    return f'''
+    return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
@@ -336,12 +331,12 @@ def _build_links_js(scope_js: str, offset: int, limit: int) -> str:
 
         return result;
     }})()
-    '''
+    """
 
 
 def _build_headings_js(scope_js: str) -> str:
     """Build JavaScript for headings extraction."""
-    return f'''
+    return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
@@ -364,12 +359,12 @@ def _build_headings_js(scope_js: str) -> str:
             items: headings
         }};
     }})()
-    '''
+    """
 
 
 def _build_images_js(scope_js: str, offset: int, limit: int) -> str:
     """Build JavaScript for images extraction."""
-    return f'''
+    return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
@@ -414,4 +409,4 @@ def _build_images_js(scope_js: str, offset: int, limit: int) -> str:
 
         return result;
     }})()
-    '''
+    """

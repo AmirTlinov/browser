@@ -4,6 +4,7 @@ TOTP (Time-based One-Time Password) generation for 2FA.
 Provides:
 - generate_totp: Generate TOTP code from secret
 """
+
 from __future__ import annotations
 
 import base64

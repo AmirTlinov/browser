@@ -6,6 +6,7 @@ Provides:
 - eval_js: Evaluate JavaScript expression in page context
 - dump_dom_html: Navigate to URL and return full DOM HTML
 """
+
 from __future__ import annotations
 
 import json

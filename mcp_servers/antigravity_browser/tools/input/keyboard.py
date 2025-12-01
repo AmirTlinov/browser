@@ -3,6 +3,7 @@ Keyboard input operations for browser automation.
 
 Provides key press and text typing operations.
 """
+
 from __future__ import annotations
 
 from typing import Any

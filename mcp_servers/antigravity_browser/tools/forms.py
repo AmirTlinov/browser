@@ -7,6 +7,7 @@ Provides:
 - clear_input: Clear input field value
 - wait_for_element: Wait for element to appear in DOM
 """
+
 from __future__ import annotations
 
 import json

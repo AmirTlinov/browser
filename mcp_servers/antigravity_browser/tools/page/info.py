@@ -3,6 +3,7 @@ Page information and context access.
 
 Provides get_page_info and get_page_context functions.
 """
+
 from __future__ import annotations
 
 import time
@@ -41,17 +42,14 @@ def get_page_context(config: BrowserConfig) -> dict[str, Any]:
             "cached": True,
             "url": _page_context.url,
             "title": _page_context.title,
-            "age_seconds": round(time.time() - _page_context.timestamp, 1)
+            "age_seconds": round(time.time() - _page_context.timestamp, 1),
         }
 
     # Refresh context - import here to avoid circular dependency
     from .analyze import analyze_page
+
     result = analyze_page(config)
-    return {
-        "cached": False,
-        "overview": result.get("overview"),
-        "target": result.get("target")
-    }
+    return {"cached": False, "overview": result.get("overview"), "target": result.get("target")}
 
 
 def get_page_info(config: BrowserConfig) -> dict[str, Any]:
@@ -82,8 +80,5 @@ def get_page_info(config: BrowserConfig) -> dict[str, Any]:
             return {"pageInfo": result, "target": target["id"]}
         except (OSError, ValueError, KeyError) as e:
             raise SmartToolError(
-                tool="get_page_info",
-                action="get",
-                reason=str(e),
-                suggestion="Ensure the page is loaded and responsive"
+                tool="get_page_info", action="get", reason=str(e), suggestion="Ensure the page is loaded and responsive"
             ) from e

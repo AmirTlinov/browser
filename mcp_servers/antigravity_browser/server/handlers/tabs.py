@@ -14,9 +14,7 @@ if TYPE_CHECKING:
     from ...launcher import BrowserLauncher
 
 
-def handle_list_tabs(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_list_tabs(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.list_tabs(
         config,
         offset=args.get("offset", 0),
@@ -26,9 +24,7 @@ def handle_list_tabs(
     return ToolResult.json(result)
 
 
-def handle_switch_tab(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_switch_tab(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.switch_tab(
         config,
         tab_id=args.get("tab_id"),
@@ -37,9 +33,7 @@ def handle_switch_tab(
     return ToolResult.json(result)
 
 
-def handle_new_tab(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_new_tab(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.new_tab(
         config,
         url=args.get("url", "about:blank"),
@@ -47,9 +41,7 @@ def handle_new_tab(
     return ToolResult.json(result)
 
 
-def handle_close_tab(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_close_tab(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.close_tab(
         config,
         tab_id=args.get("tab_id"),

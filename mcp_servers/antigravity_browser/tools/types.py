@@ -4,6 +4,7 @@ TypedDict definitions for browser automation tool responses.
 These types provide static type checking and documentation for the
 dictionary structures returned by browser automation tools.
 """
+
 from __future__ import annotations
 
 from typing import Any, NotRequired, TypedDict

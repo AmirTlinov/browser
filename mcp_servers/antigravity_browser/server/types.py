@@ -34,11 +34,17 @@ class ToolResult:
     """Result of a tool execution."""
 
     content: list[ToolContent] = field(default_factory=list)
+    is_error: bool = False
 
     @classmethod
     def text(cls, text: str) -> ToolResult:
         """Create result with single text content."""
         return cls(content=[ToolContent(type="text", text=text)])
+
+    @classmethod
+    def error(cls, message: str) -> ToolResult:
+        """Create error result."""
+        return cls(content=[ToolContent(type="text", text=f"Error: {message}")], is_error=True)
 
     @classmethod
     def json(cls, data: Any) -> ToolResult:

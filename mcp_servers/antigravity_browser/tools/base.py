@@ -8,6 +8,7 @@ Provides:
 - URL validation functions
 - Retry decorator with exponential backoff
 """
+
 from __future__ import annotations
 
 import time
@@ -140,7 +141,9 @@ def _create_session(config: BrowserConfig, timeout: float = 5.0) -> tuple[Browse
 
 
 @contextmanager
-def get_session(config: BrowserConfig, timeout: float = 5.0) -> Generator[tuple[BrowserSession, dict[str, str]], None, None]:
+def get_session(
+    config: BrowserConfig, timeout: float = 5.0
+) -> Generator[tuple[BrowserSession, dict[str, str]], None, None]:
     """Context manager for browser session with automatic cleanup.
 
     Usage:

@@ -3,6 +3,7 @@ CAPTCHA submission.
 
 Find and click verify/submit buttons.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -40,44 +41,28 @@ def submit_captcha(config: BrowserConfig) -> dict[str, Any]:
                 tool="submit_captcha",
                 action="find_button",
                 reason="No verify/submit button found",
-                suggestion="CAPTCHA may auto-submit, or use click_element to find button manually"
+                suggestion="CAPTCHA may auto-submit, or use click_element to find button manually",
             )
 
         x = result["x"]
         y = result["y"]
 
         # Click the button
-        session.send("Input.dispatchMouseEvent", {
-            "type": "mousePressed",
-            "x": x,
-            "y": y,
-            "button": "left",
-            "clickCount": 1
-        })
-        session.send("Input.dispatchMouseEvent", {
-            "type": "mouseReleased",
-            "x": x,
-            "y": y,
-            "button": "left"
-        })
+        session.send(
+            "Input.dispatchMouseEvent", {"type": "mousePressed", "x": x, "y": y, "button": "left", "clickCount": 1}
+        )
+        session.send("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": x, "y": y, "button": "left"})
 
         return {
-            "result": {
-                "success": True,
-                "button": result.get("text", "verify"),
-                "clicked": {"x": x, "y": y}
-            },
-            "target": target.get("id", "")
+            "result": {"success": True, "button": result.get("text", "verify"), "clicked": {"x": x, "y": y}},
+            "target": target.get("id", ""),
         }
 
     except SmartToolError:
         raise
     except (OSError, ValueError, KeyError) as e:
         raise SmartToolError(
-            tool="submit_captcha",
-            action="submit",
-            reason=str(e),
-            suggestion="Try clicking verify button manually"
+            tool="submit_captcha", action="submit", reason=str(e), suggestion="Try clicking verify button manually"
         ) from e
     finally:
         session.close()
@@ -85,7 +70,7 @@ def submit_captcha(config: BrowserConfig) -> dict[str, Any]:
 
 def _build_submit_js() -> str:
     """Build JavaScript to find verify/submit button."""
-    return '''
+    return """
     (() => {
         // Common verify/submit button selectors
         const selectors = [
@@ -145,4 +130,4 @@ def _build_submit_js() -> str:
 
         return { found: false };
     })()
-    '''
+    """

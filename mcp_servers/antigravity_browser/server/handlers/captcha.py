@@ -15,9 +15,7 @@ if TYPE_CHECKING:
     from ...launcher import BrowserLauncher
 
 
-def handle_analyze_captcha(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_analyze_captcha(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.analyze_captcha(
         config,
         force_grid_size=args.get("force_grid_size", 0),
@@ -25,9 +23,7 @@ def handle_analyze_captcha(
     return ToolResult.json(result)
 
 
-def handle_get_captcha_screenshot(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_get_captcha_screenshot(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.get_captcha_screenshot(
         config,
         grid_size=args.get("grid_size", 0),
@@ -46,9 +42,7 @@ def handle_get_captcha_screenshot(
     )
 
 
-def handle_click_captcha_blocks(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_click_captcha_blocks(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.click_captcha_blocks(
         config,
         blocks=args["blocks"],
@@ -57,9 +51,7 @@ def handle_click_captcha_blocks(
     return ToolResult.json(result)
 
 
-def handle_click_captcha_area(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_click_captcha_area(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.click_captcha_area(
         config,
         area_id=args["area_id"],
@@ -67,9 +59,7 @@ def handle_click_captcha_area(
     return ToolResult.json(result)
 
 
-def handle_submit_captcha(
-    config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]
-) -> ToolResult:
+def handle_submit_captcha(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     result = smart_tools.submit_captcha(config)
     return ToolResult.json(result)
 

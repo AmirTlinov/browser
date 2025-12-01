@@ -3,6 +3,7 @@ Smart form filling by field names/labels.
 
 Matches fields by name, id, label text, placeholder, or aria-label.
 """
+
 from __future__ import annotations
 
 import json
@@ -13,12 +14,7 @@ from ..base import SmartToolError, get_session, with_retry
 
 
 @with_retry(max_attempts=2, delay=0.2)
-def fill_form(
-    config: BrowserConfig,
-    data: dict[str, Any],
-    form_index: int = 0,
-    submit: bool = False
-) -> dict[str, Any]:
+def fill_form(config: BrowserConfig, data: dict[str, Any], form_index: int = 0, submit: bool = False) -> dict[str, Any]:
     """
     Fill a form with provided data in one operation.
 
@@ -43,7 +39,7 @@ def fill_form(
             tool="fill_form",
             action="validate",
             reason="No data provided",
-            suggestion="Provide a dict with field names/values"
+            suggestion="Provide a dict with field names/values",
         )
 
     with get_session(config) as (session, target):
@@ -55,21 +51,18 @@ def fill_form(
                 tool="fill_form",
                 action="evaluate",
                 reason="Form fill returned null",
-                suggestion="Page may have navigated or form structure changed"
+                suggestion="Page may have navigated or form structure changed",
             )
 
         if result.get("notFound") and len(result["notFound"]) > 0:
             result["suggestion"] = f"Fields not found: {result['notFound']}. Use analyze_page to see available fields."
 
-        return {
-            "result": result,
-            "target": target["id"]
-        }
+        return {"result": result, "target": target["id"]}
 
 
 def _build_fill_form_js(data: dict[str, Any], form_index: int, submit: bool) -> str:
     """Build JavaScript for form filling operation."""
-    return f'''
+    return f"""
     (() => {{
         const data = {json.dumps(data)};
         const formIndex = {form_index};
@@ -223,4 +216,4 @@ def _build_fill_form_js(data: dict[str, Any], form_index: int, submit: bool) -> 
 
         return results;
     }})()
-    '''
+    """

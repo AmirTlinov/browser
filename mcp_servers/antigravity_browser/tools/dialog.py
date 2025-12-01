@@ -4,6 +4,7 @@ Dialog handling tools for JavaScript alerts, confirms, and prompts.
 Provides:
 - handle_dialog: Accept or dismiss JS dialogs
 """
+
 from __future__ import annotations
 
 from typing import Any

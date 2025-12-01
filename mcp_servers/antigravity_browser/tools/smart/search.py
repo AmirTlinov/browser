@@ -3,6 +3,7 @@ Universal page search functionality.
 
 Auto-finds search input using multiple strategies.
 """
+
 from __future__ import annotations
 
 import json
@@ -14,11 +15,7 @@ from ..base import SmartToolError, get_session, with_retry
 
 
 @with_retry(max_attempts=3, delay=0.3)
-def search_page(
-    config: BrowserConfig,
-    query: str,
-    submit: bool = True
-) -> dict[str, Any]:
+def search_page(config: BrowserConfig, query: str, submit: bool = True) -> dict[str, Any]:
     """
     Perform a search on the current page.
 
@@ -31,10 +28,7 @@ def search_page(
     """
     if not query:
         raise SmartToolError(
-            tool="search_page",
-            action="validate",
-            reason="Empty query",
-            suggestion="Provide a search query"
+            tool="search_page", action="validate", reason="Empty query", suggestion="Provide a search query"
         )
 
     with get_session(config) as (session, target):
@@ -46,7 +40,7 @@ def search_page(
                 tool="search_page",
                 action="evaluate",
                 reason="Search evaluation returned null",
-                suggestion="Page may have navigated or crashed"
+                suggestion="Page may have navigated or crashed",
             )
 
         if result.get("error"):
@@ -54,22 +48,19 @@ def search_page(
                 tool="search_page",
                 action="find_input",
                 reason=result.get("reason", "Unknown error"),
-                suggestion=result.get("suggestion", "Try fill_form instead")
+                suggestion=result.get("suggestion", "Try fill_form instead"),
             )
 
         # Wait for navigation if submitted
         if submit and result.get("submitted"):
             time.sleep(0.5)
 
-        return {
-            "result": result,
-            "target": target["id"]
-        }
+        return {"result": result, "target": target["id"]}
 
 
 def _build_search_js(query: str, submit: bool) -> str:
     """Build JavaScript for search operation."""
-    return f'''
+    return f"""
     (() => {{
         const query = {json.dumps(query)};
         const shouldSubmit = {json.dumps(submit)};
@@ -223,4 +214,4 @@ def _build_search_js(query: str, submit: bool) -> str:
             strategyUsed: strategyUsed
         }};
     }})()
-    '''
+    """

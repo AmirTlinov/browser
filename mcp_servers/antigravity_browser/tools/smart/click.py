@@ -3,6 +3,7 @@ Smart element clicking by natural language.
 
 Uses text, role, and proximity instead of CSS selectors.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,7 +20,7 @@ def click_element(
     role: str | None = None,
     near_text: str | None = None,
     index: int = 0,
-    wait_timeout: float = 3.0
+    wait_timeout: float = 3.0,
 ) -> dict[str, Any]:
     """
     Click an element using natural language description instead of CSS selector.
@@ -46,7 +47,7 @@ def click_element(
             tool="click_element",
             action="validate",
             reason="No search criteria provided",
-            suggestion="Provide at least one of: text, role, or near_text"
+            suggestion="Provide at least one of: text, role, or near_text",
         )
 
     with get_session(config) as (session, target):
@@ -58,7 +59,7 @@ def click_element(
                 tool="click_element",
                 action="evaluate",
                 reason="Click evaluation returned null",
-                suggestion="Page may have navigated or crashed"
+                suggestion="Page may have navigated or crashed",
             )
 
         if result.get("error"):
@@ -67,24 +68,15 @@ def click_element(
                 action="find",
                 reason=result.get("reason", "Unknown error"),
                 suggestion=result.get("suggestion", "Check element exists"),
-                details=result.get("searchCriteria", {})
+                details=result.get("searchCriteria", {}),
             )
 
-        return {
-            "result": result,
-            "target": target["id"]
-        }
+        return {"result": result, "target": target["id"]}
 
 
-def _build_click_js(
-    text: str | None,
-    role: str | None,
-    near_text: str | None,
-    index: int,
-    wait_timeout: float
-) -> str:
+def _build_click_js(text: str | None, role: str | None, near_text: str | None, index: int, wait_timeout: float) -> str:
     """Build JavaScript for smart click operation."""
-    return f'''
+    return f"""
     (() => {{
         const searchText = {json.dumps(text)};
         const searchRole = {json.dumps(role)};
@@ -245,4 +237,4 @@ def _build_click_js(
             matchesFound: matches.length
         }};
     }})()
-    '''
+    """

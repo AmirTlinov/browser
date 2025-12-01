@@ -3,6 +3,7 @@ Smart waiting for browser conditions.
 
 Provides wait_for function for navigation, load, text, element presence.
 """
+
 from __future__ import annotations
 
 import json
@@ -14,11 +15,7 @@ from ..base import SmartToolError, get_session
 
 
 def wait_for(
-    config: BrowserConfig,
-    condition: str,
-    timeout: float = 10.0,
-    text: str | None = None,
-    selector: str | None = None
+    config: BrowserConfig, condition: str, timeout: float = 10.0, text: str | None = None, selector: str | None = None
 ) -> dict[str, Any]:
     """
     Wait for a condition before proceeding.
@@ -44,7 +41,7 @@ def wait_for(
             tool="wait_for",
             action="validate",
             reason=f"Invalid condition: {condition}",
-            suggestion=f"Use one of: {', '.join(valid_conditions)}"
+            suggestion=f"Use one of: {', '.join(valid_conditions)}",
         )
 
     if condition == "text" and not text:
@@ -52,7 +49,7 @@ def wait_for(
             tool="wait_for",
             action="validate",
             reason="text parameter required for condition='text'",
-            suggestion="Provide text='expected text'"
+            suggestion="Provide text='expected text'",
         )
 
     if condition == "element" and not selector:
@@ -60,7 +57,7 @@ def wait_for(
             tool="wait_for",
             action="validate",
             reason="selector parameter required for condition='element'",
-            suggestion="Provide selector='css selector'"
+            suggestion="Provide selector='css selector'",
         )
 
     with get_session(config) as (session, target):
@@ -70,10 +67,7 @@ def wait_for(
         while time.time() - start_time < timeout:
             elapsed = time.time() - start_time
 
-            result = _check_condition(
-                session, target, condition, elapsed,
-                start_url, text, selector
-            )
+            result = _check_condition(session, target, condition, elapsed, start_url, text, selector)
             if result:
                 return result
 
@@ -85,7 +79,7 @@ def wait_for(
             "timeout": timeout,
             "elapsed": round(time.time() - start_time, 2),
             "suggestion": f"Condition '{condition}' not met within {timeout}s",
-            "target": target["id"]
+            "target": target["id"],
         }
 
 
@@ -96,7 +90,7 @@ def _check_condition(
     elapsed: float,
     start_url: str | None,
     text: str | None,
-    selector: str | None
+    selector: str | None,
 ) -> dict[str, Any] | None:
     """Check a single wait condition. Returns result dict if met, None otherwise."""
     if condition == "navigation":
@@ -108,18 +102,13 @@ def _check_condition(
                 "elapsed": round(elapsed, 2),
                 "old_url": start_url,
                 "new_url": current_url,
-                "target": target["id"]
+                "target": target["id"],
             }
 
     elif condition == "load":
         ready_state = session.eval_js("document.readyState")
         if ready_state == "complete":
-            return {
-                "success": True,
-                "condition": condition,
-                "elapsed": round(elapsed, 2),
-                "target": target["id"]
-            }
+            return {"success": True, "condition": condition, "elapsed": round(elapsed, 2), "target": target["id"]}
 
     elif condition == "text" and text:
         found = session.eval_js(f"document.body.innerText.includes({json.dumps(text)})")
@@ -129,7 +118,7 @@ def _check_condition(
                 "condition": condition,
                 "text": text,
                 "elapsed": round(elapsed, 2),
-                "target": target["id"]
+                "target": target["id"],
             }
 
     elif condition == "element" and selector:
@@ -141,11 +130,11 @@ def _check_condition(
                 "condition": condition,
                 "selector": selector,
                 "elapsed": round(elapsed, 2),
-                "target": target["id"]
+                "target": target["id"],
             }
 
     elif condition == "network_idle":
-        js = '''
+        js = """
         (() => {
             if (!window._networkIdleTracker) {
                 window._networkIdleTracker = { count: 0, lastActivity: Date.now() };
@@ -157,14 +146,9 @@ def _check_condition(
             }
             return Date.now() - window._networkIdleTracker.lastActivity > 500;
         })()
-        '''
+        """
         is_idle = session.eval_js(js)
         if is_idle:
-            return {
-                "success": True,
-                "condition": condition,
-                "elapsed": round(elapsed, 2),
-                "target": target["id"]
-            }
+            return {"success": True, "condition": condition, "elapsed": round(elapsed, 2), "target": target["id"]}
 
     return None

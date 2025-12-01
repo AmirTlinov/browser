@@ -3,6 +3,7 @@ Batch workflow execution for browser automation.
 
 Execute sequences of browser actions efficiently.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -37,7 +38,7 @@ def _execute_click_step(config: BrowserConfig, step: dict[str, Any]) -> dict[str
             text=step.get("text"),
             role=step.get("role"),
             near_text=step.get("near_text"),
-            index=step.get("index", 0)
+            index=step.get("index", 0),
         )
         result = click_result.get("result", {})
         result["success"] = True
@@ -66,12 +67,7 @@ def _execute_fill_step(config: BrowserConfig, step: dict[str, Any]) -> dict[str,
     from .form import fill_form
 
     data = step.get("data", {})
-    fill_result = fill_form(
-        config,
-        data=data,
-        form_index=step.get("form_index", 0),
-        submit=step.get("submit", False)
-    )
+    fill_result = fill_form(config, data=data, form_index=step.get("form_index", 0), submit=step.get("submit", False))
     result = fill_result.get("result", {})
     result["success"] = result.get("success", True)
     return result
@@ -92,12 +88,13 @@ def _execute_wait_step(config: BrowserConfig, step: dict[str, Any]) -> dict[str,
     """Execute wait step."""
     try:
         from ..page import wait_for
+
         wait_result = wait_for(
             config,
             condition=step.get("condition", "load"),
             timeout=step.get("timeout", 10),
             text=step.get("text"),
-            selector=step.get("selector")
+            selector=step.get("selector"),
         )
         wait_result["success"] = True
         return wait_result
@@ -109,21 +106,16 @@ def _execute_screenshot_step(config: BrowserConfig, step: dict[str, Any]) -> dic
     """Execute screenshot step."""
     with get_session(config) as (session, target):
         data_b64 = session.capture_screenshot()
-        return {
-            "success": True,
-            "bytes": len(data_b64) * 3 // 4,
-            "screenshot_b64": data_b64
-        }
+        return {"success": True, "bytes": len(data_b64) * 3 // 4, "screenshot_b64": data_b64}
 
 
 def _execute_extract_step(config: BrowserConfig, step: dict[str, Any]) -> dict[str, Any]:
     """Execute extract content step."""
     try:
         from ..page import extract_content
+
         extract_result = extract_content(
-            config,
-            content_type=step.get("content_type", "main"),
-            selector=step.get("selector")
+            config, content_type=step.get("content_type", "main"), selector=step.get("selector")
         )
         return {"success": True, "content": extract_result.get("content")}
     except ImportError:
@@ -153,7 +145,7 @@ def _execute_workflow_step(config: BrowserConfig, step: dict[str, Any]) -> dict[
     else:
         return {
             "error": f"Unknown action: {action}",
-            "suggestion": f"Supported actions: {', '.join(_STEP_HANDLERS.keys())}"
+            "suggestion": f"Supported actions: {', '.join(_STEP_HANDLERS.keys())}",
         }
 
 
@@ -200,18 +192,14 @@ def execute_workflow(
             tool="execute_workflow",
             action="validate",
             reason="No steps provided",
-            suggestion="Provide a list of action steps"
+            suggestion="Provide a list of action steps",
         )
 
     results = []
 
     for i, step in enumerate(steps):
         action = step.get("action")
-        step_result: dict[str, Any] = {
-            "step": i,
-            "action": action,
-            "success": False
-        }
+        step_result: dict[str, Any] = {"step": i, "action": action, "success": False}
 
         try:
             result = _execute_workflow_step(config, step)
@@ -245,5 +233,5 @@ def execute_workflow(
         "total": len(steps),
         "executed": len(results),
         "succeeded": succeeded,
-        "results": results
+        "results": results,
     }

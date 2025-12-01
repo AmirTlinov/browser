@@ -38,4 +38,3 @@ def http_get(url: str, config: BrowserConfig) -> dict[str, object]:
             }
     except (TimeoutError, URLError) as exc:
         raise HttpClientError(str(exc)) from exc
-

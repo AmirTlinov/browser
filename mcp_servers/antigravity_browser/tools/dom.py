@@ -6,6 +6,7 @@ Provides:
 - get_element_info: Get detailed element information
 - screenshot: Capture page screenshot
 """
+
 from __future__ import annotations
 
 import base64

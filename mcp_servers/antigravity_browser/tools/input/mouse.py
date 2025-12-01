@@ -3,6 +3,7 @@ Mouse input operations for browser automation.
 
 Provides click, double-click, move, hover, and drag operations.
 """
+
 from __future__ import annotations
 
 import json
