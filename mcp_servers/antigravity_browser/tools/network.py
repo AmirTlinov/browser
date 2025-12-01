@@ -151,32 +151,70 @@ def eval_js(config: BrowserConfig, expression: str) -> dict[str, Any]:
             ) from e
 
 
-def dump_dom_html(config: BrowserConfig, url: str) -> dict[str, Any]:
+DEFAULT_DOM_MAX_CHARS = 50000  # 50KB default
+MAX_DOM_CHARS_LIMIT = 200000  # 200KB max
+
+
+def dump_dom_html(
+    config: BrowserConfig,
+    url: str,
+    max_chars: int = DEFAULT_DOM_MAX_CHARS,
+) -> dict[str, Any]:
     """
-    Navigate to URL and return full DOM HTML.
+    Navigate to URL and return DOM HTML with size limiting.
+
+    IMPORTANT: Consider using browser_navigate() + analyze_page() for
+    structured data - they are more context-efficient.
 
     Args:
         config: Browser configuration
         url: URL to navigate to and dump
+        max_chars: Maximum HTML characters to return (default: 50000, max: 200000)
 
     Returns:
-        Dict with html content and targetId
+        Dict with:
+        - html: HTML content (truncated if exceeds max_chars)
+        - targetId: Browser target ID
+        - totalChars: Original HTML size
+        - truncated: True if HTML was truncated
+        - hint: Suggestion if truncated
 
     Raises:
         SmartToolError: If URL validation fails or navigation fails
     """
     # Validate URL against allowlist
     ensure_allowed_navigation(url, config)
+    max_chars = min(max_chars, MAX_DOM_CHARS_LIMIT)
 
     with get_session(config) as (session, target):
         try:
             session.navigate(url, wait_load=True)
             html = session.get_dom()
-            return {"html": html, "targetId": target["id"]}
+            total_chars = len(html)
+            truncated = total_chars > max_chars
+
+            if truncated:
+                html = html[:max_chars]
+
+            result: dict[str, Any] = {
+                "html": html,
+                "targetId": target["id"],
+                "totalChars": total_chars,
+                "truncated": truncated,
+            }
+
+            if truncated:
+                result["hint"] = (
+                    f"HTML truncated ({total_chars} -> {max_chars} chars). "
+                    f"Consider using browser_navigate(url) + analyze_page() for structured data, "
+                    f"or increase max_chars (up to {MAX_DOM_CHARS_LIMIT})."
+                )
+
+            return result
         except Exception as e:
             raise SmartToolError(
                 tool="dump_dom_html",
                 action="navigate",
                 reason=str(e),
-                suggestion="Check URL and network connectivity",
+                suggestion="Check URL and network connectivity. Consider using browser_navigate() + analyze_page() instead.",
             ) from e

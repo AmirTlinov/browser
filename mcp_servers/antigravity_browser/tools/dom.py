@@ -2,7 +2,7 @@
 DOM tools for browser automation.
 
 Provides:
-- get_dom: Get HTML content from page or element
+- get_dom: Get HTML content from page or element with size limits
 - get_element_info: Get detailed element information
 - screenshot: Capture page screenshot
 """
@@ -16,27 +16,74 @@ from ..config import BrowserConfig
 from ..session import session_manager
 from .base import SmartToolError, get_session
 
+# Default and max limits for HTML content
+DEFAULT_MAX_CHARS = 50000  # 50KB default
+MAX_CHARS_LIMIT = 200000  # 200KB max
 
-def get_dom(config: BrowserConfig, selector: str | None = None) -> dict[str, Any]:
-    """Get DOM HTML from session's tab.
+
+def get_dom(
+    config: BrowserConfig,
+    selector: str | None = None,
+    max_chars: int = DEFAULT_MAX_CHARS,
+    include_metadata: bool = True,
+) -> dict[str, Any]:
+    """Get DOM HTML from session's tab with size limiting.
+
+    IMPORTANT: Consider using analyze_page() or extract_content() for
+    structured data - they are more context-efficient.
 
     Args:
         config: Browser configuration
         selector: Optional CSS selector to get HTML of specific element
+        max_chars: Maximum HTML characters to return (default: 50000, max: 200000)
+        include_metadata: Include HTML size metadata (default: True)
 
     Returns:
-        Dict with html content, target ID, and session tab ID
+        Dict with:
+        - html: HTML content (truncated if exceeds max_chars)
+        - truncated: True if HTML was truncated
+        - totalChars: Original HTML size before truncation
+        - returnedChars: Actual returned size
+        - target: Target ID
+        - hint: Suggestion if truncated
     """
+    max_chars = min(max_chars, MAX_CHARS_LIMIT)
+
     with get_session(config) as (session, target):
         try:
             html = session.get_dom(selector)
-            return {"html": html, "target": target["id"], "sessionTabId": session_manager.tab_id}
+            total_chars = len(html)
+            truncated = total_chars > max_chars
+
+            if truncated:
+                html = html[:max_chars]
+
+            result: dict[str, Any] = {
+                "html": html,
+                "target": target["id"],
+                "sessionTabId": session_manager.tab_id,
+            }
+
+            if include_metadata:
+                result["totalChars"] = total_chars
+                result["returnedChars"] = len(html)
+                result["truncated"] = truncated
+
+            if truncated:
+                result["hint"] = (
+                    f"HTML truncated ({total_chars} -> {max_chars} chars). "
+                    f"Options: 1) Use selector='...' to get specific element, "
+                    f"2) Use max_chars={min(total_chars, MAX_CHARS_LIMIT)} for full content, "
+                    f"3) Use analyze_page() or extract_content() for structured data."
+                )
+
+            return result
         except Exception as e:
             raise SmartToolError(
                 tool="get_dom",
                 action="get",
                 reason=str(e),
-                suggestion="Check selector is valid",
+                suggestion="Check selector is valid. Consider using analyze_page() instead.",
             ) from e
 
 

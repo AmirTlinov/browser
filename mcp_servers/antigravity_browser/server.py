@@ -828,12 +828,22 @@ Examples:
         },
         {
             "name": "dump_dom",
-            "description": "Uses Chrome to render a page and return its DOM HTML.",
+            "description": """Uses Chrome to render a page and return its DOM HTML.
+
+IMPORTANT: Consider using browser_navigate(url) + analyze_page() instead -
+they return structured data optimized for AI context.
+
+Returns HTML with automatic size limiting (default 50KB, max 200KB).""",
             "inputSchema": {
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "type": "object",
                 "properties": {
                     "url": {"type": "string", "description": "URL to render"},
+                    "max_chars": {
+                        "type": "integer",
+                        "default": 50000,
+                        "description": "Maximum HTML characters (default: 50000, max: 200000)"
+                    }
                 },
                 "required": ["url"],
                 "additionalProperties": False,
@@ -841,12 +851,31 @@ Examples:
         },
         {
             "name": "browser_get_dom",
-            "description": "Get DOM HTML of the current page or a specific element.",
+            "description": """Get DOM HTML of the current page or a specific element.
+
+IMPORTANT: Consider using analyze_page() or extract_content() instead -
+they return structured data optimized for AI context.
+
+Returns HTML with automatic size limiting (default 50KB, max 200KB).
+Use selector to get specific element's HTML for smaller response.""",
             "inputSchema": {
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector (optional, returns full page if omitted)"},
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector (optional, returns full page if omitted)"
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "default": 50000,
+                        "description": "Maximum HTML characters (default: 50000, max: 200000)"
+                    },
+                    "include_metadata": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": "Include size metadata and hints (default: true)"
+                    }
                 },
                 "required": [],
                 "additionalProperties": False,
@@ -1542,16 +1571,19 @@ class McpServer:
                 ]
             elif name == "dump_dom":
                 url = arguments["url"]
+                max_chars = arguments.get("max_chars", 50000)
                 self.launcher.ensure_running()
-                dom = smart_tools.dump_dom_html(self.config, url)
-                content = [
-                    self._result_content(f"target={dom['targetId']}"),
-                    self._result_content(dom["html"]),
-                ]
+                dom = smart_tools.dump_dom_html(self.config, url, max_chars)
+                # Return structured result instead of two separate messages
+                content = [self._result_content(json.dumps(dom, ensure_ascii=False))]
             elif name == "browser_get_dom":
-                selector = arguments.get("selector")
                 self.launcher.ensure_running()
-                result = smart_tools.get_dom(self.config, selector)
+                result = smart_tools.get_dom(
+                    self.config,
+                    selector=arguments.get("selector"),
+                    max_chars=arguments.get("max_chars", 50000),
+                    include_metadata=arguments.get("include_metadata", True)
+                )
                 content = [self._result_content(json.dumps(result, ensure_ascii=False))]
             elif name == "browser_get_element":
                 selector = arguments["selector"]

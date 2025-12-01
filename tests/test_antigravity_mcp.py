@@ -185,12 +185,14 @@ def test_server_call_tool_browser_get_cookies(monkeypatch: pytest.MonkeyPatch) -
 def test_server_call_tool_dump_dom(monkeypatch: pytest.MonkeyPatch) -> None:
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
-    monkeypatch.setattr(cdp_module, "dump_dom_html", lambda url, config: {"targetId": "t", "html": "<html></html>"})
+    fake_resp = {"targetId": "t", "html": "<html></html>", "totalChars": 13, "truncated": False}
+    monkeypatch.setattr(cdp_module, "dump_dom_html", lambda config, url, max_chars=50000: fake_resp)
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="2", name="dump_dom", arguments={"url": "http://example.com"})
-    assert "target=t" in sent[0]["result"]["content"][0]["text"]
-    assert "<html" in sent[0]["result"]["content"][1]["text"]
+    response_text = sent[0]["result"]["content"][0]["text"]
+    assert "targetId" in response_text
+    assert "<html" in response_text
 
 
 def test_server_call_tool_launch(monkeypatch: pytest.MonkeyPatch) -> None:
