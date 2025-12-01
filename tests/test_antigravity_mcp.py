@@ -521,3 +521,56 @@ def test_list_tabs_url_filter() -> None:
 
         assert result["total"] == 2  # Only github URLs
         assert all("github" in t["url"].lower() for t in result["tabs"])
+
+
+# --- DOM Tools Truncation Tests ---
+
+
+def test_get_dom_truncation() -> None:
+    """Test get_dom truncates large HTML and returns metadata."""
+    from unittest.mock import MagicMock, patch
+
+    from mcp_servers.antigravity_browser.tools.dom import get_dom
+
+    # Create large HTML (100KB)
+    large_html = "<html>" + ("x" * 100000) + "</html>"
+
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=(mock_session, {"id": "test"}))
+    mock_session.__exit__ = MagicMock(return_value=None)
+    mock_session.get_dom = MagicMock(return_value=large_html)
+
+    with patch("mcp_servers.antigravity_browser.tools.dom.get_session", return_value=mock_session):
+        config = BrowserConfig.from_env()
+
+        # Test with default limit (50000)
+        result = get_dom(config, max_chars=50000)
+
+        assert result["truncated"] is True
+        assert result["totalChars"] == len(large_html)
+        assert result["returnedChars"] == 50000
+        assert len(result["html"]) == 50000
+        assert "hint" in result
+
+
+def test_get_dom_no_truncation() -> None:
+    """Test get_dom doesn't truncate small HTML."""
+    from unittest.mock import MagicMock, patch
+
+    from mcp_servers.antigravity_browser.tools.dom import get_dom
+
+    small_html = "<html><body>Hello</body></html>"
+
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=(mock_session, {"id": "test"}))
+    mock_session.__exit__ = MagicMock(return_value=None)
+    mock_session.get_dom = MagicMock(return_value=small_html)
+
+    with patch("mcp_servers.antigravity_browser.tools.dom.get_session", return_value=mock_session):
+        config = BrowserConfig.from_env()
+        result = get_dom(config)
+
+        assert result["truncated"] is False
+        assert result["totalChars"] == len(small_html)
+        assert result["html"] == small_html
+        assert "hint" not in result
