@@ -63,21 +63,53 @@ def _tool_definitions() -> list[dict[str, Any]]:
             "description": """PRIMARY TOOL: Analyze the current page and return a structured summary.
 
 ALWAYS call this tool FIRST when you need to understand what's on a page.
-Returns: page type, all forms with fields, clickable elements, main content.
 
-Use cases:
-- Before filling a form (to see available fields)
-- Before clicking (to see available buttons/links)
-- To understand page structure
-- After navigation to verify success""",
+OVERVIEW MODE (default, no params):
+Returns compact summary with counts and hints - minimal context usage.
+- Page metadata (URL, title, pageType)
+- Element counts (forms, links, buttons, inputs)
+- Preview samples (first few of each type)
+- Hints showing how to get more details
+
+DETAIL MODES (use detail parameter):
+- detail="forms": List all forms with field counts
+- detail="forms" + form_index=N: Full details of form N with all fields
+- detail="links" + offset/limit: Paginated list of links
+- detail="buttons": All buttons on page
+- detail="inputs": Standalone inputs (not in forms)
+- detail="content" + offset/limit: Main page content (paginated)
+
+Examples:
+- analyze_page() → overview with counts and hints
+- analyze_page(detail="forms", form_index=0) → form 0 with all fields
+- analyze_page(detail="links", offset=0, limit=20) → first 20 links""",
             "inputSchema": {
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "type": "object",
                 "properties": {
+                    "detail": {
+                        "type": "string",
+                        "enum": ["forms", "links", "buttons", "inputs", "content"],
+                        "description": "Section to get details for. Omit for overview."
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Starting index for paginated results (default: 0)",
+                        "default": 0
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max items to return (default: 10, max: 50)",
+                        "default": 10
+                    },
+                    "form_index": {
+                        "type": "integer",
+                        "description": "Specific form index when detail='forms'"
+                    },
                     "include_content": {
                         "type": "boolean",
-                        "description": "Include main text content (default: true)",
-                        "default": True
+                        "description": "Include content preview in overview (default: false)",
+                        "default": False
                     }
                 },
                 "required": [],
@@ -169,28 +201,50 @@ Example: search_page(query="Claude AI tutorial")""",
         },
         {
             "name": "extract_content",
-            "description": """SMART EXTRACT: Get structured content from page.
+            "description": """SMART EXTRACT: Get structured content from page with pagination.
 
 Use instead of browser_get_dom when you need specific data.
 
-content_type options:
-- "main": Article/content text with paragraphs
-- "table": All tables as structured arrays
-- "links": All links with text and URLs
-- "headings": Document outline (h1-h6)
-- "images": All images with alt text
-- "all": Everything combined""",
+OVERVIEW MODE (default):
+Returns content structure summary with counts and hints.
+
+DETAIL MODES with pagination:
+- content_type="main" + offset/limit: Main text paragraphs
+- content_type="table": List of tables with metadata
+- content_type="table" + table_index=N + offset/limit: Rows of table N
+- content_type="links" + offset/limit: All links
+- content_type="headings": Document outline (h1-h6)
+- content_type="images" + offset/limit: Images with metadata
+
+Examples:
+- extract_content() → overview with counts
+- extract_content(content_type="main", offset=0, limit=10) → first 10 paragraphs
+- extract_content(content_type="table", table_index=0, limit=20) → first 20 rows of table 0""",
             "inputSchema": {
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "type": "object",
                 "properties": {
                     "content_type": {
                         "type": "string",
-                        "enum": ["main", "table", "links", "headings", "images", "all"],
-                        "description": "What to extract",
-                        "default": "main"
+                        "enum": ["overview", "main", "table", "links", "headings", "images"],
+                        "description": "What to extract (default: overview)",
+                        "default": "overview"
                     },
-                    "selector": {"type": "string", "description": "Optional CSS selector to limit scope"}
+                    "selector": {"type": "string", "description": "Optional CSS selector to limit scope"},
+                    "offset": {
+                        "type": "integer",
+                        "description": "Starting index for paginated results (default: 0)",
+                        "default": 0
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max items to return (default: 10, max: 50)",
+                        "default": 10
+                    },
+                    "table_index": {
+                        "type": "integer",
+                        "description": "Specific table index when content_type='table'"
+                    }
                 },
                 "required": [],
                 "additionalProperties": False,
@@ -1120,9 +1174,13 @@ class McpServer:
                 self.launcher.ensure_running()
                 result = smart_tools.analyze_page(
                     self.config,
-                    include_content=arguments.get("include_content", True)
+                    detail=arguments.get("detail"),
+                    offset=arguments.get("offset", 0),
+                    limit=arguments.get("limit", 10),
+                    form_index=arguments.get("form_index"),
+                    include_content=arguments.get("include_content", False)
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "click_element":
                 self.launcher.ensure_running()
@@ -1158,10 +1216,13 @@ class McpServer:
                 self.launcher.ensure_running()
                 result = smart_tools.extract_content(
                     self.config,
-                    content_type=arguments.get("content_type", "main"),
-                    selector=arguments.get("selector")
+                    content_type=arguments.get("content_type", "overview"),
+                    selector=arguments.get("selector"),
+                    offset=arguments.get("offset", 0),
+                    limit=arguments.get("limit", 10),
+                    table_index=arguments.get("table_index")
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "wait_for":
                 self.launcher.ensure_running()
