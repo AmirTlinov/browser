@@ -19,28 +19,64 @@ from ..session import session_manager
 from .base import SmartToolError
 
 
-def list_tabs(config: BrowserConfig) -> dict[str, Any]:
-    """List all open browser tabs.
+def list_tabs(
+    config: BrowserConfig,
+    offset: int = 0,
+    limit: int = 20,
+    url_filter: str | None = None,
+) -> dict[str, Any]:
+    """List browser tabs with pagination and filtering.
 
     Args:
         config: Browser configuration
+        offset: Starting index for paginated results (default: 0)
+        limit: Maximum tabs to return (default: 20, max: 50)
+        url_filter: Filter tabs by URL substring (optional, case-insensitive)
 
     Returns:
         Dict containing:
-        - tabs: List of tab objects with id, url, title, and current flag
-        - count: Total number of tabs
+        - tabs: Paginated list of tab objects with id, url, title, and current flag
+        - total: Total number of matching tabs
+        - offset: Current offset
+        - limit: Current limit
+        - hasMore: Whether more tabs exist beyond current page
         - sessionTabId: ID of the current session's tab
+        - navigation: Hints for prev/next pagination (if applicable)
 
     The current session's tab is marked with 'current': True.
     Use switch_tab() to change the active tab.
     """
+    limit = min(limit, 50)  # Cap at 50
+
     try:
-        tabs = session_manager.list_tabs(config)
-        return {
+        all_tabs = session_manager.list_tabs(config)
+
+        # Apply URL filter if provided
+        if url_filter:
+            filter_lower = url_filter.lower()
+            all_tabs = [t for t in all_tabs if filter_lower in t.get("url", "").lower()]
+
+        total = len(all_tabs)
+        tabs = all_tabs[offset : offset + limit]
+
+        response: dict[str, Any] = {
             "tabs": tabs,
-            "count": len(tabs),
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "hasMore": offset + limit < total,
             "sessionTabId": session_manager.tab_id,
         }
+
+        # Navigation hints
+        if offset > 0 or offset + limit < total:
+            response["navigation"] = {}
+            if offset > 0:
+                response["navigation"]["prev"] = f"offset={max(0, offset - limit)} limit={limit}"
+            if offset + limit < total:
+                response["navigation"]["next"] = f"offset={offset + limit} limit={limit}"
+
+        return response
     except Exception as e:
         raise SmartToolError(
             tool="list_tabs",

@@ -818,7 +818,9 @@ def _execute_workflow_step(config: BrowserConfig, step: dict[str, Any]) -> dict[
 
 def execute_workflow(
     config: BrowserConfig,
-    steps: list[dict[str, Any]]
+    steps: list[dict[str, Any]],
+    include_screenshots: bool = False,
+    compact_results: bool = True,
 ) -> dict[str, Any]:
     """
     Execute a sequence of browser actions as a workflow.
@@ -838,7 +840,15 @@ def execute_workflow(
 
     Each step can have "continue_on_error": true to continue despite errors.
 
-    Returns results for all steps executed.
+    Args:
+        config: Browser configuration
+        steps: List of action steps to execute
+        include_screenshots: Include screenshot data in results (default: False to save context)
+        compact_results: Return compact results without redundant fields (default: True)
+
+    Returns:
+        Summary with workflow status and step results.
+        If include_screenshots=False, screenshot steps return only metadata (bytes, success).
     """
     if not steps:
         raise SmartToolError(
@@ -852,7 +862,7 @@ def execute_workflow(
 
     for i, step in enumerate(steps):
         action = step.get("action")
-        step_result = {
+        step_result: dict[str, Any] = {
             "step": i,
             "action": action,
             "success": False
@@ -860,6 +870,11 @@ def execute_workflow(
 
         try:
             result = _execute_workflow_step(config, step)
+
+            # Remove screenshot data if not requested
+            if not include_screenshots and "screenshot_b64" in result:
+                del result["screenshot_b64"]
+
             step_result.update(result)
         except SmartToolError as e:
             step_result["error"] = str(e)
@@ -867,16 +882,24 @@ def execute_workflow(
         except Exception as e:
             step_result["error"] = str(e)
 
+        # Compact results - remove success=True (implied by lack of error)
+        # Keep success=False for failed steps
+        if compact_results and step_result.get("success") is True:
+            step_result.pop("success", None)
+
         results.append(step_result)
 
         # Stop on error unless continue_on_error specified
-        if not step_result.get("success") and not step.get("continue_on_error"):
+        if step_result.get("error") and not step.get("continue_on_error"):
             break
 
+    succeeded = sum(1 for r in results if not r.get("error"))
+    completed = len(results) == len(steps) and succeeded == len(steps)
+
     return {
-        "workflow_completed": len(results) == len(steps) and all(r.get("success") for r in results),
-        "steps_total": len(steps),
-        "steps_executed": len(results),
-        "steps_succeeded": sum(1 for r in results if r.get("success")),
+        "completed": completed,
+        "total": len(steps),
+        "executed": len(results),
+        "succeeded": succeeded,
         "results": results
     }

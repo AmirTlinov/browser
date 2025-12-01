@@ -115,16 +115,35 @@ def set_cookies_batch(config: BrowserConfig, cookies: list[dict[str, Any]]) -> d
             ) from e
 
 
-def get_all_cookies(config: BrowserConfig, urls: list[str] | None = None) -> dict[str, Any]:
-    """Get all cookies or cookies for specific URLs via CDP.
+def get_all_cookies(
+    config: BrowserConfig,
+    urls: list[str] | None = None,
+    offset: int = 0,
+    limit: int = 20,
+    name_filter: str | None = None,
+) -> dict[str, Any]:
+    """Get cookies with pagination and filtering.
+
+    OVERVIEW MODE (default with small limit):
+    Returns first N cookies with total count and navigation hints.
 
     Args:
         config: Browser configuration
         urls: Optional list of URLs to get cookies for. If None, returns all cookies.
+        offset: Starting index for paginated results (default: 0)
+        limit: Maximum cookies to return (default: 20, max: 100)
+        name_filter: Filter cookies by name substring (optional)
 
     Returns:
-        Dict with cookies list, count, and target ID
+        Dict with paginated cookies, total count, and navigation hints
+
+    Examples:
+        get_all_cookies()  # First 20 cookies
+        get_all_cookies(offset=20, limit=20)  # Next 20 cookies
+        get_all_cookies(name_filter="session")  # Filter by name
     """
+    limit = min(limit, 100)  # Cap at 100
+
     with get_session(config) as (session, target):
         try:
             session.send("Network.enable", {})
@@ -133,8 +152,33 @@ def get_all_cookies(config: BrowserConfig, urls: list[str] | None = None) -> dic
                 params["urls"] = urls
 
             result = session.send("Network.getCookies", params)
-            cookies = result.get("cookies", [])
-            return {"cookies": cookies, "count": len(cookies), "target": target["id"]}
+            all_cookies = result.get("cookies", [])
+
+            # Apply name filter if provided
+            if name_filter:
+                all_cookies = [c for c in all_cookies if name_filter.lower() in c.get("name", "").lower()]
+
+            total = len(all_cookies)
+            cookies = all_cookies[offset : offset + limit]
+
+            response: dict[str, Any] = {
+                "cookies": cookies,
+                "total": total,
+                "offset": offset,
+                "limit": limit,
+                "hasMore": offset + limit < total,
+                "target": target["id"],
+            }
+
+            # Navigation hints
+            if offset > 0 or offset + limit < total:
+                response["navigation"] = {}
+                if offset > 0:
+                    response["navigation"]["prev"] = f"offset={max(0, offset - limit)} limit={limit}"
+                if offset + limit < total:
+                    response["navigation"]["next"] = f"offset={offset + limit} limit={limit}"
+
+            return response
         except Exception as e:
             raise SmartToolError(
                 tool="get_all_cookies",

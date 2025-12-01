@@ -309,6 +309,16 @@ Example: Login workflow
                         "type": "array",
                         "description": "Array of action steps",
                         "items": {"type": "object"}
+                    },
+                    "include_screenshots": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Include screenshot base64 data in results (default: False to save context)"
+                    },
+                    "compact_results": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": "Return compact results without redundant fields (default: True)"
                     }
                 },
                 "required": ["steps"],
@@ -359,11 +369,28 @@ Example: handle_dialog(accept=True) or handle_dialog(accept=False, prompt_text="
             "name": "list_tabs",
             "description": """TAB LIST: List all open browser tabs.
 
-Returns tab IDs, URLs and titles. Use switch_tab() to change active tab.""",
+Returns tab IDs, URLs and titles. Use switch_tab() to change active tab.
+
+Supports pagination (offset/limit) and URL filtering for many tabs.""",
             "inputSchema": {
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "offset": {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Starting index for paginated results (default: 0)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Maximum tabs to return (default: 20, max: 50)"
+                    },
+                    "url_filter": {
+                        "type": "string",
+                        "description": "Filter tabs by URL substring (optional)"
+                    }
+                },
                 "required": [],
                 "additionalProperties": False,
             },
@@ -622,7 +649,14 @@ Use this after selecting all correct images/blocks.""",
         },
         {
             "name": "browser_get_cookies",
-            "description": "Get all cookies or cookies for specific URLs via CDP.",
+            "description": """Get cookies with pagination and filtering.
+
+Returns paginated list of cookies with total count and navigation hints.
+
+Examples:
+- browser_get_cookies() → first 20 cookies with total count
+- browser_get_cookies(offset=20, limit=20) → next 20 cookies
+- browser_get_cookies(name_filter="session") → filter by name""",
             "inputSchema": {
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "type": "object",
@@ -631,6 +665,20 @@ Use this after selecting all correct images/blocks.""",
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Optional list of URLs to get cookies for. If empty, returns all cookies.",
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Starting index for paginated results (default: 0)",
+                        "default": 0
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max cookies to return (default: 20, max: 100)",
+                        "default": 20
+                    },
+                    "name_filter": {
+                        "type": "string",
+                        "description": "Filter cookies by name substring"
                     },
                 },
                 "required": [],
@@ -1237,21 +1285,24 @@ class McpServer:
 
             elif name == "execute_workflow":
                 self.launcher.ensure_running()
+                include_screenshots = arguments.get("include_screenshots", False)
                 result = smart_tools.execute_workflow(
                     self.config,
-                    steps=arguments.get("steps", [])
+                    steps=arguments.get("steps", []),
+                    include_screenshots=include_screenshots,
+                    compact_results=arguments.get("compact_results", True)
                 )
-                # Handle screenshots in workflow
+                # Handle screenshots in workflow only if included
                 workflow_content = []
-                for step_result in result.get("results", []):
-                    if step_result.get("screenshot_b64"):
-                        import base64
-                        workflow_content.append({
-                            "type": "image",
-                            "data": step_result.pop("screenshot_b64"),
-                            "mimeType": "image/png"
-                        })
-                workflow_content.insert(0, self._result_content(json.dumps(result, ensure_ascii=False, indent=2)))
+                if include_screenshots:
+                    for step_result in result.get("executed", []):
+                        if step_result.get("screenshot_b64"):
+                            workflow_content.append({
+                                "type": "image",
+                                "data": step_result.pop("screenshot_b64"),
+                                "mimeType": "image/png"
+                            })
+                workflow_content.insert(0, self._result_content(json.dumps(result, ensure_ascii=False)))
                 content = workflow_content
 
             elif name == "upload_file":
@@ -1261,7 +1312,7 @@ class McpServer:
                     file_paths=arguments.get("file_paths", []),
                     selector=arguments.get("selector")
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "handle_dialog":
                 self.launcher.ensure_running()
@@ -1270,12 +1321,17 @@ class McpServer:
                     accept=arguments.get("accept", True),
                     prompt_text=arguments.get("prompt_text")
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "list_tabs":
                 self.launcher.ensure_running()
-                result = smart_tools.list_tabs(self.config)
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                result = smart_tools.list_tabs(
+                    self.config,
+                    offset=arguments.get("offset", 0),
+                    limit=arguments.get("limit", 20),
+                    url_filter=arguments.get("url_filter")
+                )
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "switch_tab":
                 self.launcher.ensure_running()
@@ -1284,7 +1340,7 @@ class McpServer:
                     tab_id=arguments.get("tab_id"),
                     url_pattern=arguments.get("url_pattern")
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "new_tab":
                 self.launcher.ensure_running()
@@ -1292,7 +1348,7 @@ class McpServer:
                     self.config,
                     url=arguments.get("url", "about:blank")
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "close_tab":
                 self.launcher.ensure_running()
@@ -1300,7 +1356,7 @@ class McpServer:
                     self.config,
                     tab_id=arguments.get("tab_id")
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "generate_totp":
                 result = smart_tools.generate_totp(
@@ -1308,7 +1364,7 @@ class McpServer:
                     digits=arguments.get("digits", 6),
                     interval=arguments.get("interval", 30)
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             # ─────────────────────────────────────────────────────────────────
             # CAPTCHA tools
@@ -1318,7 +1374,7 @@ class McpServer:
                     self.config,
                     force_grid_size=arguments.get("force_grid_size", 0)
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "get_captcha_screenshot":
                 result = smart_tools.get_captcha_screenshot(
@@ -1329,10 +1385,10 @@ class McpServer:
                 if result.get("screenshot"):
                     content = [
                         {"type": "image", "data": result["screenshot"], "mimeType": "image/png"},
-                        {"type": "text", "text": json.dumps({k: v for k, v in result.items() if k != "screenshot"}, ensure_ascii=False, indent=2)}
+                        {"type": "text", "text": json.dumps({k: v for k, v in result.items() if k != "screenshot"}, ensure_ascii=False)}
                     ]
                 else:
-                    content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                    content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "click_captcha_blocks":
                 result = smart_tools.click_captcha_blocks(
@@ -1340,18 +1396,18 @@ class McpServer:
                     blocks=arguments["blocks"],
                     grid_size=arguments.get("grid_size", 0)
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "click_captcha_area":
                 result = smart_tools.click_captcha_area(
                     self.config,
                     area_id=arguments["area_id"]
                 )
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             elif name == "submit_captcha":
                 result = smart_tools.submit_captcha(self.config)
-                content = [self._result_content(json.dumps(result, ensure_ascii=False, indent=2))]
+                content = [self._result_content(json.dumps(result, ensure_ascii=False))]
 
             # ─────────────────────────────────────────────────────────────────
             # Basic tools
@@ -1400,8 +1456,13 @@ class McpServer:
                 content = [self._result_content(json.dumps(result, ensure_ascii=False))]
             elif name == "browser_get_cookies":
                 self.launcher.ensure_running()
-                urls = arguments.get("urls")
-                result = smart_tools.get_all_cookies(self.config, urls)
+                result = smart_tools.get_all_cookies(
+                    self.config,
+                    urls=arguments.get("urls"),
+                    offset=arguments.get("offset", 0),
+                    limit=arguments.get("limit", 20),
+                    name_filter=arguments.get("name_filter"),
+                )
                 content = [self._result_content(json.dumps(result, ensure_ascii=False))]
             elif name == "browser_delete_cookie":
                 self.launcher.ensure_running()

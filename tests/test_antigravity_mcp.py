@@ -174,8 +174,8 @@ def test_server_call_tool_browser_set_cookie(monkeypatch: pytest.MonkeyPatch) ->
 def test_server_call_tool_browser_get_cookies(monkeypatch: pytest.MonkeyPatch) -> None:
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
-    fake_resp = {"cookies": [{"name": "test", "value": "123"}]}
-    monkeypatch.setattr(cdp_module, "get_all_cookies", lambda config, urls=None: fake_resp)
+    fake_resp = {"cookies": [{"name": "test", "value": "123"}], "total": 1, "offset": 0, "limit": 20, "hasMore": False}
+    monkeypatch.setattr(cdp_module, "get_all_cookies", lambda config, urls=None, offset=0, limit=20, name_filter=None: fake_resp)
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="1g", name="browser_get_cookies", arguments={})
@@ -418,3 +418,104 @@ def test_handle_call_tool_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="err", name="unknown", arguments={})
     assert sent[0]["error"]["code"] == -32001
+
+
+# --- Pagination Tests ---
+
+
+def test_get_all_cookies_pagination() -> None:
+    """Test get_all_cookies pagination logic."""
+    from unittest.mock import MagicMock, patch
+
+    from mcp_servers.antigravity_browser.tools.cookies import get_all_cookies
+
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=(mock_session, {"id": "test"}))
+    mock_session.__exit__ = MagicMock(return_value=None)
+    mock_session.send = MagicMock(return_value={
+        "cookies": [{"name": f"cookie_{i}", "value": f"val_{i}"} for i in range(25)]
+    })
+
+    with patch("mcp_servers.antigravity_browser.tools.cookies.get_session", return_value=mock_session):
+        config = BrowserConfig.from_env()
+        result = get_all_cookies(config, offset=0, limit=10)
+
+        assert result["total"] == 25
+        assert len(result["cookies"]) == 10
+        assert result["offset"] == 0
+        assert result["limit"] == 10
+        assert result["hasMore"] is True
+        assert "navigation" in result
+        assert "next" in result["navigation"]
+
+
+def test_get_all_cookies_with_filter() -> None:
+    """Test get_all_cookies name filtering."""
+    from unittest.mock import MagicMock, patch
+
+    from mcp_servers.antigravity_browser.tools.cookies import get_all_cookies
+
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=(mock_session, {"id": "test"}))
+    mock_session.__exit__ = MagicMock(return_value=None)
+    mock_session.send = MagicMock(return_value={
+        "cookies": [
+            {"name": "session_id", "value": "123"},
+            {"name": "auth_token", "value": "abc"},
+            {"name": "session_data", "value": "xyz"},
+        ]
+    })
+
+    with patch("mcp_servers.antigravity_browser.tools.cookies.get_session", return_value=mock_session):
+        config = BrowserConfig.from_env()
+        result = get_all_cookies(config, name_filter="session")
+
+        assert result["total"] == 2  # Only session_id and session_data match
+        assert all("session" in c["name"].lower() for c in result["cookies"])
+
+
+def test_list_tabs_pagination() -> None:
+    """Test list_tabs pagination logic."""
+    from unittest.mock import MagicMock, patch
+
+    from mcp_servers.antigravity_browser.tools.tabs import list_tabs
+
+    mock_tabs = [{"id": f"tab_{i}", "url": f"https://example{i}.com", "title": f"Tab {i}"} for i in range(15)]
+
+    with patch("mcp_servers.antigravity_browser.tools.tabs.session_manager") as mock_sm:
+        mock_sm.list_tabs = MagicMock(return_value=mock_tabs)
+        mock_sm.tab_id = "current_tab"
+
+        config = BrowserConfig.from_env()
+        result = list_tabs(config, offset=5, limit=5)
+
+        assert result["total"] == 15
+        assert len(result["tabs"]) == 5
+        assert result["offset"] == 5
+        assert result["hasMore"] is True
+        assert "navigation" in result
+        assert "prev" in result["navigation"]
+        assert "next" in result["navigation"]
+
+
+def test_list_tabs_url_filter() -> None:
+    """Test list_tabs URL filtering."""
+    from unittest.mock import MagicMock, patch
+
+    from mcp_servers.antigravity_browser.tools.tabs import list_tabs
+
+    mock_tabs = [
+        {"id": "1", "url": "https://github.com/repo", "title": "GitHub"},
+        {"id": "2", "url": "https://google.com", "title": "Google"},
+        {"id": "3", "url": "https://github.com/issues", "title": "Issues"},
+    ]
+
+    with patch("mcp_servers.antigravity_browser.tools.tabs.session_manager") as mock_sm:
+        mock_sm.list_tabs = MagicMock(return_value=mock_tabs)
+        mock_sm.tab_id = "current_tab"
+
+        config = BrowserConfig.from_env()
+        result = list_tabs(config, url_filter="github")
+
+        assert result["total"] == 2  # Only github URLs
+        assert all("github" in t["url"].lower() for t in result["tabs"])

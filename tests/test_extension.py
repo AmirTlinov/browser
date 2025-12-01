@@ -54,7 +54,7 @@ def test_cdp_cookies():
         {"name": "batch_cookie_1", "value": "batch_value_1", "domain": "httpbin.org"},
         {"name": "batch_cookie_2", "value": "batch_value_2", "domain": "httpbin.org"},
     ]
-    result = cdp.set_cookies_batch(batch_cookies, config)
+    result = cdp.set_cookies_batch(config, batch_cookies)
     print(f"set_cookies_batch result: {result}")
 
     # Verify batch cookies
@@ -92,7 +92,7 @@ def test_browser_fetch():
 
     # Test GET request
     print("\nTesting GET request...")
-    result = cdp.browser_fetch("https://httpbin.org/get", config)
+    result = cdp.browser_fetch(config, "https://httpbin.org/get")
     print(f"GET result: ok={result.get('ok')}, status={result.get('status')}")
     if result.get("ok"):
         print("GET request successful")
@@ -102,8 +102,8 @@ def test_browser_fetch():
     # Test POST request
     print("\nTesting POST request...")
     result = cdp.browser_fetch(
-        "https://httpbin.org/post",
         config,
+        "https://httpbin.org/post",
         method="POST",
         headers={"Content-Type": "application/json"},
         body='{"test": "data"}',
@@ -113,8 +113,8 @@ def test_browser_fetch():
     # Test with custom headers
     print("\nTesting custom headers...")
     result = cdp.browser_fetch(
-        "https://httpbin.org/headers",
         config,
+        "https://httpbin.org/headers",
         headers={"X-Custom-Header": "test-value"},
     )
     print(f"Headers result: ok={result.get('ok')}")
