@@ -12,8 +12,7 @@ from urllib.error import URLError
 import pytest
 
 from mcp_servers.antigravity_browser import launcher as launcher_module
-from mcp_servers.antigravity_browser import server as mcp_server
-from mcp_servers.antigravity_browser import smart_tools as cdp_module
+from mcp_servers.antigravity_browser import main as mcp_server
 from mcp_servers.antigravity_browser.config import BrowserConfig
 from mcp_servers.antigravity_browser.http_client import HttpClientError, http_get
 from mcp_servers.antigravity_browser.launcher import BrowserLauncher
@@ -139,19 +138,21 @@ def test_initialize_falls_back_to_latest(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_server_call_tool_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.antigravity_browser.server.handlers import network as network_handlers
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
-    monkeypatch.setattr(mcp_server, "http_get", lambda url, config: {"status": 200, "headers": {}, "body": "ok", "truncated": False})
+    monkeypatch.setattr(network_handlers, "http_get", lambda url, config: {"status": 200, "headers": {}, "body": "ok", "truncated": False})
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="1", name="http_get", arguments={"url": "http://example.com"})
     assert "ok" in sent[0]["result"]["content"][1]["text"]
 
 
 def test_server_call_tool_browser_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.antigravity_browser.server.handlers import network as network_handlers
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
     fake_resp = {"ok": True, "status": 200, "statusText": "OK", "body": "ok-fetch"}
-    monkeypatch.setattr(cdp_module, "browser_fetch", lambda url, config, method="GET", headers=None, body=None, credentials="include": fake_resp)
+    monkeypatch.setattr(network_handlers.smart_tools, "browser_fetch", lambda config, url, method="GET", headers=None, body=None, credentials="include": fake_resp)
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="1f", name="browser_fetch", arguments={"url": "http://example.com"})
@@ -159,10 +160,11 @@ def test_server_call_tool_browser_fetch(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_server_call_tool_browser_set_cookie(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.antigravity_browser.server.handlers import cookies as cookie_handlers
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
     fake_resp = {"success": True}
-    monkeypatch.setattr(cdp_module, "set_cookie", lambda **kwargs: fake_resp)
+    monkeypatch.setattr(cookie_handlers.smart_tools, "set_cookie", lambda **kwargs: fake_resp)
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="1c", name="browser_set_cookie", arguments={
@@ -172,10 +174,11 @@ def test_server_call_tool_browser_set_cookie(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_server_call_tool_browser_get_cookies(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.antigravity_browser.server.handlers import cookies as cookie_handlers
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
     fake_resp = {"cookies": [{"name": "test", "value": "123"}], "total": 1, "offset": 0, "limit": 20, "hasMore": False}
-    monkeypatch.setattr(cdp_module, "get_all_cookies", lambda config, urls=None, offset=0, limit=20, name_filter=None: fake_resp)
+    monkeypatch.setattr(cookie_handlers.smart_tools, "get_all_cookies", lambda config, urls=None, offset=0, limit=20, name_filter=None: fake_resp)
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="1g", name="browser_get_cookies", arguments={})
@@ -183,10 +186,11 @@ def test_server_call_tool_browser_get_cookies(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_server_call_tool_dump_dom(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.antigravity_browser.server.handlers import dom as dom_handlers
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
     fake_resp = {"targetId": "t", "html": "<html></html>", "totalChars": 13, "truncated": False}
-    monkeypatch.setattr(cdp_module, "dump_dom_html", lambda config, url, max_chars=50000: fake_resp)
+    monkeypatch.setattr(dom_handlers.smart_tools, "dump_dom_html", lambda config, url, max_chars=50000: fake_resp)
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="2", name="dump_dom", arguments={"url": "http://example.com"})
@@ -209,6 +213,7 @@ def test_server_call_tool_launch(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_server_call_tool_screenshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.antigravity_browser.server.handlers import dom as dom_handlers
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
@@ -224,8 +229,8 @@ def test_server_call_tool_screenshot(monkeypatch: pytest.MonkeyPatch) -> None:
         target = {"id": "t"}
         yield session, target
 
-    monkeypatch.setattr(cdp_module, "get_session", fake_get_session)
-    monkeypatch.setattr(cdp_module, "navigate_to", lambda config, url: None)
+    monkeypatch.setattr(dom_handlers.smart_tools, "get_session", fake_get_session)
+    monkeypatch.setattr(dom_handlers.smart_tools, "navigate_to", lambda config, url: None)
 
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="5", name="screenshot", arguments={"url": "http://example.com"})
@@ -233,10 +238,11 @@ def test_server_call_tool_screenshot(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_server_call_tool_js_eval(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.antigravity_browser.server.handlers import network as network_handlers
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
-    monkeypatch.setattr(cdp_module, "eval_js", lambda expr, config: {"result": 42})
+    monkeypatch.setattr(network_handlers.smart_tools, "eval_js", lambda expr, config: {"result": 42})
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="6", name="js_eval", arguments={"expression": "6*7"})
     assert "42" in sent[0]["result"]["content"][0]["text"]
@@ -396,11 +402,12 @@ def test_dispatch_ping(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_logging_called(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.antigravity_browser.server.handlers import network as network_handlers
     logged: list[str] = []
     monkeypatch.setattr(mcp_server.logger, "info", lambda *args, **kwargs: logged.append(args[0]))
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: None)
     monkeypatch.setattr(mcp_server.BrowserLauncher, "ensure_running", lambda self: None)
-    monkeypatch.setattr(cdp_module, "eval_js", lambda expr, config: {"result": "ok"})
+    monkeypatch.setattr(network_handlers.smart_tools, "eval_js", lambda expr, config: {"result": "ok"})
     srv = mcp_server.McpServer()
     srv.handle_call_tool("x", "js_eval", {"expression": "1"})
     assert logged
