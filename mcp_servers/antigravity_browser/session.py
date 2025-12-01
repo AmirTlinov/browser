@@ -96,7 +96,7 @@ class CdpConnection:
                 data = json.loads(raw)
                 if data.get("method") == event_name:
                     return data.get("params", {})
-            except Exception:
+            except (json.JSONDecodeError, OSError, TimeoutError):
                 continue
         return None
 
@@ -342,7 +342,7 @@ class SessionManager:
         """Get list of browser targets."""
         try:
             return _http_get_json(f"http://127.0.0.1:{config.cdp_port}/json/list") or []
-        except Exception:
+        except (OSError, json.JSONDecodeError, ValueError):
             return []
 
     def _get_browser_ws(self, config: BrowserConfig) -> str:
@@ -427,13 +427,13 @@ class SessionManager:
             return False
         self._session_tab_id = tab_id
 
-        # Try to activate in browser UI
+        # Try to activate in browser UI (best-effort, ignore failures)
         try:
             conn = CdpConnection(ws_url, timeout=3.0)
             conn.send("Target.activateTarget", {"targetId": tab_id})
             conn.close()
-        except Exception:
-            pass
+        except OSError:
+            pass  # Connection failures are acceptable for UI activation
         return True
 
     def list_tabs(self, config: BrowserConfig) -> list:
@@ -471,7 +471,7 @@ class SessionManager:
             if target_id == self._session_tab_id:
                 self._session_tab_id = None
             return True
-        except Exception:
+        except (OSError, ValueError, KeyError):
             return False
 
 

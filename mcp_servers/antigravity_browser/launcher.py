@@ -75,7 +75,7 @@ class BrowserLauncher:
         try:
             with urlopen(endpoint, timeout=timeout) as resp:
                 return resp.status == 200
-        except Exception:
+        except (OSError, TimeoutError, URLError):
             return False
 
     def ensure_running(self, timeout: float = 5.0) -> LaunchResult:

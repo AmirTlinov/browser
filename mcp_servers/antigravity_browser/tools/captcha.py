@@ -455,7 +455,7 @@ def get_captcha_screenshot(
                     # Try to use a larger font
                     try:
                         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
-                    except Exception:
+                    except (OSError, IOError):
                         font = ImageFont.load_default()
 
                     # Get text size for centering
