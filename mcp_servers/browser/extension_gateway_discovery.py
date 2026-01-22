@@ -17,6 +17,7 @@ class GatewayDiscovery:
     server_started_at_ms: int
     extension_connected: bool
     peer_count: int
+    supports_peers: bool
     protocol_version: str
     server_version: str
     pid: int
@@ -104,19 +105,22 @@ def _probe_one(host: str, port: int, *, timeout: float) -> GatewayDiscovery | No
     except Exception:
         pid = 0
 
+    supports_peers = bool(data.get("supportsPeers"))
+
     return GatewayDiscovery(
         host=str(host),
         port=int(gw_port),
         server_started_at_ms=max(0, started),
         extension_connected=bool(ext_connected),
         peer_count=max(0, peer_count),
+        supports_peers=bool(supports_peers),
         protocol_version=str(data.get("protocolVersion") or ""),
         server_version=str(data.get("serverVersion") or ""),
         pid=max(0, pid),
     )
 
 
-def discover_best_gateway(*, timeout: float = 0.25) -> GatewayDiscovery | None:
+def discover_best_gateway(*, timeout: float = 0.25, require_peers: bool = False) -> GatewayDiscovery | None:
     host = (os.environ.get("MCP_EXTENSION_HOST") or "127.0.0.1").strip() or "127.0.0.1"
     ports = _port_candidates()
     if not ports:
@@ -137,6 +141,11 @@ def discover_best_gateway(*, timeout: float = 0.25) -> GatewayDiscovery | None:
 
     if not results:
         return None
+
+    if require_peers:
+        results = [r for r in results if r.supports_peers]
+        if not results:
+            return None
 
     # Prefer a gateway that is already extension-connected, otherwise fall back to newest.
     results.sort(

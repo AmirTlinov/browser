@@ -51,8 +51,11 @@ const MAX_WS_DISCOVERY_TRIES_UI = 12;
 let wsScanCursor = 0;
 
 let state = {
-  enabled: false,
-  followActive: true,
+  // Flagship default: "just works" without a manual UI toggle.
+  // Keep followActive OFF by default to avoid cross-agent interference when multiple
+  // CLIs are running concurrently.
+  enabled: true,
+  followActive: false,
   focusedTabId: null,
   gatewayUrl: DEFAULT_GATEWAY_URL,
   // last known-good gateway url (auto-discovered). This must NOT overwrite `gatewayUrl`
@@ -457,7 +460,6 @@ async function tryConnectOnce(url, reason, timeoutMs = 1200) {
 }
 
 function scheduleReconnect(reason) {
-  if (!state.enabled) return;
   if (reconnectTimer) return;
   const delay = Math.min(Math.max(backoffMs, 250), MAX_BACKOFF_MS);
   // Jitter reduces "thundering herd" when multiple Chrome profiles/extensions are enabled.
@@ -470,9 +472,8 @@ function scheduleReconnect(reason) {
 }
 
 function connect(reason) {
-  // UX: do not attempt any gateway connection unless the user explicitly enabled agent control.
-  // Chrome will log connection failures to the extension error console, so avoid spam by default.
-  if (!state.enabled && reason !== "ui_reconnect") return;
+  // Always attempt gateway connectivity. Browser MCP uses quiet HTTP discovery + backoff,
+  // so this stays low-noise even when the server isn't running.
   if (connectInFlight) return;
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
@@ -1063,18 +1064,24 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
 chrome.runtime.onInstalled.addListener(async () => {
   await loadState();
-  if (state.enabled) ensureConnected("onInstalled");
+  // Flagship default: auto-enable on install/update.
+  if (!state.enabled) {
+    state.enabled = true;
+    state.followActive = false;
+    await saveState();
+  }
+  ensureConnected("onInstalled");
   chrome.alarms.create("mcpKeepAlive", { periodInMinutes: 1 });
 });
 
 chrome.runtime.onStartup?.addListener(async () => {
   await loadState();
-  if (state.enabled) ensureConnected("onStartup");
+  // Auto-connect even if the user previously disabled the toggle (keeps the bridge healthy).
+  ensureConnected("onStartup");
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm?.name !== "mcpKeepAlive") return;
-  if (!state.enabled) return;
   ensureConnected("alarm_keepalive");
   try {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping", ts: Date.now() }));
@@ -1085,7 +1092,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 (async () => {
   await loadState();
-  if (state.enabled) ensureConnected("boot");
+  // Flagship default: connect on boot (no manual toggle).
+  if (!state.enabled) {
+    state.enabled = true;
+    state.followActive = false;
+  }
+  ensureConnected("boot");
   const tab = await getActiveTab();
   if (tab?.id) state.focusedTabId = String(tab.id);
   await saveState();

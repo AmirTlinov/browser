@@ -6,7 +6,7 @@ from typing import Any
 
 from .extension_gateway import ExtensionGateway
 from .extension_gateway_peer import ExtensionGatewayPeer
-from .extension_leader_lock import default_leader_lock
+from .extension_leader_lock import default_leader_lock, rescue_leader_lock
 
 
 class SharedExtensionGateway:
@@ -27,6 +27,7 @@ class SharedExtensionGateway:
         self._on_cdp_event = on_cdp_event
         self._lock = threading.Lock()
         self._leader_lock = default_leader_lock()
+        self._rescue_lock = rescue_leader_lock()
 
         self._leader: ExtensionGateway | None = None
         self._peer: ExtensionGatewayPeer | None = None
@@ -78,6 +79,7 @@ class SharedExtensionGateway:
                 self._leader.stop(timeout=timeout)
                 self._leader = None
             self._leader_lock.release()
+            self._rescue_lock.release()
             self.is_proxy = False
 
     def status(self) -> dict[str, Any]:
@@ -116,6 +118,23 @@ class SharedExtensionGateway:
             gw2 = self._leader
             if gw2 is not None:
                 return bool(gw2.wait_for_connection(timeout=timeout))
+
+            # If the lock holder is unhealthy (or legacy), allow a rescue leader to come up
+            # on a free port in the same range. This prevents "stuck peer" states where
+            # multiple CLIs cannot recover without manual process cleanup.
+            with self._lock:
+                if self.is_proxy and self._rescue_lock.try_acquire():
+                    if self._peer is not None:
+                        self._peer.stop(timeout=0.5)
+                        self._peer = None
+                    if self._leader is None:
+                        self._leader = ExtensionGateway(on_cdp_event=self._on_cdp_event)
+                    self.is_proxy = False
+                    self._leader.start(wait_timeout=0.2, require_listening=False)
+
+            gw3 = self._leader
+            if gw3 is not None:
+                return bool(gw3.wait_for_connection(timeout=timeout))
         return False
 
     def rpc_call(self, method: str, params: dict[str, Any] | None = None, *, timeout: float = 10.0) -> Any:

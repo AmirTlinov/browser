@@ -268,6 +268,7 @@ def test_extension_gateway_well_known_and_wait_for_connection() -> None:
     assert data.get("type") == "browserMcpGateway"
     assert int(data.get("gatewayPort")) == port
     assert int(data.get("serverStartedAtMs") or 0) > 0
+    assert data.get("supportsPeers") is True
 
     connected = threading.Event()
     stop = threading.Event()

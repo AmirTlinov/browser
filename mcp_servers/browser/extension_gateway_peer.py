@@ -306,7 +306,7 @@ class ExtensionGatewayPeer:
         while not self._stop.is_set():
             disc = None
             try:
-                disc = discover_best_gateway(timeout=0.25)
+                disc = discover_best_gateway(timeout=0.25, require_peers=True)
             except Exception:
                 disc = None
 

@@ -785,6 +785,7 @@ class ExtensionGateway:
                     "pid": int(os.getpid()),
                     "extensionConnected": bool(ext_connected),
                     "peerCount": int(peer_count),
+                    "supportsPeers": True,
                 }
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
