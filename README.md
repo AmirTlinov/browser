@@ -31,6 +31,10 @@ profile (with your tabs, cookies, and extensions) **without** restarting with a
 
 Then open the extension popup and turn **Agent control** ON.
 
+Multi-CLI: you can run multiple CLI sessions concurrently (10+). Browser MCP elects a single local
+gateway leader and other sessions proxy through it, so the extension stays connected without port
+conflicts.
+
 **Alternative (Same Browser): Attach via CDP Port**
 
 Use this if you prefer the classic DevTools Protocol attach flow.

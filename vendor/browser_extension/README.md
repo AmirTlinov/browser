@@ -10,11 +10,12 @@ KILL_SWITCH = A user-visible toggle that disables all agent control immediately.
 This [EXTENSION] enables [EXTENSION_MODE] by acting as a thin DevTools Protocol proxy:
 - The extension attaches to real tabs via `chrome.debugger`.
 - The extension connects to the local [GATEWAY] over WebSocket (`ws://127.0.0.1:8765` by default).
-  If the default port is busy, Browser MCP will auto-bind to the next available port in a small range
-  and the extension will auto-discover it (no manual port babysitting).
-  Discovery uses a quiet HTTP probe (`http://127.0.0.1:<port>/.well-known/browser-mcp-gateway`) to pick
-  the newest running gateway, then opens a WebSocket only to that best port (reduces noisy `WebSocket(...)`
-  failures in the extension console when ports are closed / sessions are stale).
+  Discovery uses a quiet HTTP probe (`http://127.0.0.1:<port>/.well-known/browser-mcp-gateway`) to find a
+  running gateway without noisy `WebSocket(...)` failures in the extension console.
+  
+  Multi-CLI note (flagship UX): Browser MCP uses a leader lock so **only one** process binds the gateway
+  listener ports. Other Browser MCP processes connect as peers and proxy through that leader, so you can
+  run many CLI sessions concurrently (10+) while the extension stays connected 100% (no port conflicts).
 - For high-frequency input (drag/typing), the extension supports batched CDP (`cdp.sendMany`) so Browser MCP can send many events in one gateway round-trip.
 - For low-noise control-plane calls (tabs/state), the extension supports RPC batching (`rpc.batch`) so Browser MCP can collapse multiple RPC calls into one message.
 - Browser MCP keeps its AI-native tools unchanged; only the transport changes.
@@ -44,6 +45,7 @@ For canvas apps, the extension also enables a clipboard write bridge:
 - **Agent control** ([KILL_SWITCH]): when OFF, the extension refuses to execute any browser-changing commands.
 - When [KILL_SWITCH] is OFF, the extension also avoids connecting to the [GATEWAY] (prevents noisy “connection refused” spam when Browser MCP isn’t running).
 - **Follow active tab**: when ON, Browser MCP will (by default) adopt your currently focused tab as the session tab.
+  In multi-CLI usage, peer sessions default to isolated tabs to avoid cross-agent interference.
 - **Gateway (Configured)**: override the base gateway URL if needed (Save/Reset). In most cases you can keep the default.
 - **Gateway (Last good)**: shows the last working gateway URL discovered automatically (useful when multiple sessions/ports exist).
 

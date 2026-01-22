@@ -86,8 +86,10 @@ class ExtensionGateway:
         self._ready = threading.Event()
         self._stop = threading.Event()
 
-        self._server = None
-        self._ws = None
+        # NOTE: explicitly typed as Any to avoid coupling this module to a specific
+        # websockets protocol class across versions (keeps typecheckers calm).
+        self._server: Any | None = None
+        self._ws: Any | None = None
         self._bind_error: str | None = None
 
         self._session_id: str | None = None
@@ -97,6 +99,10 @@ class ExtensionGateway:
 
         self._next_id = 1
         self._pending: dict[int, Future] = {}
+
+        # Connected peer clients (other Browser MCP processes) when running as the gateway.
+        # This enables multi-CLI usage: multiple MCP servers can proxy through one extension.
+        self._peers: dict[str, dict[str, Any]] = {}
 
         # tabId(str) -> deque of {"method": str, "params": dict}
         self._event_queues: dict[str, deque[dict[str, Any]]] = {}
@@ -293,6 +299,45 @@ class ExtensionGateway:
             payload["params"] = params
         res = self.rpc_call("cdp.send", payload, timeout=timeout)
         return res if isinstance(res, dict) else {}
+
+    async def _rpc_call_async(self, method: str, params: dict[str, Any] | None = None, *, timeout: float = 10.0) -> Any:
+        """Async variant of rpc_call for use inside the gateway event loop.
+
+        This is required to serve peer clients without blocking the asyncio loop.
+        """
+        if not isinstance(method, str) or not method.strip():
+            raise HttpClientError("Extension RPC method is required")
+
+        with self._lock:
+            ws = self._ws
+            if ws is None:
+                raise HttpClientError(
+                    "Extension is not connected. Install/enable the extension and ensure it can connect to the gateway."
+                )
+            req_id = self._next_id
+            self._next_id += 1
+            fut = Future()
+            self._pending[req_id] = fut
+
+        msg: dict[str, Any] = {"type": "rpc", "id": req_id, "method": method}
+        if isinstance(params, dict) and params:
+            msg["params"] = params
+
+        try:
+            await self._ws_send_json(ws, msg)
+        except Exception as exc:  # noqa: BLE001
+            with self._lock:
+                self._pending.pop(int(req_id), None)
+            raise HttpClientError(f"Extension RPC send failed: {exc}") from exc
+
+        try:
+            wrapped = asyncio.wrap_future(fut)
+            return await asyncio.wait_for(wrapped, timeout=max(0.1, float(timeout)))
+        except Exception as exc:  # noqa: BLE001
+            raise HttpClientError(f"Extension RPC timed out: method={method}") from exc
+        finally:
+            with self._lock:
+                self._pending.pop(int(req_id), None)
 
     def supports_cdp_send_many(self) -> bool:
         """Return True if the connected extension advertises cdpSendMany capability."""
@@ -519,7 +564,18 @@ class ExtensionGateway:
             except Exception:
                 hello = None
 
-            if not (isinstance(hello, dict) and hello.get("type") == "hello"):
+            if not isinstance(hello, dict):
+                with contextlib.suppress(Exception):
+                    await ws.close(code=1002, reason="expected hello")
+                return
+
+            hello_type = str(hello.get("type") or "").strip()
+
+            if hello_type == "peerHello":
+                await _handle_peer_connection(ws, hello)
+                return
+
+            if hello_type != "hello":
                 with contextlib.suppress(Exception):
                     await ws.close(code=1002, reason="expected hello")
                 return
@@ -589,6 +645,120 @@ class ExtensionGateway:
             finally:
                 self._disconnect()
 
+        async def _peer_rpc_reply(
+            ws,
+            req_id: Any,
+            *,
+            ok: bool,
+            result: Any = None,
+            error: str | None = None,
+        ) -> None:
+            payload: dict[str, Any] = {"type": "rpcResult", "id": req_id, "ok": bool(ok)}
+            if ok:
+                payload["result"] = result
+            else:
+                payload["error"] = {"message": str(error or "unknown error")}
+            with contextlib.suppress(Exception):
+                await self._ws_send_json(ws, payload)
+
+        async def _peer_dispatch(method: str, params: dict[str, Any], *, timeout: float) -> Any:
+            m = str(method or "").strip()
+            if not m:
+                raise HttpClientError("peer rpc: missing method")
+
+            if m == "gateway.status":
+                return self.status()
+            if m == "gateway.waitForConnection":
+                ok = await asyncio.to_thread(self.wait_for_connection, timeout=timeout)
+                return {"connected": bool(ok)}
+            if m == "gateway.popEvent":
+                tab_id = str(params.get("tabId") or "")
+                event_name = str(params.get("eventName") or "")
+                return self.pop_event(tab_id, event_name)
+            if m == "gateway.waitForEvent":
+                tab_id = str(params.get("tabId") or "")
+                event_name = str(params.get("eventName") or "")
+                ev = await asyncio.to_thread(self.wait_for_event, tab_id, event_name, timeout=timeout)
+                return ev
+
+            # Default: pass-through to the extension.
+            return await self._rpc_call_async(m, params, timeout=timeout)
+
+        async def _peer_loop(ws, peer_id: str) -> None:
+            try:
+                async for raw_msg in ws:
+                    msg = None
+                    try:
+                        msg = json.loads(raw_msg)
+                    except Exception:
+                        continue
+                    if not isinstance(msg, dict):
+                        continue
+                    if msg.get("type") != "rpc":
+                        continue
+
+                    req_id = msg.get("id")
+                    method = str(msg.get("method") or "")
+                    raw_params = msg.get("params")
+                    params: dict[str, Any] = {}
+                    if isinstance(raw_params, dict):
+                        for k, v in raw_params.items():
+                            if isinstance(k, str):
+                                params[k] = v
+
+                    # Subscribe the peer to tab-scoped events when it references a tabId.
+                    tab_ref = params.get("tabId")
+                    if isinstance(tab_ref, (str, int)):
+                        tab_s = str(tab_ref).strip()
+                        if tab_s:
+                            with self._lock:
+                                peer = self._peers.get(peer_id)
+                                tabs = peer.get("tabs") if isinstance(peer, dict) else None
+                                if isinstance(tabs, set):
+                                    tabs.add(tab_s)
+                    try:
+                        timeout_ms = int(msg.get("timeoutMs") or 0)
+                    except Exception:
+                        timeout_ms = 0
+                    timeout = float(timeout_ms / 1000.0) if timeout_ms > 0 else 10.0
+                    timeout = max(0.1, min(timeout, 60.0))
+
+                    try:
+                        res = await _peer_dispatch(method, params, timeout=timeout)
+                        await _peer_rpc_reply(ws, req_id, ok=True, result=res)
+                    except Exception as exc:  # noqa: BLE001
+                        await _peer_rpc_reply(ws, req_id, ok=False, error=str(exc))
+            finally:
+                with self._lock:
+                    self._peers.pop(peer_id, None)
+
+        async def _handle_peer(ws, hello_msg: dict[str, Any]) -> None:
+            peer_id = str(hello_msg.get("peerId") or "").strip() or f"peer-{int(time.time() * 1000)}-{os.getpid()}"
+            with self._lock:
+                self._peers[peer_id] = {
+                    "peerId": peer_id,
+                    "pid": int(hello_msg.get("pid") or 0) if str(hello_msg.get("pid") or "").isdigit() else None,
+                    "startedAtMs": int(time.time() * 1000),
+                    "tabs": set(),
+                    "ws": ws,
+                }
+
+            with contextlib.suppress(Exception):
+                await self._ws_send_json(
+                    ws,
+                    {
+                        "type": "peerHelloAck",
+                        "protocolVersion": EXTENSION_BRIDGE_PROTOCOL_VERSION,
+                        "gatewayPort": int(self.port),
+                        "serverStartedAtMs": int(self._server_started_at_ms),
+                    },
+                )
+
+            await _peer_loop(ws, peer_id)
+
+        async def _handle_peer_connection(ws, hello_msg: dict[str, Any]) -> None:
+            await _handle_peer(ws, hello_msg)
+
         def _maybe_build_well_known_response(request) -> WsResponse | None:  # type: ignore[name-defined]
             """Serve a tiny HTTP discovery endpoint on the WS port.
 
@@ -602,6 +772,10 @@ class ExtensionGateway:
                 if path != EXTENSION_GATEWAY_WELL_KNOWN_PATH:
                     return None
 
+                with self._lock:
+                    ext_connected = self._ws is not None
+                    peer_count = len(self._peers)
+
                 payload = {
                     "type": "browserMcpGateway",
                     "protocolVersion": EXTENSION_BRIDGE_PROTOCOL_VERSION,
@@ -609,6 +783,8 @@ class ExtensionGateway:
                     "serverStartedAtMs": int(self._server_started_at_ms),
                     "gatewayPort": int(self.port),
                     "pid": int(os.getpid()),
+                    "extensionConnected": bool(ext_connected),
+                    "peerCount": int(peer_count),
                 }
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
@@ -679,12 +855,12 @@ class ExtensionGateway:
                 for port in self._port_candidates():
                     last_attempted_port = int(port)
                     try:
-                        server = await websockets.serve(  # type: ignore[misc]
+                        server = await websockets.serve(
                             _handler,
                             self.host,
                             int(port),
                             # Some Chrome contexts may omit Origin on localhost WS connects; allow it.
-                            origins=[None, "null", re.compile(r"^chrome-extension://[a-p]{32}/?$")],
+                            origins=[None, re.compile(r"^null$"), re.compile(r"^chrome-extension://[a-p]{32}/?$")],
                             process_request=_process_request,
                             max_size=2_000_000,
                             ping_interval=None,
@@ -812,7 +988,8 @@ class ExtensionGateway:
             if not tab_id or not isinstance(method, str) or not method:
                 return
             params = msg.get("params")
-            ev: dict[str, Any] = {"method": method, "params": params if isinstance(params, dict) else {}}
+            params_dict = params if isinstance(params, dict) else {}
+            ev: dict[str, Any] = {"method": method, "params": params_dict}
 
             # Queue (bounded) for server-side waits.
             with self._events_lock:
@@ -834,6 +1011,26 @@ class ExtensionGateway:
             if cb is not None:
                 with contextlib.suppress(Exception):
                     cb(tab_id, ev)
+
+            # Forward to subscribed peers (multi-CLI support).
+            peers = []
+            with self._lock:
+                for rec in self._peers.values():
+                    if not isinstance(rec, dict):
+                        continue
+                    ws_peer = rec.get("ws")
+                    tabs = rec.get("tabs")
+                    if ws_peer is None or not isinstance(tabs, set):
+                        continue
+                    if tab_id in tabs:
+                        peers.append(ws_peer)
+            if peers:
+                payload = {"type": "cdpEvent", "tabId": tab_id, "method": method, "params": params_dict}
+                with contextlib.suppress(Exception):
+                    await asyncio.gather(
+                        *[self._ws_send_json(w, payload) for w in peers],
+                        return_exceptions=True,
+                    )
             return
 
         if mtype == "log":

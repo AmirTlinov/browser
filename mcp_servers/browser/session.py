@@ -1273,6 +1273,13 @@ class SessionManager:
         if getattr(config, "mode", "launch") == "extension":
             gw = self._require_extension_gateway_connected()
 
+            # Multi-client safety: when this process is proxying through another Browser MCP
+            # instance, avoid implicitly adopting the user's active tab. Peers should default to
+            # isolated tabs to prevent cross-agent interference.
+            force_isolated = bool(getattr(gw, "is_proxy", False))
+            if os.environ.get("MCP_EXTENSION_FORCE_NEW_TAB") == "1":
+                force_isolated = True
+
             def _ext_get(tab_id: str) -> dict[str, Any] | None:
                 try:
                     info = gw.rpc_call("tabs.get", {"tabId": str(tab_id)}, timeout=2.0)
@@ -1290,17 +1297,19 @@ class SessionManager:
             # Create new isolated tab
             # UX-first default: if the extension is configured to follow the user's active tab,
             # adopt it as the session tab (no surprise "new tab" unless needed).
-            try:
-                st = gw.rpc_call("state.get", {}, timeout=1.5)
-            except Exception:
-                st = None
-
-            try:
-                follow_active = bool(st.get("followActive")) if isinstance(st, dict) else False
-                focused = str(st.get("focusedTabId") or "").strip() if isinstance(st, dict) else ""
-            except Exception:
-                follow_active = False
-                focused = ""
+            follow_active = False
+            focused = ""
+            if not force_isolated:
+                try:
+                    st = gw.rpc_call("state.get", {}, timeout=1.5)
+                except Exception:
+                    st = None
+                try:
+                    follow_active = bool(st.get("followActive")) if isinstance(st, dict) else False
+                    focused = str(st.get("focusedTabId") or "").strip() if isinstance(st, dict) else ""
+                except Exception:
+                    follow_active = False
+                    focused = ""
 
             if follow_active and focused:
                 info = _ext_get(focused)

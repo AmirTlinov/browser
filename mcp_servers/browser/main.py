@@ -97,16 +97,18 @@ class McpServer:
 
         # Extension mode: control the user's already-running Chrome via a local MV3 extension.
         if getattr(self.config, "mode", "launch") == "extension":
-            from .extension_gateway import ExtensionGateway
+            from .extension_gateway_shared import SharedExtensionGateway
             from .session import session_manager
 
             try:
-                gw = ExtensionGateway(on_cdp_event=lambda tab_id, ev: session_manager._ingest_tier0_event(tab_id, ev))  # noqa: SLF001
+                gw = SharedExtensionGateway(
+                    on_cdp_event=lambda tab_id, ev: session_manager._ingest_tier0_event(tab_id, ev)  # noqa: SLF001
+                )
                 # Do not block MCP initialize on extension connectivity. The gateway will bind quickly
                 # in the common case, but on port conflicts it's better to fail-soft and surface
                 # actionable status via browser(action="status") / tool errors.
                 gw.start(wait_timeout=0.5, require_listening=False)
-                session_manager.set_extension_gateway(gw)
+                session_manager.set_extension_gateway(gw)  # type: ignore[arg-type]
                 self.extension_gateway = gw
             except Exception as exc:  # noqa: BLE001
                 # Fail-soft: do not crash the MCP handshake; return actionable errors on tool calls.

@@ -2224,13 +2224,13 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
             # Best-effort: if the gateway wasn't created at startup (or failed), try again here.
             if gw is None:
                 try:
-                    from ...extension_gateway import ExtensionGateway
+                    from ...extension_gateway_shared import SharedExtensionGateway
 
-                    gw = ExtensionGateway(
-                        on_cdp_event=lambda tab_id, ev: _session_manager._ingest_tier0_event(tab_id, ev)
-                    )  # noqa: SLF001
+                    gw = SharedExtensionGateway(
+                        on_cdp_event=lambda tab_id, ev: _session_manager._ingest_tier0_event(tab_id, ev)  # noqa: SLF001
+                    )
                     gw.start(wait_timeout=0.5, require_listening=False)
-                    _session_manager.set_extension_gateway(gw)
+                    _session_manager.set_extension_gateway(gw)  # type: ignore[arg-type]
                     gw_error = None
                 except Exception as exc:  # noqa: BLE001
                     gw = None
