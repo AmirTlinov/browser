@@ -40,15 +40,6 @@ class LeaderLock:
         fp = open(self.path, "a+", encoding="utf-8")  # noqa: SIM115
 
         try:
-            fp.seek(0)
-            fp.truncate(0)
-            fp.write(f"pid={os.getpid()}\n")
-            fp.flush()
-        except Exception:
-            # Non-fatal.
-            pass
-
-        try:
             if sys.platform == "win32":
                 import msvcrt  # type: ignore
 
@@ -70,7 +61,18 @@ class LeaderLock:
         except Exception:
             # If locking is not supported, fall back to "no lock".
             self._fp = fp
+            with contextlib.suppress(Exception):
+                fp.seek(0)
+                fp.truncate(0)
+                fp.write(f"pid={os.getpid()}\n")
+                fp.flush()
             return True
+
+        with contextlib.suppress(Exception):
+            fp.seek(0)
+            fp.truncate(0)
+            fp.write(f"pid={os.getpid()}\n")
+            fp.flush()
 
         self._fp = fp
         return True

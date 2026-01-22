@@ -502,11 +502,11 @@ class ExtensionGateway:
 
         Default behavior:
         - Try MCP_EXTENSION_PORT (or 8765)
-        - If busy, try a small adjacent range (port..port+10)
+        - If busy, try a small adjacent range (port..port+50)
 
         Override:
         - MCP_EXTENSION_PORT_RANGE="8765-8775" (inclusive) to control the range.
-        - MCP_EXTENSION_PORT_SPAN=10 to control the default span.
+        - MCP_EXTENSION_PORT_SPAN=50 to control the default span.
         """
         base = int(self.port or 8765)
         ports: list[int] = []
@@ -532,9 +532,9 @@ class ExtensionGateway:
             return ports
 
         try:
-            span = int(os.environ.get("MCP_EXTENSION_PORT_SPAN") or 10)
+            span = int(os.environ.get("MCP_EXTENSION_PORT_SPAN") or 50)
         except Exception:
-            span = 10
+            span = 50
         span = max(0, min(span, 250))
         for p in range(base, base + span + 1):
             _add(p)

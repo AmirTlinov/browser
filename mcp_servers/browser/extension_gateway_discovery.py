@@ -53,9 +53,9 @@ def _port_candidates() -> list[int]:
         return ports
 
     try:
-        span = int(os.environ.get("MCP_EXTENSION_PORT_SPAN") or 10)
+        span = int(os.environ.get("MCP_EXTENSION_PORT_SPAN") or 50)
     except Exception:
-        span = 10
+        span = 50
     span = max(0, min(span, 250))
     for p in range(base, base + span + 1):
         _add(p)

@@ -5,7 +5,7 @@
 // - a local WebSocket gateway (Browser MCP server) on 127.0.0.1
 
 const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:8765";
-const DEFAULT_GATEWAY_SPAN = 10;
+const DEFAULT_GATEWAY_SPAN = 50;
 const GATEWAY_WELL_KNOWN_PATH = "/.well-known/browser-mcp-gateway";
 const STORAGE_KEY = "mcp_ext_state_v1";
 

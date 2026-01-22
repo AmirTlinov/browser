@@ -39,7 +39,7 @@ For canvas apps, the extension also enables a clipboard write bridge:
   - `MCP_EXTENSION_HOST` (default `127.0.0.1`)
   - `MCP_EXTENSION_ID` (if you want the gateway to accept only your extension id)
   - `MCP_EXTENSION_PORT_RANGE` (e.g. `8765-8775`) to control the auto-bind range
-  - `MCP_EXTENSION_PORT_SPAN` (default `10`) to control the default range size when `MCP_EXTENSION_PORT_RANGE` is not set
+  - `MCP_EXTENSION_PORT_SPAN` (default `50`) to control the default range size when `MCP_EXTENSION_PORT_RANGE` is not set
 
 ## Popup controls
 - **Agent control** ([KILL_SWITCH]): when OFF, the extension refuses to execute any browser-changing commands.
