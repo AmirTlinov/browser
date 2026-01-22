@@ -363,7 +363,7 @@ class ExtensionGatewayPeer:
                             await self._on_message(msg)
                     finally:
                         poll_task.cancel()
-                        with contextlib.suppress(Exception):
+                        with contextlib.suppress(asyncio.CancelledError):
                             await poll_task
             except Exception as exc:  # noqa: BLE001
                 with self._lock:
