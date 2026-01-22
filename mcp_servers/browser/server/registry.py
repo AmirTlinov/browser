@@ -114,7 +114,7 @@ class ToolRegistry:
                         return ToolResult.error(
                             "Extension is not connected (mode=extension)",
                             tool=name,
-                            suggestion='Enable the Browser MCP extension and turn ON agent control in the extension popup, then retry (check via browser(action="status"))',
+                            suggestion='Ensure the Browser MCP extension is installed/enabled, then retry (check via browser(action="status"))',
                             details={"gateway": gw.status()},
                         )
                 except Exception:

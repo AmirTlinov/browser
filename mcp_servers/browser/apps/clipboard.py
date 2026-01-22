@@ -33,7 +33,7 @@ def _require_extension_gateway(config: BrowserConfig):
             tool="clipboard",
             action="write",
             reason="Clipboard bridge is only available in extension mode",
-            suggestion="Set MCP_BROWSER_MODE=extension and enable Agent control in the extension popup",
+            suggestion="Set MCP_BROWSER_MODE=extension and ensure the Browser MCP extension is installed/enabled",
             details={"mode": getattr(config, "mode", "launch")},
         )
 
@@ -52,7 +52,7 @@ def _require_extension_gateway(config: BrowserConfig):
             tool="clipboard",
             action="write",
             reason="Extension is not connected",
-            suggestion="Open the Browser MCP extension popup and enable Agent control; ensure the gateway is running",
+            suggestion="Ensure the Browser MCP extension is installed/enabled and the gateway is running",
         )
     return gw
 

@@ -29,7 +29,7 @@ profile (with your tabs, cookies, and extensions) **without** restarting with a
 ./scripts/run_browser_mcp.sh
 ```
 
-Then open the extension popup and turn **Agent control** ON.
+The extension auto-connects when installed/enabled.
 
 Multi-CLI: you can run multiple CLI sessions concurrently (10+). Browser MCP elects a single local
 gateway leader and other sessions proxy through it, so the extension stays connected without port

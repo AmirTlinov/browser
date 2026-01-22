@@ -43,7 +43,7 @@ For canvas apps, the extension also enables a clipboard write bridge:
 
 ## Popup controls
 - **Agent control** ([KILL_SWITCH]): when OFF, the extension refuses to execute any browser-changing commands.
-- When [KILL_SWITCH] is OFF, the extension also avoids connecting to the [GATEWAY] (prevents noisy “connection refused” spam when Browser MCP isn’t running).
+- The extension keeps the gateway connection healthy automatically; you generally don't need to touch the popup.
 - **Follow active tab**: when ON, Browser MCP will (by default) adopt your currently focused tab as the session tab.
   In multi-CLI usage, peer sessions default to isolated tabs to avoid cross-agent interference.
 - **Gateway (Configured)**: override the base gateway URL if needed (Save/Reset). In most cases you can keep the default.

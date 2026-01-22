@@ -2178,7 +2178,7 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
                 "Extension mode: connected"
                 if connected
                 else (
-                    "Extension mode: install/enable the Browser MCP extension in your normal Chrome, then turn ON agent control in the extension UI."
+                    "Extension mode: install/enable the Browser MCP extension in your normal Chrome. Connection should be automatic."
                 )
             )
 
@@ -2256,9 +2256,7 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
                     "running": bool(gw_status.get("connected")),
                     "gateway": gw_status,
                     **({"gatewayError": gw_error} if gw_error else {}),
-                    "note": (
-                        "Extension mode: nothing to launch. Enable the Browser MCP extension in Chrome and turn ON agent control."
-                    ),
+                    "note": "Extension mode: nothing to launch (uses your normal Chrome).",
                     "suggestion": "Run browser(action='status') to verify connection, then use tabs/navigate/page/run/app.",
                 }
             )

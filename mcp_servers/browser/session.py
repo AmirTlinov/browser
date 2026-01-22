@@ -1228,7 +1228,8 @@ class SessionManager:
         if not gw.is_connected():
             raise HttpClientError(
                 "Extension is not connected (mode=extension). "
-                "Open the Browser MCP extension popup and turn ON agent control."
+                "Ensure the Browser MCP extension is installed/enabled in your normal Chrome profile. "
+                "Connection should be automatic; if you just updated the repo, reload the unpacked extension."
             )
         return gw
 
