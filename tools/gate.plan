@@ -1,0 +1,5 @@
+# Browser MCP — gate.plan
+# Lines are executed in a shell, in order (after doc checks).
+
+( [ -x .venv/bin/python ] && PYTHONPATH="vendor/python:$PYTHONPATH" .venv/bin/python -m compileall -q mcp_servers ) || PYTHONPATH="vendor/python:$PYTHONPATH" python3 -m compileall -q mcp_servers
+( [ -x .venv/bin/python ] && PYTHONPATH="vendor/python:$PYTHONPATH" .venv/bin/python -m pytest -q --maxfail=1 ) || PYTHONPATH="vendor/python:$PYTHONPATH" python3 -m pytest -q --maxfail=1

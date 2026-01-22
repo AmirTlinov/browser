@@ -1,0 +1,5 @@
+# Browser MCP — doctor.plan
+# Lines are executed in a shell, in order.
+
+python3 --version
+python3 -c "import sys; print('python_executable:', sys.executable)"

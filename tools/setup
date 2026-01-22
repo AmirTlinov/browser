@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import subprocess
+import sys
+import venv
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _venv_python(root: Path) -> Path:
+    return root / ".venv" / "bin" / "python"
+
+
+def _run(root: Path, cmd: list[str]) -> int:
+    print("$ " + " ".join(cmd))
+    return subprocess.call(cmd, cwd=root)
+
+
+def main() -> int:
+    root = _repo_root()
+    venv_dir = root / ".venv"
+    py = _venv_python(root)
+
+    print("== setup ==")
+    print(f"repo: {root}")
+
+    if not py.exists():
+        print(f"Creating venv: {venv_dir}")
+        venv.EnvBuilder(with_pip=True, clear=False).create(str(venv_dir))
+
+    if not py.exists():
+        print("ERROR: venv python not found after create", file=sys.stderr)
+        return 2
+
+    if _run(root, [str(py), "-m", "pip", "install", "--upgrade", "pip"]) != 0:
+        return 1
+
+    # Installs pinned runtime deps + dev tools (ruff/pytest).
+    if _run(root, [str(py), "-m", "pip", "install", "-e", ".[dev]"]) != 0:
+        return 1
+
+    print("\nOK: setup")
+    print("Next: ./tools/lint && ./tools/gate")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

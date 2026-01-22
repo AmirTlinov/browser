@@ -1,0 +1,14 @@
+version: 1
+project: browser-mcp
+purpose: AI-native browser control + frontend diagnostics
+
+golden_path:
+  - tools/doctor
+  - tools/gate
+
+docs:
+  legend: LEGEND.md
+  map: MAP.md
+  architecture: ARCHITECTURE.md
+  playbook: docs/AGENT_PLAYBOOK.md
+  contracts_dir: docs/contracts

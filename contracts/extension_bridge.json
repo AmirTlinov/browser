@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openai.com/browser-mcp/contracts/extension_bridge.json",
+  "title": "Browser MCP Extension Bridge Protocol",
+  "description": "WebSocket message schema for the local bridge between the Chrome extension and Browser MCP server (extension mode).",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/hello" },
+    { "$ref": "#/$defs/helloAck" },
+    { "$ref": "#/$defs/rpc" },
+    { "$ref": "#/$defs/rpcResult" },
+    { "$ref": "#/$defs/cdpEvent" },
+    { "$ref": "#/$defs/ping" },
+    { "$ref": "#/$defs/pong" },
+    { "$ref": "#/$defs/log" }
+  ],
+  "$defs": {
+    "tabId": {
+      "description": "Chrome tab id. In the extension APIs this is an integer, but the bridge normalizes to string in many places for stability across JSON and tool layers.",
+      "oneOf": [
+        { "type": "integer" },
+        { "type": "string" }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message": { "type": "string" },
+        "code": { "type": "string" },
+        "data": { "type": "object" }
+      },
+      "required": ["message"]
+    },
+    "hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "hello" },
+        "protocolVersion": { "type": "string" },
+        "extensionId": { "type": "string" },
+        "extensionVersion": { "type": "string" },
+        "userAgent": { "type": "string" },
+        "capabilities": { "type": "object" },
+        "state": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "followActive": { "type": "boolean" },
+            "focusedTabId": {
+              "oneOf": [
+                { "$ref": "#/$defs/tabId" },
+                { "type": "null" }
+              ]
+            }
+          }
+        }
+      },
+      "required": ["type", "protocolVersion", "extensionId"]
+    },
+    "helloAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "helloAck" },
+        "protocolVersion": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "serverVersion": { "type": "string" },
+        "serverStartedAtMs": { "type": "integer" },
+        "gatewayPort": { "type": "integer" },
+        "state": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "followActive": { "type": "boolean" },
+            "focusedTabId": {
+              "oneOf": [
+                { "$ref": "#/$defs/tabId" },
+                { "type": "null" }
+              ]
+            }
+          }
+        }
+      },
+      "required": ["type", "protocolVersion", "sessionId"]
+    },
+    "rpc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "rpc" },
+        "id": { "type": ["string", "integer"] },
+        "method": { "type": "string" },
+        "params": { "type": "object" }
+      },
+      "required": ["type", "id", "method"]
+    },
+    "rpcResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "rpcResult" },
+        "id": { "type": ["string", "integer"] },
+        "ok": { "type": "boolean" },
+        "result": {},
+        "error": { "$ref": "#/$defs/error" }
+      },
+      "required": ["type", "id", "ok"]
+    },
+    "cdpEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "cdpEvent" },
+        "tabId": { "$ref": "#/$defs/tabId" },
+        "method": { "type": "string" },
+        "params": { "type": "object" }
+      },
+      "required": ["type", "tabId", "method"]
+    },
+    "ping": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "ping" },
+        "ts": { "type": "integer" }
+      },
+      "required": ["type"]
+    },
+    "pong": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "pong" },
+        "ts": { "type": "integer" }
+      },
+      "required": ["type"]
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "log" },
+        "level": { "type": "string", "enum": ["debug", "info", "warn", "error"] },
+        "message": { "type": "string" },
+        "meta": { "type": "object" }
+      },
+      "required": ["type", "level", "message"]
+    }
+  }
+}

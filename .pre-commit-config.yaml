@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: contracts-sync
+        name: contracts sync (unified_tools)
+        entry: python3 scripts/generate_contracts.py
+        language: system
+        pass_filenames: false

@@ -4,15 +4,16 @@ Demo: AI controlling visible browser window
 Shows step-by-step what AI is doing in the browser
 """
 
+import base64
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mcp_servers.antigravity_browser import cdp
-from mcp_servers.antigravity_browser.config import BrowserConfig
-from mcp_servers.antigravity_browser.launcher import BrowserLauncher
+from mcp_servers.browser import tools as cdp
+from mcp_servers.browser.config import BrowserConfig
+from mcp_servers.browser.launcher import BrowserLauncher
 
 
 def demo(interactive=True, delay=2.0):
@@ -22,6 +23,7 @@ def demo(interactive=True, delay=2.0):
         interactive: If True, waits for Enter key between steps. If False, runs automatically.
         delay: Seconds to wait between steps in auto mode.
     """
+
     def wait_step(message):
         """Wait for user input or auto-delay."""
         if interactive:
@@ -53,7 +55,7 @@ def demo(interactive=True, delay=2.0):
     # Step 2: Navigate to test page
     wait_step("\nPress Enter to open test page...")
     test_page = f"file://{Path(__file__).parent.absolute()}/test_page.html"
-    cdp.navigate_to(test_page, config)
+    cdp.navigate_to(config, test_page)
     print(f"✓ Navigated to: {test_page}")
     time.sleep(1)
 
@@ -66,61 +68,45 @@ def demo(interactive=True, delay=2.0):
 
     # Step 4: Type in input
     wait_step("\nPress Enter to type text in input field...")
-    cdp.focus_element("#text-input", config)
+    cdp.focus_element(config, "#text-input")
     time.sleep(0.5)
-    cdp.dom_action_fallback(config, {
-        "command": "type",
-        "selector": "#text-input",
-        "text": "Hello from AI! 🤖",
-        "clear": True
-    })
-    print("✓ Typed text: 'Hello from AI! 🤖'")
+    cdp.dom_action_type(config, selector="#text-input", text="Hello from AI!", clear=True)
+    print("✓ Typed text: 'Hello from AI!'")
     time.sleep(1)
 
     # Step 5: Click button
     wait_step("\nPress Enter to click button...")
-    result = cdp.dom_action_fallback(config, {
-        "command": "click",
-        "selector": "#click-button"
-    })
+    cdp.dom_action_click(config, "#click-button")
     print("✓ Clicked button")
     time.sleep(1)
 
     # Step 6: Scroll down
     wait_step("\nPress Enter to scroll down...")
-    cdp.scroll_page(0, 500, config)
+    cdp.scroll_page(config, 0, 500)
     print("✓ Scrolled down 500px")
     time.sleep(1)
 
     # Step 7: Hover over element
     wait_step("\nPress Enter to hover over element...")
-    cdp.hover_element("#hover-target", config)
+    cdp.hover_element(config, "#hover-target")
     print("✓ Hovering over hover target (watch the color change!)")
     time.sleep(2)
 
     # Step 8: Select option
     wait_step("\nPress Enter to select dropdown option...")
-    cdp.scroll_page(0, -500, config)  # Scroll back up
+    cdp.scroll_page(config, 0, -500)  # Scroll back up
     time.sleep(0.5)
-    cdp.select_option("#dropdown", "option3", config, by="value")
+    cdp.select_option(config, "#dropdown", "option3", by="value")
     print("✓ Selected 'Option 3' in dropdown")
     time.sleep(1)
 
     # Step 9: Take screenshot
     wait_step("\nPress Enter to take screenshot...")
-    target = cdp._first_page_target(config)
-    session = cdp.CdpSession(target["webSocketDebuggerUrl"])
-    try:
-        session.enable_page()
-        data_b64 = session.capture_screenshot()
-        import base64
-        binary = base64.b64decode(data_b64, validate=False)
-        screenshot_path = Path(__file__).parent / "demo_screenshot.png"
-        screenshot_path.write_bytes(binary)
-        print(f"✓ Screenshot saved: {screenshot_path}")
-        print(f"  Size: {len(binary)} bytes")
-    finally:
-        session.close()
+    shot = cdp.screenshot(config)
+    screenshot_path = Path(__file__).parent / "demo_screenshot.png"
+    screenshot_path.write_bytes(base64.b64decode(shot["content_b64"], validate=False))
+    print(f"✓ Screenshot saved: {screenshot_path}")
+    print(f"  Size: {shot['bytes']} bytes")
     time.sleep(1)
 
     print("\n" + "=" * 60)
@@ -134,6 +120,7 @@ def demo(interactive=True, delay=2.0):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Browser automation demo")
     parser.add_argument("--auto", action="store_true", help="Run automatically without user input")
     parser.add_argument("--delay", type=float, default=2.0, help="Delay between steps in auto mode (default: 2.0s)")
@@ -147,5 +134,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\n❌ Demo error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

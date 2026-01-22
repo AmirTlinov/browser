@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Browser MCP</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="header">
+        <div class="title">Browser MCP</div>
+        <div id="connBadge" class="badge badge--warn">Connecting…</div>
+      </header>
+
+      <section class="card">
+        <div class="row">
+          <div>
+            <div class="label">Agent control</div>
+            <div class="hint">Turns DevTools control ON/OFF immediately.</div>
+          </div>
+          <label class="switch">
+            <input id="enabledToggle" type="checkbox" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="row">
+          <div>
+            <div class="label">Follow active tab</div>
+            <div class="hint">Keeps attaching to your focused tab.</div>
+          </div>
+          <label class="switch">
+            <input id="followToggle" type="checkbox" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="kv">
+          <div class="k">Gateway</div>
+          <div class="v mono" id="gatewayUrl">—</div>
+        </div>
+        <div class="kv">
+          <div class="k">Configured</div>
+          <div class="v">
+            <input id="gatewayUrlInput" class="input mono" placeholder="ws://127.0.0.1:8765" />
+          </div>
+        </div>
+        <div class="kv">
+          <div class="k">Last good</div>
+          <div class="v mono" id="gatewayLastGood">—</div>
+        </div>
+        <div class="kv">
+          <div class="k">Extension ID</div>
+          <div class="v mono" id="extId">…</div>
+        </div>
+        <div class="kv">
+          <div class="k">Focused tab</div>
+          <div class="v mono" id="focusedTab">—</div>
+        </div>
+
+        <div class="actions">
+          <button id="saveGatewayBtn" class="btn btn--ghost">Save</button>
+          <button id="resetGatewayBtn" class="btn btn--ghost">Reset</button>
+        </div>
+        <div class="actions">
+          <button id="reconnectBtn" class="btn">Reconnect</button>
+          <button id="copyExtIdBtn" class="btn btn--ghost">Copy ID</button>
+        </div>
+      </section>
+
+      <section class="footer">
+        <div id="lastError" class="error"></div>
+      </section>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

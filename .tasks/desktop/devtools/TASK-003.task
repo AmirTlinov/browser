@@ -21,9 +21,9 @@ updated: 2025-11-23 03:51
 
 ## Подзадачи
 - [x] Подключить MCP сервер к клиенту IDE и проверить реальный запуск Chrome/CDP с allowlist
-  - Критерии: MCP сервер подключен к клиенту (конфиг/launch командой) и проходит handshake; Реальный запуск Chrome/Antigravity подтверждён; CDP отвечает на json/version; Allowlist блокирует неразрешённый домен и пропускает разрешённый
+  - Критерии: MCP сервер подключен к клиенту (конфиг/launch командой) и проходит handshake; Реальный запуск Chrome/Chromium подтверждён; CDP отвечает на json/version; Allowlist блокирует неразрешённый домен и пропускает разрешённый
   - Тесты: Ручной прогон: старт сервера → подключение клиентом → http_get разрешённого домена (200) и запрещённого (ошибка); Лог/скриншот CDP json/version
-  - Блокеры: Нет установленного Chrome/Antigravity или занят CDP порт; Клиент MCP недоступен или не поддерживает stdio
+  - Блокеры: Нет установленного Chrome/Chromium или занят CDP порт; Клиент MCP недоступен или не поддерживает stdio
   - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
   - Отметки критериев: Handshake initialize → ответ с protocolVersion=2025-06-18 (unit-тест + ручной запрос run_browser_mcp.sh); cdp-lite2: Chrome/142.0.7444.175 headless отвечает на /json/version; cdp_version tool выдаёт /json/version 200 (cdp-lite2 лог); http_get manual: allow example.com -> 200, deny example.com when allowlist=['example.net']
   - Отметки тестов: Ручной http_get: example.com=200, блокировка example.com при allowlist=['example.net']; cdp-lite2 stdout зафиксирован (/home/amir/.apply_shell/logs/cdp-lite2.*) с json/version Chrome/142.0.7444.175

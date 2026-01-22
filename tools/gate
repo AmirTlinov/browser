@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+TOKEN_RE = re.compile(r"^[A-Z][A-Z0-9_/-]*$")
+TOKEN_REF_RE = re.compile(r"\[([^\[\]]+)\]")
+CONTRACT_FILE_RE = re.compile(r"^(?P<stem>.+)_v(?P<ver>[0-9]+)\.md$")
+REQUIRED_CONTRACT_HEADINGS = ("Purpose", "Scope", "Interface", "Errors", "Examples")
+
+
+@dataclass(frozen=True)
+class DocBlocks:
+    legend: str
+    content: str
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _iter_plan_lines(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    lines: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        lines.append(line)
+    return lines
+
+
+def _strip_inline_code(text: str) -> str:
+    parts = text.split("`")
+    if len(parts) < 3:
+        return text
+    out: list[str] = []
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            out.append(part)
+    return "".join(out)
+
+
+def _parse_blocks(md: str) -> DocBlocks:
+    lines = md.splitlines()
+    # Skip leading empty lines.
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i >= len(lines) or lines[i].strip() != "[LEGEND]":
+        raise ValueError("first non-empty line must be [LEGEND]")
+
+    # Find the content header.
+    legend_start = i + 1
+    content_header_idx = None
+    in_fence = False
+    for j in range(legend_start, len(lines)):
+        line = lines[j]
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line.strip() == "[CONTENT]":
+            content_header_idx = j
+            break
+
+    if content_header_idx is None:
+        raise ValueError("missing [CONTENT] header")
+
+    # Disallow multiple content headers (outside fenced code blocks).
+    in_fence = False
+    for j in range(content_header_idx + 1, len(lines)):
+        line = lines[j]
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line.strip() == "[CONTENT]":
+            raise ValueError("multiple [CONTENT] headers found; use exactly one")
+
+    legend = "\n".join(lines[legend_start:content_header_idx]).strip("\n")
+    content = "\n".join(lines[content_header_idx + 1 :]).strip("\n")
+    return DocBlocks(legend=legend, content=content)
+
+
+def _parse_legend_tokens(legend_block: str) -> dict[str, str]:
+    tokens: dict[str, str] = {}
+    for raw in legend_block.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            raise ValueError(f"legend line must be 'TOKEN = Meaning' (got: {raw!r})")
+        left, right = line.split("=", 1)
+        token = left.strip()
+        meaning = right.strip()
+        if not token:
+            raise ValueError(f"empty token in legend line: {raw!r}")
+        if not TOKEN_RE.match(token):
+            raise ValueError(f"invalid token name: {token!r} (expected uppercase TOKEN like FOO_BAR)")
+        if token in tokens:
+            raise ValueError(f"duplicate token in legend: {token}")
+        tokens[token] = meaning
+    return tokens
+
+
+def _extract_token_refs(content_block: str) -> set[str]:
+    refs: set[str] = set()
+    in_fence = False
+    for raw in content_block.splitlines():
+        line = raw.rstrip("\n")
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        line = _strip_inline_code(line)
+        for inner in TOKEN_REF_RE.findall(line):
+            candidate = inner.strip()
+            if "|" in candidate:
+                token, src = candidate.split("|", 1)
+                token = token.strip()
+                src = src.strip()
+                if src != "LEGEND.md":
+                    continue
+                candidate = token
+            if TOKEN_RE.match(candidate):
+                refs.add(candidate)
+    return refs
+
+
+def _should_skip_dir(name: str) -> bool:
+    return name in {
+        ".git",
+        ".hg",
+        ".svn",
+        ".venv",
+        ".pytest_cache",
+        "node_modules",
+        "target",
+        "dist",
+        "build",
+        "vendor",
+        ".next",
+        ".cache",
+        "__pycache__",
+    }
+
+
+def _iter_markdown_files(root: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in sorted(root.rglob("*.md")):
+        if any(_should_skip_dir(p) for p in path.parts):
+            continue
+        files.append(path)
+    return files
+
+
+def _is_repo_root_freeform(path: Path, root: Path) -> bool:
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return False
+    if rel.parent != Path("."):
+        return False
+    return rel.name in {"AGENTS.md", "README.md"}
+
+
+def _is_contract_doc(rel: Path) -> tuple[bool, str]:
+    # Versioned contracts live under docs/contracts/*_vN.md
+    if len(rel.parts) < 3:
+        return (False, "")
+    if rel.parts[0] != "docs" or rel.parts[1] != "contracts":
+        return (False, "")
+    m = CONTRACT_FILE_RE.match(rel.name)
+    if not m:
+        return (False, "")
+    return (True, f"v{m.group('ver')}")
+
+
+def _content_headings(content_block: str) -> set[str]:
+    headings: set[str] = set()
+    in_fence = False
+    for raw in content_block.splitlines():
+        line = raw.rstrip("\n")
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line.startswith("## "):
+            headings.add(line[3:].strip())
+    return headings
+
+
+def _has_fenced_code_block(content_block: str) -> bool:
+    in_fence = False
+    for raw in content_block.splitlines():
+        line = raw.rstrip("\n")
+        if line.strip().startswith("```"):
+            return True
+        if in_fence:
+            continue
+    return False
+
+
+def _first_non_empty_line(text: str) -> str:
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line:
+            return line
+    return ""
+
+
+def _validate_contract_content(rel: Path, content_block: str, expected_version: str, errors: list[str]) -> None:
+    first = _first_non_empty_line(content_block)
+    if not first.startswith("Contract:"):
+        errors.append(f"{rel}: contract body must start with 'Contract:' line")
+        return
+    if expected_version not in first:
+        errors.append(f"{rel}: contract 'Contract:' line must include {expected_version}")
+
+    headings = _content_headings(content_block)
+    missing = [h for h in REQUIRED_CONTRACT_HEADINGS if h not in headings]
+    if missing:
+        errors.append(f"{rel}: missing required contract headings: {', '.join(missing)}")
+        return
+
+    if not _has_fenced_code_block(content_block):
+        errors.append(f"{rel}: missing fenced code block (required by ## Examples)")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="gate")
+    parser.add_argument("--strict", action="store_true", help="Fail on hygiene warnings (treat warnings as errors).")
+    args = parser.parse_args()
+
+    root = _repo_root()
+    legend_path = root / "LEGEND.md"
+
+    if not legend_path.exists():
+        print("ERROR: missing LEGEND.md", file=sys.stderr)
+        return 2
+
+    try:
+        global_blocks = _parse_blocks(legend_path.read_text(encoding="utf-8"))
+        global_tokens = _parse_legend_tokens(global_blocks.legend)
+    except Exception as e:
+        print(f"ERROR: LEGEND.md is invalid: {e}", file=sys.stderr)
+        return 2
+
+    md_files = _iter_markdown_files(root)
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    for path in md_files:
+        if _is_repo_root_freeform(path, root):
+            continue
+        rel = path.relative_to(root)
+        try:
+            blocks = _parse_blocks(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            errors.append(f"{rel}: {e}")
+            continue
+
+        try:
+            local_tokens = _parse_legend_tokens(blocks.legend)
+        except Exception as e:
+            errors.append(f"{rel}: invalid [LEGEND]: {e}")
+            continue
+
+        # LEGEND.md is the global token source; it may (and must) define global tokens.
+        if path == legend_path:
+            local_tokens = {}
+
+        shadowed = sorted(set(local_tokens.keys()) & set(global_tokens.keys()))
+        if shadowed:
+            errors.append(f"{rel}: local tokens shadow global tokens: {', '.join(shadowed)}")
+            continue
+
+        refs = _extract_token_refs(blocks.content)
+        defined = set(global_tokens.keys()) | set(local_tokens.keys())
+        missing = sorted(refs - defined)
+        if missing:
+            errors.append(f"{rel}: undefined token references: {', '.join(missing)}")
+
+        # Hygiene: unused local tokens are almost always accidental.
+        unused_local = sorted(set(local_tokens.keys()) - refs)
+        if unused_local:
+            warnings.append(f"{rel}: unused local tokens: {', '.join(unused_local)}")
+
+        is_contract, expected_ver = _is_contract_doc(rel)
+        if is_contract:
+            _validate_contract_content(rel, blocks.content, expected_ver, errors)
+
+    if warnings:
+        print("== gate warnings ==")
+        for w in warnings:
+            print(f"- {w}")
+        if args.strict:
+            errors.extend([f"{w} (warning treated as error)" for w in warnings])
+
+    if errors:
+        print("== gate errors ==", file=sys.stderr)
+        for e in errors:
+            print(f"- {e}", file=sys.stderr)
+        print(f"\nFAIL: gate ({len(errors)} error(s)).", file=sys.stderr)
+        return 2
+
+    # Run project checks (optional).
+    plan = _iter_plan_lines(root / "tools" / "gate.plan")
+    plan_failures = 0
+    if plan:
+        print("\n== gate plan ==")
+    for cmd in plan:
+        print(f"\n$ {cmd}")
+        rc = subprocess.call(cmd, shell=True, cwd=root)
+        if rc != 0:
+            plan_failures += 1
+            print(f"gate: plan command failed (rc={rc})", file=sys.stderr)
+
+    if plan_failures:
+        print(f"\nFAIL: gate plan had {plan_failures} failing command(s).", file=sys.stderr)
+        return 1
+
+    print("\nOK: gate")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

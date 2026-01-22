@@ -17,7 +17,7 @@ updated: 2025-11-23 06:18
 # Ретест extension_dom/extension_fetch после перезапуска
 
 ## Описание
-Перезапустить MCP сервер, удостовериться что antigravity extension подключено без fallback; проверить extension_dom и extension_fetch; собрать логи и зафиксировать результат.
+Перезапустить MCP сервер, удостовериться что browser extension подключено без fallback; проверить extension_dom и extension_fetch; собрать логи и зафиксировать результат.
 
 ## Подзадачи
 - [ ] Поднять MCP сервер и убедиться в handshake

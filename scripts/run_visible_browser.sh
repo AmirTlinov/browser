@@ -24,4 +24,4 @@ echo "Press Ctrl+C to stop"
 echo ""
 
 cd "$(dirname "$0")/.." || exit 1
-python3 -m mcp_servers.antigravity_browser.server
+python3 -m mcp_servers.browser.server

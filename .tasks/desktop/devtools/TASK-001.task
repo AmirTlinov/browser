@@ -10,45 +10,45 @@ priority: MEDIUM
 progress: 100
 status: OK
 tags: []
-title: Разобраться как ИИ работает с браузером в Antigravity IDE
+title: Разобраться как ИИ работает с браузером в IDE
 updated: 2025-11-22 21:03
 ---
 
-# Разобраться как ИИ работает с браузером в Antigravity IDE
+# Разобраться как ИИ работает с браузером в IDE
 
 ## Описание
-Исследовать локальную установку Antigravity, понять механизм соединения агента с браузером (Chrome, CDP, прокси), собрать подтверждения из кода и логов.
+Исследовать локальную установку IDE, понять механизм соединения агента с браузером (Chrome, CDP, прокси), собрать подтверждения из кода и логов.
 
 ## Подзадачи
-- [x] Собрать локальные источники про браузерную интеграцию Antigravity
+- [x] Собрать локальные источники про браузерную интеграцию IDE
   - Критерии: Выявлены все доступные файлы конфигурации/логов/расширений, относящиеся к браузеру и CDP; Зафиксированы ключевые пути к бинарям и профилям браузера
-  - Тесты: rg -n "browser" /usr/share/antigravity/resources/app/extensions/antigravity*; grep -n "Browser" /home/amir/reports/antigravity/20251119T090001/main.log
-  - Блокеры: Недостаточно прав на чтение системных путей; Отсутствуют установленные расширения или логи Antigravity
+  - Тесты: rg -n "browser" /usr/share/<ide>/resources/app/extensions/*; grep -n "Browser" /home/amir/reports/<ide>/20251119T090001/main.log
+  - Блокеры: Недостаточно прав на чтение системных путей; Отсутствуют установленные расширения или логи IDE
   - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
-  - Отметки критериев: RG по /usr/share/antigravity* и логи выявили BrowserOnboarding, AgentClientServer и расположение расширений.
+  - Отметки критериев: RG по /usr/share/<ide>* и логи выявили BrowserOnboarding, AgentClientServer и расположение расширений.
   - Отметки тестов: Выполнены rg на browser*, просмотр main.log копии 20251119T090001.
   - Отметки блокеров: Доступ ко всем путям есть, блокеров не встретилось.
-- [x] Разобрать код antigravity-browser-launcher и команды запуска браузера
+- [x] Разобрать код browser-launcher и команды запуска браузера
   - Критерии: Описаны команды/флаги запуска Chrome и механизм выбора профиля/порта; Понято, как запускается warmup и обратный SSH-туннель для CDP
-  - Тесты: cat /usr/share/antigravity/resources/app/extensions/antigravity-browser-launcher/dist/extension.js | head; Поиск команд antigravity.getBrowserChromePath/Port в dist
+  - Тесты: cat /usr/share/<ide>/resources/app/extensions/browser-launcher/dist/extension.js | head; Поиск команд ide.getBrowserChromePath/Port в dist
   - Блокеры: Минифицированный код затрудняет чтение; Отсутствует доступ к исходникам или sourcemap
   - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
   - Отметки критериев: Изучен dist/extension.js launcher: spawn Chrome с --remote-debugging-port и user-data-dir, warmup и SSH reverse proxy для удалённых сессий.
-  - Отметки тестов: Просмотрен dist/extension.js, найдены команды antigravity.getBrowserChromePath/UserProfilePath/CdpPort и логика launch/warmUp.
+  - Отметки тестов: Просмотрен dist/extension.js, найдены команды ide.getBrowserChromePath/UserProfilePath/CdpPort и логика launch/warmUp.
   - Отметки блокеров: Минификация не мешает пониманию основных параметров запуска.
 - [x] Сформулировать схему взаимодействия ИИ с браузером и риски
   - Критерии: Есть финальное текстовое описание цепочки (IDE → launcher → Chrome CDP → обратный прокси); Выделены риски безопасности и требования к окружению
   - Тесты: Подготовлен конспект и добавлен в ответ пользователю; Проверена корректность портов/путей в окружении
   - Блокеры: Недостаток подтвержденных данных о работе основного расширения; Порт CDP занят другими процессами
   - Чекпоинты: Критерии=OK; Тесты=OK; Блокеры=OK
-  - Отметки критериев: Собрана цепочка: IDE команды antigravity.getBrowser* → browser-launcher → Chrome с CDP (порт 9222) и пользовательским профилем ~/.gemini/antigravity-browser-profile; в SSH-сессиях поднимается обратный прокси.
+  - Отметки критериев: Собрана цепочка: IDE команды ide.getBrowser* → browser-launcher → Chrome с CDP (порт 9222) и пользовательским профилем ~/.gemini/browser-profile; в SSH-сессиях поднимается обратный прокси.
   - Отметки тестов: Итоговый конспект сформирован для ответа; проверены пути профиля/бинаря и порт 9222 из dist/extension.js и main.log.
   - Отметки блокеров: Критичных блокеров нет, при реальном запуске важны доступность Chrome и свободный порт CDP/прокси.
 
 ## Критерии успеха
-- rg -n "browser" /usr/share/antigravity/resources/app/extensions/antigravity-browser-launcher
-- cat /usr/share/antigravity/resources/app/extensions/antigravity-browser-launcher/dist/extension.js | head
-- cat /home/amir/reports/antigravity/20251119T090001/main.log
+- rg -n "browser" /usr/share/<ide>/resources/app/extensions/browser-launcher
+- cat /usr/share/<ide>/resources/app/extensions/browser-launcher/dist/extension.js | head
+- cat /home/amir/reports/<ide>/20251119T090001/main.log
 
 ## Риски
 - неполные логи

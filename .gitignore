@@ -49,10 +49,18 @@ coverage.xml
 
 # Project-specific
 vendor/chromium/
+vendor/python/
 data/outbox/
+data/artifacts/
+data/downloads/
+.agents/
+mcp_servers/**/.agents/
 .tmp/
 *.ps
 *.log
+
+# Local task scratchpads
+.tasks/
 
 # OS
 .DS_Store

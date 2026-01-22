@@ -1,3 +1,6 @@
+[LEGEND]
+
+[CONTENT]
 # Troubleshooting Guide
 
 ## Snap Chromium Issues
@@ -47,7 +50,7 @@ export MCP_BROWSER_BINARY=/usr/bin/chromium-browser
 
 ```bash
 # Check which binary will be used
-python3 -c "from mcp_servers.antigravity_browser.config import BrowserConfig; print(BrowserConfig.detect_binary())"
+python3 -c "from mcp_servers.browser.config import BrowserConfig; print(BrowserConfig.detect_binary())"
 
 # Should NOT be /snap/bin/chromium
 ```
@@ -88,7 +91,7 @@ Error: Unable to lock profile
 export MCP_BROWSER_PROFILE=~/.mcp/browser-$(date +%s)
 
 # Or clean existing
-rm -rf ~/.gemini/antigravity-browser-profile/SingletonLock
+rm -rf ~/.gemini/browser-profile/SingletonLock
 ```
 
 ---
@@ -99,7 +102,7 @@ rm -rf ~/.gemini/antigravity-browser-profile/SingletonLock
 
 ```bash
 # 1. Browser binary exists
-ls -la $(python3 -c "from mcp_servers.antigravity_browser.config import BrowserConfig; print(BrowserConfig.detect_binary())")
+ls -la $(python3 -c "from mcp_servers.browser.config import BrowserConfig; print(BrowserConfig.detect_binary())")
 
 # 2. Display available
 echo $DISPLAY
@@ -168,13 +171,13 @@ Error: Inspected target navigated or closed
 
 ### This is Normal
 
-Happens with `browser_back`/`browser_forward` - navigation closes connection.
+Can happen during navigation changes (e.g. `navigate(action="back")` / `navigate(action="forward")`). Navigation can invalidate the inspected target.
 
 No action needed - handled automatically.
 
 ---
 
-## browser_fetch CORS Errors
+## fetch CORS Errors
 
 ```
 Error: CORS policy blocked the request
@@ -182,21 +185,21 @@ Error: CORS policy blocked the request
 
 ### Explanation
 
-`browser_fetch` executes fetch() in the page context, so it's subject to CORS policy. This is intentional - it simulates what a user script on the page could do.
+`fetch` executes `fetch()` in the page context, so it's subject to CORS policy. This is intentional - it simulates what a user script on the page could do.
 
 ### Solutions
 
 1. **Navigate to the same origin first:**
    ```
-   browser_navigate to https://api.example.com/
-   browser_fetch https://api.example.com/data
+   navigate(url="https://api.example.com/")
+   fetch(url="https://api.example.com/data")
    ```
 
-2. **Use http_get for simple requests:**
-   `http_get` makes server-side requests without CORS restrictions.
+2. **Use http for simple requests:**
+   `http` makes server-side requests without CORS restrictions.
 
-3. **Use browser_set_cookie for authentication:**
-   Set cookies directly via CDP, then navigate to the page.
+3. **Use cookies tool for authentication:**
+   Set cookies via CDP, then navigate to the page.
 
 ---
 
@@ -205,7 +208,7 @@ Error: CORS policy blocked the request
 ```bash
 # Check configuration
 python3 -c "
-from mcp_servers.antigravity_browser.config import BrowserConfig
+from mcp_servers.browser.config import BrowserConfig
 c = BrowserConfig.from_env()
 print(f'Binary: {c.binary_path}')
 print(f'Profile: {c.profile_path}')
@@ -214,8 +217,8 @@ print(f'Port: {c.cdp_port}')
 
 # Test CDP connection
 python3 -c "
-from mcp_servers.antigravity_browser.config import BrowserConfig
-from mcp_servers.antigravity_browser.launcher import BrowserLauncher
+from mcp_servers.browser.config import BrowserConfig
+from mcp_servers.browser.launcher import BrowserLauncher
 config = BrowserConfig.from_env()
 launcher = BrowserLauncher(config)
 result = launcher.ensure_running()

@@ -1,11 +1,12 @@
 [project]
-name = "antigravity-browser-mcp"
+name = "browser-mcp"
 version = "0.1.0"
 description = "MCP server for browser automation via Chrome DevTools Protocol"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "websocket-client>=1.8.0",
+    "websocket-client==1.9.0",
+    "websockets==15.0.1",
 ]
 
 [project.optional-dependencies]
@@ -14,6 +15,9 @@ dev = [
     "pytest-cov>=4.0",
     "ruff>=0.1.0",
 ]
+
+[project.scripts]
+browser-mcp = "mcp_servers.browser.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -35,8 +39,8 @@ omit = [
     "*/tests/*",
     "*/__pycache__/*",
     # Browser tools require real Chrome - covered by integration tests
-    "mcp_servers/antigravity_browser/tools/*",
-    "mcp_servers/antigravity_browser/session.py",
+    "mcp_servers/browser/tools/*",
+    "mcp_servers/browser/session.py",
 ]
 
 [tool.coverage.report]
@@ -52,6 +56,11 @@ fail_under = 50
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+exclude = [
+    "vendor/**",
+    ".venv/**",
+    "data/**",
+]
 
 [tool.ruff.lint]
 select = [

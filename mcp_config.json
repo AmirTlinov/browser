@@ -1,6 +1,6 @@
 {
   "servers": {
-    "antigravity-browser": {
+    "browser": {
       "enabled": true,
       "transport": {
         "type": "stdio",
@@ -9,6 +9,9 @@
         "cwd": ".",
         "env": {
           "MCP_QUIET": "1",
+          "MCP_TOOLSET": "full",
+          "MCP_BROWSER_MODE": "extension",
+          "MCP_AUTO_PORT_FALLBACK": "0",
           "MCP_DUMP_FRAMES": "data/outbox/mcp_frames.log"
         }
       }

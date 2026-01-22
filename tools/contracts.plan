@@ -1,0 +1,3 @@
+# Browser MCP — contracts.plan
+
+python3 scripts/generate_contracts.py
