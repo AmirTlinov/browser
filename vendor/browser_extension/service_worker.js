@@ -354,10 +354,12 @@ async function probeGatewayWellKnown(wsUrl) {
 
   const startedAt = Number(json.serverStartedAtMs || 0);
   const gatewayPort = Number(json.gatewayPort || parsed.port);
+  const supportsPeers = json.supportsPeers === true;
   return {
     wsUrl: `${parsed.proto}//${parsed.host}:${gatewayPort}${parsed.path}`,
     serverStartedAtMs: Number.isFinite(startedAt) ? startedAt : 0,
     gatewayPort: Number.isFinite(gatewayPort) ? gatewayPort : parsed.port,
+    supportsPeers,
     protocolVersion: String(json.protocolVersion || ""),
     serverVersion: String(json.serverVersion || ""),
   };
@@ -374,7 +376,12 @@ async function discoverBestGateway() {
   const ok = results.filter(Boolean);
   if (!ok.length) return null;
 
-  ok.sort((a, b) => Number(b.serverStartedAtMs || 0) - Number(a.serverStartedAtMs || 0));
+  ok.sort((a, b) => {
+    const ap = a.supportsPeers ? 1 : 0;
+    const bp = b.supportsPeers ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return Number(b.serverStartedAtMs || 0) - Number(a.serverStartedAtMs || 0);
+  });
   return ok[0];
 }
 
