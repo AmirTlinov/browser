@@ -1474,6 +1474,8 @@ USAGE:
 - Agent memory (safe KV): browser(action="memory", memory_action="set", key="token", value="...")
 - Agent memory list: browser(action="memory", memory_action="list")
 - Agent memory get (redacted by default): browser(action="memory", memory_action="get", key="token")
+- Persist memory (non-sensitive): browser(action="memory", memory_action="save")
+- Load memory (after restart): browser(action="memory", memory_action="load")
 - Use memory in run without revealing: run(actions=[{type:{selector:"#pwd", text:"{{mem:token}}"}}], report="map")
 
 DRILLDOWN:
