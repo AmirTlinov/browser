@@ -1062,6 +1062,29 @@ class SessionManager:
             inst._auto_dialog = {}
             inst._auto_dialog_lock = threading.Lock()
             inst._auto_dialog_last_handled_ms = {}
+
+            # Best-effort: load persisted agent memory (non-sensitive only by default).
+            # This keeps the server restart-safe without leaking secrets by default.
+            try:
+                if inst._policy_mode != "strict":
+                    from .agent_memory_persist import load_items
+
+                    items = load_items()
+                    if isinstance(items, dict):
+                        with inst._agent_memory_lock:
+                            for k, entry in items.items():
+                                if not (isinstance(k, str) and k.strip()):
+                                    continue
+                                if not isinstance(entry, dict):
+                                    continue
+                                if entry.get("sensitive") is True or is_sensitive_key(k):
+                                    continue
+                                # Mark as loaded-from-disk (helps debugging without revealing values).
+                                e = dict(entry)
+                                e["persisted"] = True
+                                inst._agent_memory[k] = e
+            except Exception:
+                pass
             cls._instance = inst
         return cls._instance
 
@@ -2343,6 +2366,79 @@ class SessionManager:
                 )
         items.sort(key=lambda it: str(it.get("key") or ""))
         return items
+
+    def memory_export_entries(
+        self,
+        *,
+        prefix: str | None = None,
+        allow_sensitive: bool = False,
+    ) -> dict[str, dict[str, Any]]:
+        """Export entries for persistence (best-effort)."""
+
+        pref = str(prefix or "").strip()
+        out: dict[str, dict[str, Any]] = {}
+        with self._agent_memory_lock:
+            for k, entry in self._agent_memory.items():
+                if not isinstance(k, str) or not k.strip():
+                    continue
+                if pref and not k.startswith(pref):
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                sensitive = bool(entry.get("sensitive") is True or is_sensitive_key(k))
+                if sensitive and not allow_sensitive:
+                    continue
+                if "value" not in entry:
+                    continue
+                out[k] = {
+                    "value": entry.get("value"),
+                    **({"bytes": entry.get("bytes")} if isinstance(entry.get("bytes"), int) else {}),
+                    **({"createdAt": entry.get("createdAt")} if isinstance(entry.get("createdAt"), int) else {}),
+                    **({"updatedAt": entry.get("updatedAt")} if isinstance(entry.get("updatedAt"), int) else {}),
+                    **({"sensitive": True} if sensitive else {}),
+                }
+        return out
+
+    def memory_import_entries(
+        self,
+        entries: dict[str, dict[str, Any]],
+        *,
+        allow_sensitive: bool = False,
+        replace: bool = False,
+        max_keys: int = 200,
+    ) -> dict[str, Any]:
+        """Import persisted entries into memory.
+
+        - replace=false: merge/overwrite only the provided keys
+        - replace=true: clear current memory first
+        """
+
+        if not isinstance(entries, dict):
+            return {"loaded": 0, "skipped": 0}
+        if replace:
+            with self._agent_memory_lock:
+                self._agent_memory.clear()
+
+        loaded = 0
+        skipped = 0
+        for k, entry in entries.items():
+            if not isinstance(k, str) or not k.strip():
+                skipped += 1
+                continue
+            sensitive = bool((isinstance(entry, dict) and entry.get("sensitive") is True) or is_sensitive_key(k))
+            if sensitive and not allow_sensitive:
+                skipped += 1
+                continue
+            if not isinstance(entry, dict) or "value" not in entry:
+                skipped += 1
+                continue
+            try:
+                self.memory_set(key=k, value=entry.get("value"), max_bytes=500_000, max_keys=max_keys)
+                loaded += 1
+            except Exception:
+                skipped += 1
+
+        return {"loaded": loaded, "skipped": skipped}
 
     # ─────────────────────────────────────────────────────────────────────────
     # Downloads (best-effort, no output spam)

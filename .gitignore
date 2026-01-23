@@ -53,6 +53,7 @@ vendor/python/
 data/outbox/
 data/artifacts/
 data/downloads/
+data/memory/
 .agents/
 mcp_servers/**/.agents/
 .tmp/

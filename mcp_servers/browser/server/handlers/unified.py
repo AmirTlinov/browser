@@ -2756,19 +2756,23 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
         mode = str(pol.get("mode") or "permissive")
 
         mem_action = str(args.get("memory_action", "list") or "list").strip().lower()
-        if mem_action not in {"list", "get", "set", "delete", "clear"}:
+        if mem_action not in {"list", "get", "set", "delete", "clear", "save", "load"}:
             return ToolResult.error(
                 f"Unknown memory_action: {mem_action}",
                 tool="browser",
-                suggestion="Use memory_action='list'|'get'|'set'|'delete'|'clear'",
+                suggestion="Use memory_action='list'|'get'|'set'|'delete'|'clear'|'save'|'load'",
             )
 
-        if mode == "strict" and mem_action in {"set", "delete", "clear"}:
+        if mode == "strict" and mem_action in {"set", "delete", "clear", "save", "load"}:
             return ToolResult.error(
                 "Strict policy forbids memory mutation",
                 tool="browser",
                 suggestion='Switch to permissive via browser(action="policy", mode="permissive") if you have explicit user approval',
             )
+
+        persist = bool(args.get("persist", False))
+        allow_sensitive = bool(args.get("allow_sensitive", False))
+        replace = bool(args.get("replace", False))
 
         if mem_action == "list":
             prefix = args.get("prefix")
@@ -2904,10 +2908,28 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
                     "next": [
                         f'browser(action="memory", memory_action="get", key="{meta.get("key")}")',
                         f'run(actions=[{{type:{{selector:"#...", text:"{{{{mem:{meta.get("key")}}}}}"}}}}], report="map")',
+                        'browser(action="memory", memory_action="save")  # persist non-sensitive keys',
                     ],
                 },
                 "policy": pol,
             }
+
+            if persist:
+                if bool(meta.get("sensitive")) and not allow_sensitive:
+                    return ToolResult.error(
+                        "Refusing to persist a sensitive key without allow_sensitive=true",
+                        tool="browser",
+                        suggestion="Re-run with allow_sensitive=true if you explicitly accept the risk (persisted file is NOT encrypted)",
+                        details={"key": meta.get("key")},
+                    )
+                try:
+                    from ...agent_memory_persist import save_items
+
+                    items = _session_manager.memory_export_entries(allow_sensitive=allow_sensitive)
+                    persisted = save_items(items=items)
+                except Exception as exc:  # noqa: BLE001
+                    return ToolResult.error(str(exc), tool="browser", suggestion="Retry memory_action='save'")
+                result["memory"]["persisted"] = persisted
 
         elif mem_action == "delete":
             key = args.get("key")
@@ -2922,7 +2944,24 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
                 "policy": pol,
             }
 
-        else:  # clear
+            if persist:
+                if is_sensitive_key(key.strip()) and not allow_sensitive:
+                    return ToolResult.error(
+                        "Refusing to persist sensitive keys without allow_sensitive=true",
+                        tool="browser",
+                        suggestion="Re-run with allow_sensitive=true if you explicitly accept the risk",
+                        details={"key": key.strip()},
+                    )
+                try:
+                    from ...agent_memory_persist import save_items
+
+                    items = _session_manager.memory_export_entries(allow_sensitive=allow_sensitive)
+                    persisted = save_items(items=items)
+                except Exception as exc:  # noqa: BLE001
+                    return ToolResult.error(str(exc), tool="browser", suggestion="Retry memory_action='save'")
+                result["memory"]["persisted"] = persisted
+
+        elif mem_action == "clear":
             prefix = args.get("prefix")
             n = _session_manager.memory_clear(prefix=str(prefix) if isinstance(prefix, str) else None)
             result = {
@@ -2930,6 +2969,79 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
                 "memory_action": "clear",
                 "ok": True,
                 "memory": {"cleared": int(n), **({"prefix": prefix} if isinstance(prefix, str) and prefix else {})},
+                "policy": pol,
+            }
+
+            if persist:
+                try:
+                    from ...agent_memory_persist import save_items
+
+                    items = _session_manager.memory_export_entries(allow_sensitive=allow_sensitive)
+                    persisted = save_items(items=items)
+                except Exception as exc:  # noqa: BLE001
+                    return ToolResult.error(str(exc), tool="browser", suggestion="Retry memory_action='save'")
+                result["memory"]["persisted"] = persisted
+
+        elif mem_action == "save":
+            try:
+                from ...agent_memory_persist import save_items
+
+                prefix = args.get("prefix")
+                items = _session_manager.memory_export_entries(
+                    prefix=str(prefix) if isinstance(prefix, str) and prefix else None,
+                    allow_sensitive=allow_sensitive,
+                )
+                persisted = save_items(items=items)
+            except Exception as exc:  # noqa: BLE001
+                return ToolResult.error(str(exc), tool="browser", suggestion="Retry")
+
+            result = {
+                "action": "memory",
+                "memory_action": "save",
+                "ok": True,
+                "memory": {
+                    "persisted": persisted,
+                    "allow_sensitive": bool(allow_sensitive),
+                    **({"prefix": prefix} if isinstance(prefix, str) and prefix else {}),
+                },
+                "policy": pol,
+            }
+
+        else:  # load
+            try:
+                from ...agent_memory_persist import load_items
+
+                persisted_items = load_items()
+            except Exception as exc:  # noqa: BLE001
+                return ToolResult.error(str(exc), tool="browser", suggestion="Retry")
+
+            prefix = args.get("prefix")
+            if isinstance(prefix, str) and prefix.strip() and isinstance(persisted_items, dict):
+                persisted_items = {
+                    k: v for k, v in persisted_items.items() if isinstance(k, str) and k.startswith(prefix)
+                }
+
+            imported = _session_manager.memory_import_entries(
+                persisted_items,
+                allow_sensitive=allow_sensitive,
+                replace=replace,
+                max_keys=int(args.get("memory_max_keys", 200) or 200),
+            )
+
+            result = {
+                "action": "memory",
+                "memory_action": "load",
+                "ok": True,
+                "memory": {
+                    "import": imported,
+                    "allow_sensitive": bool(allow_sensitive),
+                    "replace": bool(replace),
+                    **({"prefix": prefix} if isinstance(prefix, str) and prefix else {}),
+                    "next": [
+                        'browser(action="memory", memory_action="list")',
+                        'browser(action="memory", memory_action="get", key="...")',
+                    ],
+                },
                 "policy": pol,
             }
 

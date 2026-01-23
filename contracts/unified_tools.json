@@ -1428,7 +1428,9 @@
               "get",
               "set",
               "delete",
-              "clear"
+              "clear",
+              "save",
+              "load"
             ],
             "default": "list",
             "description": "Memory operation (requires action='memory')"
@@ -1450,7 +1452,9 @@
               "object",
               "array",
               "null"
-            ]
+            ],
+            "items": {},
+            "additionalProperties": true
           },
           "reveal": {
             "type": "boolean",
@@ -1471,6 +1475,21 @@
             "type": "integer",
             "default": 200,
             "description": "Max keys for memory store (LRU-evicted)"
+          },
+          "persist": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, also write memory snapshot to disk (permissive only)"
+          },
+          "allow_sensitive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow persisting/loading sensitive keys (NOT encrypted; use carefully)"
+          },
+          "replace": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, load replaces current memory (load only)"
           }
         },
         "additionalProperties": false

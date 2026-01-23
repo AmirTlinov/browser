@@ -37,6 +37,8 @@ It runs multiple actions and returns one compact report (optionally with a scree
 - Cross-page memory in one call: `run(actions=[...], report="graph")`
 - Safe agent memory KV:
   - Set: `browser(action="memory", memory_action="set", key="token", value="...")`
+  - Persist (non-sensitive): `browser(action="memory", memory_action="save")`
+  - Load (after restart): `browser(action="memory", memory_action="load")`
   - Use without revealing: `run(actions=[{type:{selector:"#pwd", text:"{{mem:token}}"}}], report="map")`
 - Exporting state (no output dumps): `run(actions=[{"tool":"page","args":{"detail":"triage"},"export":{"cursor":"cursor","url":"triage.url"}}], report="none")`
 - Debug-first: `run(..., actions_output="errors", screenshot_on_error=true)`

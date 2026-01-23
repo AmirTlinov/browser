@@ -1546,7 +1546,7 @@ RESPONSE (status):
                 # Agent memory (server-local, safe-by-default)
                 "memory_action": {
                     "type": "string",
-                    "enum": ["list", "get", "set", "delete", "clear"],
+                    "enum": ["list", "get", "set", "delete", "clear", "save", "load"],
                     "default": "list",
                     "description": "Memory operation (requires action='memory')",
                 },
@@ -1555,6 +1555,10 @@ RESPONSE (status):
                 "value": {
                     "description": "Memory value (set)",
                     "type": ["string", "number", "boolean", "object", "array", "null"],
+                    # Some schema consumers require `items` for array even in union types.
+                    "items": {},
+                    # Allow arbitrary objects (JSON-like) by default.
+                    "additionalProperties": True,
                 },
                 "reveal": {
                     "type": "boolean",
@@ -1575,6 +1579,21 @@ RESPONSE (status):
                     "type": "integer",
                     "default": 200,
                     "description": "Max keys for memory store (LRU-evicted)",
+                },
+                "persist": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "If true, also write memory snapshot to disk (permissive only)",
+                },
+                "allow_sensitive": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Allow persisting/loading sensitive keys (NOT encrypted; use carefully)",
+                },
+                "replace": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "If true, load replaces current memory (load only)",
                 },
             },
             "additionalProperties": False,

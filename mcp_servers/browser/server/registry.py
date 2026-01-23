@@ -550,32 +550,53 @@ def create_default_registry() -> ToolRegistry:
 
                 return value
 
-            def _interpolate_mem_vars(value: Any) -> Any:
+            def _interpolate_mem_vars_pair(value: Any) -> tuple[Any, Any]:
+                """Return (actual, note) values.
+
+                - actual: real substituted memory values
+                - note: same structure but with {{mem:key}} replaced by <mem:key> so step notes never leak secrets
+                """
+
                 if isinstance(value, str):
                     m = _MEM_VAR_EXACT_RE.match(value)
                     if m:
                         key = m.group(1) or m.group(2) or ""
-                        return _mem_var_lookup(key)
+                        return _mem_var_lookup(key), f"<mem:{key}>"
 
-                    def _repl(match: re.Match[str]) -> str:
+                    if "{{mem:" not in value and "${mem:" not in value:
+                        return value, value
+
+                    def _repl_actual(match: re.Match[str]) -> str:
                         key = match.group(1) or match.group(2) or ""
                         v = _mem_var_lookup(key)
                         return "" if v is None else str(v)
 
-                    if "{{mem:" not in value and "${mem:" not in value:
-                        return value
-                    return _MEM_VAR_INLINE_RE.sub(_repl, value)
+                    def _repl_note(match: re.Match[str]) -> str:
+                        key = match.group(1) or match.group(2) or ""
+                        # Keep key name for debuggability; never reveal value.
+                        return f"<mem:{key}>"
+
+                    return _MEM_VAR_INLINE_RE.sub(_repl_actual, value), _MEM_VAR_INLINE_RE.sub(_repl_note, value)
 
                 if isinstance(value, dict):
-                    out: dict[str, Any] = {}
+                    out_actual: dict[str, Any] = {}
+                    out_note: dict[str, Any] = {}
                     for k, v in value.items():
-                        out[str(k)] = _interpolate_mem_vars(v)
-                    return out
+                        a, n = _interpolate_mem_vars_pair(v)
+                        out_actual[str(k)] = a
+                        out_note[str(k)] = n
+                    return out_actual, out_note
 
                 if isinstance(value, list):
-                    return [_interpolate_mem_vars(v) for v in value]
+                    actual_items: list[Any] = []
+                    note_items: list[Any] = []
+                    for v in value:
+                        a, n = _interpolate_mem_vars_pair(v)
+                        actual_items.append(a)
+                        note_items.append(n)
+                    return actual_items, note_items
 
-                return value
+                return value, value
 
             def _collect_next(payload: Any) -> None:
                 """Bubble step-level drilldown hints to the top-level flow/run response.
@@ -1395,8 +1416,9 @@ def create_default_registry() -> ToolRegistry:
                     continue
 
                 # Server-side agent memory placeholders (safe-by-default): {{mem:key}} or ${mem:key}
+                tool_args_note = tool_args
                 try:
-                    tool_args = _interpolate_mem_vars(tool_args)
+                    tool_args, tool_args_note = _interpolate_mem_vars_pair(tool_args)
                 except _MemVarMissing as exc:
                     hint = _mem_keys_hint()
                     step_summaries.append(
@@ -1664,13 +1686,20 @@ def create_default_registry() -> ToolRegistry:
 
                     # Optional overrides: act(ref="aff:1", args={...})
                     overrides = tool_args.get("args") if isinstance(tool_args, dict) else None
+                    overrides_note = tool_args_note.get("args") if isinstance(tool_args_note, dict) else None
                     if isinstance(overrides, dict) and overrides:
                         merged_args = {**resolved_args, **overrides}
                     else:
                         merged_args = dict(resolved_args)
 
+                    if isinstance(overrides_note, dict) and overrides_note:
+                        merged_note_args = {**resolved_args, **overrides_note}
+                    else:
+                        merged_note_args = dict(resolved_args)
+
                     tool_name = resolved_tool
                     tool_args = merged_args
+                    tool_args_note = merged_note_args
                     display_tool = "act"
 
                 if tool_name in {"flow", "run"}:
@@ -1973,7 +2002,8 @@ def create_default_registry() -> ToolRegistry:
                     download_detected = True
                 if ok and want_download and download_required and not download_detected:
                     ok = False
-                resolved_note = _step_note(tool_name, tool_args)
+                note_args = tool_args_note if isinstance(tool_args_note, dict) else tool_args
+                resolved_note = _step_note(tool_name, note_args)
                 note = resolved_note
                 entry: dict[str, Any] = {"i": i, "tool": display_tool, "ok": ok, **({"note": note} if note else {})}
                 if meta and meta.get("label"):
