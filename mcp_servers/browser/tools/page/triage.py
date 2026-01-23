@@ -190,7 +190,7 @@ def get_page_triage(
         except Exception:
             affordances = {"available": False, "reason": "locators_unavailable"}
 
-    return {
+    out = {
         "triage": {
             **page_meta,
             **({"since": since} if since is not None else {}),
@@ -201,6 +201,7 @@ def get_page_triage(
                 "page(detail='locators') for interactive map",
                 "page(detail='frames') for iframe/cross-origin map",
                 "page(detail='diagnostics') for full snapshot",
+                "page(detail='graph') for visited-page graph",
                 "page(detail='resources', sort='duration') for slow assets",
                 "page(detail='performance') for vitals/long-tasks",
             ],
@@ -210,3 +211,27 @@ def get_page_triage(
         "sessionTabId": diag.get("sessionTabId") if isinstance(diag, dict) else None,
         "cursor": diag.get("cursor") if isinstance(diag, dict) else None,
     }
+
+    _note_nav_graph(out)
+    return out
+
+
+def _note_nav_graph(triage: dict[str, Any]) -> None:
+    """Best-effort: update navigation graph from a triage snapshot."""
+    try:
+        tab_id = triage.get("sessionTabId") if isinstance(triage, dict) else None
+        body = triage.get("triage") if isinstance(triage, dict) else None
+        if not isinstance(body, dict):
+            return
+        url = body.get("url")
+        if not (isinstance(tab_id, str) and tab_id and isinstance(url, str) and url.strip()):
+            return
+        title = body.get("title")
+        session_manager.note_nav_graph_observation(
+            tab_id,
+            url=url,
+            title=title if isinstance(title, str) and title.strip() else None,
+            link_edges=None,
+        )
+    except Exception:
+        return

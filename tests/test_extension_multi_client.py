@@ -138,6 +138,8 @@ def test_extension_gateway_peer_roundtrip_and_event_forwarding() -> None:
                     if msg.get("type") == "rpcResult" and msg.get("id") == 1:
                         assert msg.get("ok") is True
                         got_result = True
+                        if saw_peer_event.is_set():
+                            break
                         continue
                     if (
                         msg.get("type") == "cdpEvent"
@@ -147,9 +149,11 @@ def test_extension_gateway_peer_roundtrip_and_event_forwarding() -> None:
                         params = msg.get("params") if isinstance(msg.get("params"), dict) else {}
                         assert params.get("marker") == 1
                         saw_peer_event.set()
-                        break
+                        if got_result:
+                            break
 
                 assert got_result is True
+                assert saw_peer_event.is_set() is True
 
         asyncio.run(_main())
 

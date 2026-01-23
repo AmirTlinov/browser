@@ -14,6 +14,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 from .types import ToolResult
+from .redaction import redact_url
 
 if TYPE_CHECKING:
     from ..config import BrowserConfig
@@ -182,7 +183,7 @@ def create_default_registry() -> ToolRegistry:
     def _step_note(tool_name: str, step_args: dict[str, Any]) -> str:
         """Compact per-step note (no secrets)."""
         if tool_name == "navigate" and isinstance(step_args.get("url"), str):
-            return step_args["url"]
+            return redact_url(step_args["url"])
         if tool_name == "click":
             if isinstance(step_args.get("text"), str):
                 role = step_args.get("role")
@@ -206,7 +207,8 @@ def create_default_registry() -> ToolRegistry:
             return f"text_len={t_len}"
         if tool_name in {"http", "fetch"} and isinstance(step_args.get("url"), str):
             method = step_args.get("method")
-            return f"{method} {step_args['url']}" if method else step_args["url"]
+            safe_url = redact_url(step_args["url"])
+            return f"{method} {safe_url}" if method else safe_url
         if tool_name == "net":
             action = step_args.get("action") if isinstance(step_args.get("action"), str) else "harLite"
             since = step_args.get("since")
@@ -300,11 +302,11 @@ def create_default_registry() -> ToolRegistry:
 
         stop_on_error = bool(args.get("stop_on_error", True))
         final = str(args.get("final", "observe") or "observe")
-        if final not in {"none", "observe", "audit", "triage", "diagnostics"}:
+        if final not in {"none", "observe", "audit", "triage", "diagnostics", "map", "graph"}:
             return ToolResult.error(
                 f"Unknown final: {final}",
                 tool="flow",
-                suggestion="Use final='observe' (default), 'audit', 'triage', 'diagnostics', or 'none'",
+                suggestion="Use final='observe' (default), 'map', 'graph', 'audit', 'triage', 'diagnostics', or 'none'",
             )
         delta_final = bool(args.get("delta_final", True))
         with_screenshot = bool(args.get("with_screenshot", False))
@@ -471,10 +473,22 @@ def create_default_registry() -> ToolRegistry:
                 r"^\s*(?:\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}|\$\{\s*([A-Za-z0-9_.-]+)\s*\})\s*$"
             )
 
+            _MEM_VAR_INLINE_RE = re.compile(
+                r"(?:\{\{\s*mem:([A-Za-z0-9_.-]+)\s*\}\}|\$\{\s*mem:([A-Za-z0-9_.-]+)\s*\})"
+            )
+            _MEM_VAR_EXACT_RE = re.compile(
+                r"^\s*(?:\{\{\s*mem:([A-Za-z0-9_.-]+)\s*\}\}|\$\{\s*mem:([A-Za-z0-9_.-]+)\s*\})\s*$"
+            )
+
             class _FlowVarMissing(Exception):
                 def __init__(self, name: str) -> None:
                     super().__init__(name)
                     self.name = str(name or "")
+
+            class _MemVarMissing(Exception):
+                def __init__(self, key: str) -> None:
+                    super().__init__(key)
+                    self.key = str(key or "")
 
             def _flow_vars_hint(*, limit: int = 20) -> list[str]:
                 keys = [k for k in flow_vars if isinstance(k, str) and k.strip()]
@@ -488,6 +502,22 @@ def create_default_registry() -> ToolRegistry:
                 if k not in flow_vars:
                     raise _FlowVarMissing(k)
                 return flow_vars.get(k)
+
+            def _mem_var_lookup(name: str) -> Any:
+                k = str(name or "").strip()
+                if not k:
+                    raise _MemVarMissing(k)
+                entry = _session_manager.memory_get(key=k)
+                if not isinstance(entry, dict):
+                    raise _MemVarMissing(k)
+                return entry.get("value")
+
+            def _mem_keys_hint(*, limit: int = 20) -> list[str]:
+                items = _session_manager.memory_list()
+                keys = [it.get("key") for it in items if isinstance(it, dict) and isinstance(it.get("key"), str)]
+                keys = [k for k in keys if isinstance(k, str) and k.strip()]
+                keys.sort()
+                return keys[: max(0, int(limit))]
 
             def _interpolate_flow_vars(value: Any) -> Any:
                 if isinstance(value, str):
@@ -517,6 +547,33 @@ def create_default_registry() -> ToolRegistry:
 
                 if isinstance(value, list):
                     return [_interpolate_flow_vars(v) for v in value]
+
+                return value
+
+            def _interpolate_mem_vars(value: Any) -> Any:
+                if isinstance(value, str):
+                    m = _MEM_VAR_EXACT_RE.match(value)
+                    if m:
+                        key = m.group(1) or m.group(2) or ""
+                        return _mem_var_lookup(key)
+
+                    def _repl(match: re.Match[str]) -> str:
+                        key = match.group(1) or match.group(2) or ""
+                        v = _mem_var_lookup(key)
+                        return "" if v is None else str(v)
+
+                    if "{{mem:" not in value and "${mem:" not in value:
+                        return value
+                    return _MEM_VAR_INLINE_RE.sub(_repl, value)
+
+                if isinstance(value, dict):
+                    out: dict[str, Any] = {}
+                    for k, v in value.items():
+                        out[str(k)] = _interpolate_mem_vars(v)
+                    return out
+
+                if isinstance(value, list):
+                    return [_interpolate_mem_vars(v) for v in value]
 
                 return value
 
@@ -1337,6 +1394,26 @@ def create_default_registry() -> ToolRegistry:
                         break
                     continue
 
+                # Server-side agent memory placeholders (safe-by-default): {{mem:key}} or ${mem:key}
+                try:
+                    tool_args = _interpolate_mem_vars(tool_args)
+                except _MemVarMissing as exc:
+                    hint = _mem_keys_hint()
+                    step_summaries.append(
+                        {
+                            "i": i,
+                            "tool": tool_name,
+                            "ok": False,
+                            "error": "Missing memory key",
+                            "details": {"key": exc.key, "known": hint},
+                            "suggestion": "Set it via browser(action='memory', memory_action='set', key='...', value=...) then reference it via {{mem:key}}",
+                        }
+                    )
+                    first_error = first_error or {"i": i, "tool": tool_name, "error": "Missing memory key"}
+                    if stop_on_error:
+                        break
+                    continue
+
                 # Fail-fast: if a blocking JS dialog is currently open, avoid running any other
                 # actions that may hang CDP/Runtime. This makes cross-call dialog scenarios safe.
                 if tool_name not in {"dialog", "browser"}:
@@ -1407,14 +1484,73 @@ def create_default_registry() -> ToolRegistry:
                 # re-specifying long locators/text each time.
                 display_tool = tool_name
                 act_ref: str | None = None
+                act_label: str | None = None
+                act_kind: str | None = None
+                act_index: int | None = None
+                act_matches: list[dict[str, Any]] | None = None
                 act_state: dict[str, Any] | None = None
                 act_healed = False
                 if tool_name == "act":
                     act_ref_val = tool_args.get("ref") if isinstance(tool_args, dict) else None
                     act_ref = act_ref_val if isinstance(act_ref_val, str) else None
+
+                    act_label_val = tool_args.get("label") if isinstance(tool_args, dict) else None
+                    act_label = act_label_val if isinstance(act_label_val, str) else None
+
+                    act_kind_val = tool_args.get("kind") if isinstance(tool_args, dict) else None
+                    act_kind = act_kind_val if isinstance(act_kind_val, str) else None
+
+                    # index is optional; if omitted and label is ambiguous, we fail closed.
+                    act_index_val = tool_args.get("index") if isinstance(tool_args, dict) else None
+                    if act_index_val is not None:
+                        try:
+                            act_index = int(act_index_val)
+                        except Exception:
+                            act_index = None
+
                     tab_id = _session_manager.tab_id
-                    resolved, state = _session_manager.resolve_affordance(tab_id or "", act_ref or "")
+
+                    resolved: dict[str, Any] | None
+                    state: dict[str, Any] | None
+                    matches: list[dict[str, Any]] = []
+
+                    # Resolve by ref (preferred when available), otherwise by deterministic label match.
+                    if isinstance(act_ref, str) and act_ref.startswith("aff:"):
+                        resolved, state = _session_manager.resolve_affordance(tab_id or "", act_ref)
+                    elif isinstance(act_label, str) and act_label.strip():
+                        kind_norm = str(act_kind or "").strip().lower() if act_kind is not None else None
+                        if isinstance(kind_norm, str) and kind_norm in {"", "all"}:
+                            kind_norm = None
+                        if isinstance(kind_norm, str) and kind_norm not in {"button", "link", "input"}:
+                            step_summaries.append(
+                                {
+                                    "i": i,
+                                    "tool": "act",
+                                    "ok": False,
+                                    "error": "Invalid act kind",
+                                    "details": {"kind": act_kind},
+                                    "suggestion": "Use kind in {button, link, input} (or omit it)",
+                                }
+                            )
+                            first_error = first_error or {"i": i, "tool": "act", "error": "Invalid act kind"}
+                            if stop_on_error:
+                                break
+                            continue
+
+                        resolved, state, matches = _session_manager.resolve_affordance_by_label(
+                            tab_id or "",
+                            label=str(act_label or ""),
+                            kind=kind_norm,
+                            index=act_index,
+                            max_matches=10,
+                        )
+                        if isinstance(resolved, dict) and isinstance(resolved.get("ref"), str):
+                            act_ref = str(resolved.get("ref"))
+                    else:
+                        resolved, state = None, None
+
                     act_state = state if isinstance(state, dict) else None
+                    act_matches = matches if matches else None
                     if not isinstance(resolved, dict):
                         # Self-heal: refresh affordances once, then retry resolve.
                         # This is safe only because refs are stable hashes (aff:<hash>),
@@ -1437,13 +1573,65 @@ def create_default_registry() -> ToolRegistry:
                             with contextlib.suppress(Exception):
                                 _tools.get_page_locators(config, kind="all", offset=0, limit=80)
 
-                            resolved2, state2 = _session_manager.resolve_affordance(tab_id or "", act_ref or "")
-                            if isinstance(resolved2, dict):
-                                resolved = resolved2
-                                act_state = state2 if isinstance(state2, dict) else act_state
-                                act_healed = True
+                            # Retry the same resolver mode (ref vs label).
+                            if isinstance(act_ref, str) and act_ref.startswith("aff:"):
+                                resolved2, state2 = _session_manager.resolve_affordance(tab_id or "", act_ref)
+                                if isinstance(resolved2, dict):
+                                    resolved = resolved2
+                                    act_state = state2 if isinstance(state2, dict) else act_state
+                                    act_healed = True
+                            elif isinstance(act_label, str) and act_label.strip():
+                                kind_norm = str(act_kind or "").strip().lower() if act_kind is not None else None
+                                if isinstance(kind_norm, str) and kind_norm in {"", "all"}:
+                                    kind_norm = None
+                                resolved2, state2, matches2 = _session_manager.resolve_affordance_by_label(
+                                    tab_id or "",
+                                    label=str(act_label or ""),
+                                    kind=kind_norm,
+                                    index=act_index,
+                                    max_matches=10,
+                                )
+                                act_matches = matches2 if matches2 else act_matches
+                                if isinstance(resolved2, dict):
+                                    resolved = resolved2
+                                    act_state = state2 if isinstance(state2, dict) else act_state
+                                    act_healed = True
+                                    if isinstance(resolved2.get("ref"), str):
+                                        act_ref = str(resolved2.get("ref"))
 
                     if not isinstance(resolved, dict):
+                        # Label-mode: surface ambiguity/miss details (bounded).
+                        if isinstance(act_label, str) and act_label.strip():
+                            matches = act_matches if isinstance(act_matches, list) else []
+                            if matches:
+                                details: dict[str, Any] = {
+                                    "label": " ".join(str(act_label or "").split()),
+                                    **({"kind": act_kind} if isinstance(act_kind, str) and act_kind else {}),
+                                    "matches": matches[:5],
+                                    **({"knownCount": act_state.get("count")} if isinstance(act_state, dict) else {}),
+                                    **({"url": act_state.get("url")} if isinstance(act_state, dict) else {}),
+                                }
+                                if act_index is None:
+                                    err = "Ambiguous affordance label"
+                                    sug = "Provide index (0-based) or use page(detail='map') to pick a ref"
+                                else:
+                                    err = "Affordance label index out of range"
+                                    sug = "Fix index (0-based) or use page(detail='map') to pick a ref"
+                                step_summaries.append(
+                                    {
+                                        "i": i,
+                                        "tool": "act",
+                                        "ok": False,
+                                        "error": err,
+                                        "details": details,
+                                        "suggestion": sug,
+                                    }
+                                )
+                                first_error = first_error or {"i": i, "tool": "act", "error": err}
+                                if stop_on_error:
+                                    break
+                                continue
+
                         step_summaries.append(
                             {
                                 "i": i,
@@ -1455,7 +1643,7 @@ def create_default_registry() -> ToolRegistry:
                                     **({"knownCount": act_state.get("count")} if isinstance(act_state, dict) else {}),
                                     **({"url": act_state.get("url")} if isinstance(act_state, dict) else {}),
                                 },
-                                "suggestion": "Call page(detail='triage') or page(detail='locators') to refresh affordances, then retry act(ref=...)",
+                                "suggestion": "Call page(detail='map') or page(detail='locators') to refresh affordances, then retry act(ref=...)",
                             }
                         )
                         first_error = first_error or {"i": i, "tool": "act", "error": "Unknown or stale affordance ref"}
@@ -2242,6 +2430,8 @@ def create_default_registry() -> ToolRegistry:
             want_triage = final == "triage" or (error_happened and triage_on_error)
             want_diag = final == "diagnostics" or (error_happened and diagnostics_on_error)
             want_audit = final == "audit"
+            want_map = final == "map"
+            want_graph = final == "graph"
 
             if want_triage:
                 try:
@@ -2297,6 +2487,36 @@ def create_default_registry() -> ToolRegistry:
                     )
                     if isinstance(audit_payload, dict):
                         out["audit"] = audit_payload
+                except Exception:
+                    pass
+
+            if want_map:
+                try:
+                    map_payload = _safe_final_call(
+                        min(15.0, action_timeout_s),
+                        lambda: _tools.get_page_map(
+                            config,
+                            since=baseline_cursor if delta_final else None,
+                            limit=final_limit_triage,
+                            clear=False,
+                        ),
+                    )
+                    if isinstance(map_payload, dict):
+                        out["map"] = map_payload
+                except Exception:
+                    pass
+
+            if want_graph:
+                try:
+                    graph_payload = _safe_final_call(
+                        min(10.0, action_timeout_s),
+                        lambda: _tools.get_page_graph(
+                            config,
+                            limit=final_limit_triage,
+                        ),
+                    )
+                    if isinstance(graph_payload, dict):
+                        out["graph"] = graph_payload
                 except Exception:
                     pass
 
@@ -2610,8 +2830,16 @@ def create_default_registry() -> ToolRegistry:
                 suggestion="Provide actions=[{tool:'navigate', args:{url:'...'}}, ...] or actions=[{navigate:{url:'...'}}, ...]",
             )
 
-        # Default to an "observe" snapshot (Tier-0, low noise, fast).
-        report = str(args.get("report", "observe") or "observe")
+        # Default report selection:
+        # - v1/default toolset: observe (Tier-0, low noise, fast)
+        # - v2 toolset: map (actions-first)
+        report_arg = args.get("report")
+        if report_arg is None:
+            toolset = str(os.environ.get("MCP_TOOLSET") or "").strip().lower()
+            is_v2 = toolset in {"v2", "northstar", "north-star"}
+            report = "map" if is_v2 else "observe"
+        else:
+            report = str(report_arg or "observe")
         delta_report = bool(args.get("delta_report", True))
         actions_output = str(args.get("actions_output", "compact") or "compact").lower()
         proof = bool(args.get("proof", True))
@@ -2782,6 +3010,10 @@ def create_default_registry() -> ToolRegistry:
             report_payload["diagnostics"] = raw.get("diagnostics")
         if isinstance(raw.get("audit"), dict):
             report_payload["audit"] = raw.get("audit")
+        if isinstance(raw.get("map"), dict):
+            report_payload["map"] = raw.get("map")
+        if isinstance(raw.get("graph"), dict):
+            report_payload["graph"] = raw.get("graph")
         if report_payload:
             out["report"] = report_payload
 

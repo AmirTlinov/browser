@@ -1602,6 +1602,24 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
         )
         if store:
             _attach_artifact_ref(config, result, args, kind="page_locators")
+    elif args.get("detail") == "map":
+        limit = args.get("limit") if "limit" in args else 30
+        since = args.get("since") if "since" in args else None
+        clear = bool(args.get("clear", False))
+
+        result = tools.get_page_map(
+            config,
+            since=since,
+            limit=limit,
+            clear=clear,
+        )
+        if store:
+            _attach_artifact_ref(config, result, args, kind="page_map")
+    elif args.get("detail") == "graph":
+        limit = args.get("limit") if "limit" in args else 30
+        result = tools.get_page_graph(config, limit=limit)
+        if store:
+            _attach_artifact_ref(config, result, args, kind="page_graph")
     elif args.get("detail"):
         result = tools.analyze_page(
             config,
@@ -1613,12 +1631,25 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
         if store:
             _attach_artifact_ref(config, result, args, kind=f"page_{args.get('detail')}")
     else:
-        # AI-native default: return triage (issues + affordances + next actions).
+        # AI-native default:
+        # - v1/default toolset: triage (issues + affordances + next actions)
+        # - v2 toolset: map (actions-first)
         # Fallback to legacy structural overview if diagnostics/telemetry are unavailable.
-        try:
-            result = tools.get_page_triage(config)
-        except Exception:
-            result = tools.analyze_page(config)
+        toolset = (os.environ.get("MCP_TOOLSET") or "").strip().lower()
+        is_v2 = toolset in {"v2", "northstar", "north-star"}
+        if is_v2:
+            try:
+                result = tools.get_page_map(config)
+            except Exception:
+                try:
+                    result = tools.get_page_triage(config)
+                except Exception:
+                    result = tools.analyze_page(config)
+        else:
+            try:
+                result = tools.get_page_triage(config)
+            except Exception:
+                result = tools.analyze_page(config)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_overview")
 
@@ -2715,6 +2746,192 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
                 tool="browser",
                 suggestion='Use artifact_action="list" | "get" | "delete" | "export"',
             )
+
+    elif action == "memory":
+        # Agent memory KV (server-local, safe-by-default).
+        from ...sensitivity import is_sensitive_key
+        from ...session import session_manager as _session_manager
+
+        pol = _session_manager.get_policy()
+        mode = str(pol.get("mode") or "permissive")
+
+        mem_action = str(args.get("memory_action", "list") or "list").strip().lower()
+        if mem_action not in {"list", "get", "set", "delete", "clear"}:
+            return ToolResult.error(
+                f"Unknown memory_action: {mem_action}",
+                tool="browser",
+                suggestion="Use memory_action='list'|'get'|'set'|'delete'|'clear'",
+            )
+
+        if mode == "strict" and mem_action in {"set", "delete", "clear"}:
+            return ToolResult.error(
+                "Strict policy forbids memory mutation",
+                tool="browser",
+                suggestion='Switch to permissive via browser(action="policy", mode="permissive") if you have explicit user approval',
+            )
+
+        if mem_action == "list":
+            prefix = args.get("prefix")
+            offset = args.get("offset", 0)
+            limit = args.get("limit", 20)
+            try:
+                offset_i = int(offset or 0)
+            except Exception:
+                offset_i = 0
+            offset_i = max(0, offset_i)
+            try:
+                limit_i = int(limit or 20)
+            except Exception:
+                limit_i = 20
+            limit_i = max(0, min(limit_i, 200))
+
+            items = _session_manager.memory_list(prefix=str(prefix) if isinstance(prefix, str) else None)
+            total = len(items)
+            page = items[offset_i : offset_i + limit_i] if limit_i else []
+            result = {
+                "action": "memory",
+                "memory_action": "list",
+                "ok": True,
+                "memory": {
+                    "total": total,
+                    "offset": offset_i,
+                    "limit": limit_i,
+                    "keys": page,
+                    "next": [
+                        'browser(action="memory", memory_action="get", key="...")',
+                        'browser(action="memory", memory_action="set", key="...", value="...")',
+                    ],
+                },
+                "policy": pol,
+            }
+
+        elif mem_action == "get":
+            key = args.get("key")
+            if not isinstance(key, str) or not key.strip():
+                return ToolResult.error("Missing key", tool="browser", suggestion="Provide key='...'")
+            key = key.strip()
+            entry = _session_manager.memory_get(key=key)
+            if not isinstance(entry, dict):
+                result = {
+                    "action": "memory",
+                    "memory_action": "get",
+                    "ok": True,
+                    "memory": {"key": key, "found": False},
+                    "policy": pol,
+                }
+            else:
+                reveal = bool(args.get("reveal", False))
+                sensitive = bool(entry.get("sensitive") is True or is_sensitive_key(key))
+
+                if mode == "strict" and reveal and sensitive:
+                    return ToolResult.error(
+                        "Strict policy forbids revealing sensitive memory values",
+                        tool="browser",
+                        suggestion="Use reveal=false (default) or switch to permissive if explicitly approved",
+                        details={"key": key},
+                    )
+
+                value = entry.get("value")
+                value_out: Any | None = None
+                truncated = False
+                total_chars: int | None = None
+                if reveal and not (sensitive and mode == "strict"):
+                    try:
+                        max_chars = args.get("memory_max_chars", 2000)
+                        max_chars_i = int(max_chars or 2000)
+                    except Exception:
+                        max_chars_i = 2000
+                    max_chars_i = max(200, min(max_chars_i, 20000))
+
+                    if isinstance(value, str):
+                        total_chars = len(value)
+                        truncated = total_chars > max_chars_i
+                        value_out = value[:max_chars_i]
+                    else:
+                        # For non-strings, the stored size is already bounded by memory_max_bytes.
+                        value_out = value
+
+                result = {
+                    "action": "memory",
+                    "memory_action": "get",
+                    "ok": True,
+                    "memory": {
+                        "key": key,
+                        "found": True,
+                        **({"bytes": entry.get("bytes")} if isinstance(entry.get("bytes"), int) else {}),
+                        **({"updatedAt": entry.get("updatedAt")} if isinstance(entry.get("updatedAt"), int) else {}),
+                        **({"sensitive": True} if sensitive else {}),
+                        **({"value": value_out} if value_out is not None else {}),
+                        **({"totalChars": total_chars} if isinstance(total_chars, int) else {}),
+                        **({"truncated": True} if truncated else {}),
+                        "usage": f"{{{{mem:{key}}}}}",
+                    },
+                    "policy": pol,
+                }
+
+        elif mem_action == "set":
+            key = args.get("key")
+            if not isinstance(key, str) or not key.strip():
+                return ToolResult.error("Missing key", tool="browser", suggestion="Provide key='...'")
+            value = args.get("value")
+            try:
+                max_bytes = int(args.get("memory_max_bytes", 20000) or 20000)
+            except Exception:
+                max_bytes = 20000
+            try:
+                max_keys = int(args.get("memory_max_keys", 200) or 200)
+            except Exception:
+                max_keys = 200
+
+            try:
+                meta = _session_manager.memory_set(
+                    key=key.strip(),
+                    value=value,
+                    max_bytes=max_bytes,
+                    max_keys=max_keys,
+                )
+            except ValueError as exc:
+                return ToolResult.error(
+                    str(exc), tool="browser", suggestion="Use key=[A-Za-z0-9_.-] and a JSON-serializable value"
+                )
+
+            result = {
+                "action": "memory",
+                "memory_action": "set",
+                "ok": True,
+                "memory": {
+                    **meta,
+                    "next": [
+                        f'browser(action="memory", memory_action="get", key="{meta.get("key")}")',
+                        f'run(actions=[{{type:{{selector:"#...", text:"{{{{mem:{meta.get("key")}}}}}"}}}}], report="map")',
+                    ],
+                },
+                "policy": pol,
+            }
+
+        elif mem_action == "delete":
+            key = args.get("key")
+            if not isinstance(key, str) or not key.strip():
+                return ToolResult.error("Missing key", tool="browser", suggestion="Provide key='...'")
+            ok = bool(_session_manager.memory_delete(key=key.strip()))
+            result = {
+                "action": "memory",
+                "memory_action": "delete",
+                "ok": True,
+                "memory": {"key": key.strip(), "deleted": ok},
+                "policy": pol,
+            }
+
+        else:  # clear
+            prefix = args.get("prefix")
+            n = _session_manager.memory_clear(prefix=str(prefix) if isinstance(prefix, str) else None)
+            result = {
+                "action": "memory",
+                "memory_action": "clear",
+                "ok": True,
+                "memory": {"cleared": int(n), **({"prefix": prefix} if isinstance(prefix, str) and prefix else {})},
+                "policy": pol,
+            }
 
     elif action == "element":
         if not args.get("selector"):

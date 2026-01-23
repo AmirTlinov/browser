@@ -8,9 +8,11 @@ This is the [PLAYBOOK] for using the MCP browser server with minimal [NOISE|LEGE
 ## [OVERVIEW_FIRST] (default)
 1) `browser(action="launch")` (only if needed)
 2) `navigate(url="...")`
-3) `page()` for a compact structure overview
+3) `page()` for a compact structure overview (in MCP_TOOLSET=v2 it returns the actions-first map)
 
 Then choose exactly one drilldown ([DRILLDOWN|LEGEND.md]) based on the task:
+- Interact (fastest, actions-first): `page(detail="map")` → `run(actions=[{act:{ref:"aff:..."}}])`
+- Cross-page memory: `page(detail="graph")` (visited nodes + discovered links)
 - Interact: `page(detail="locators")` → `click(...)` / `type(...)` / `form(...)`
 - Iframes/SSO/CAPTCHA layout: `page(detail="frames")` (CDP frame tree) → `page(detail="frames", with_screenshot=true)` (visual boxes)
 - Interact (visual disambiguation): `page(detail="locators", with_screenshot=true)` → pick `n` → `click(x=..., y=...)`
@@ -30,6 +32,12 @@ Then choose exactly one drilldown ([DRILLDOWN|LEGEND.md]) based on the task:
 Use `run(...)` when you would otherwise do 3–15 tool calls.
 It runs multiple actions and returns one compact report (optionally with a screenshot):
 - Example: `run(actions=[{navigate:{url:"..."}},{click:{text:"Sign in"}},{type:{selector:"#email", text:"..."}},{type:{key:"Enter"}}])`
+- Stable UI actions: `page(detail="map")` (or `page(detail="locators")`) → `run(actions=[{act:{ref:"aff:..."}}])`
+- Even fewer calls: `run(actions=[{navigate:{url:"..."}},{act:{label:"Save", kind:"button"}}], report="map")`
+- Cross-page memory in one call: `run(actions=[...], report="graph")`
+- Safe agent memory KV:
+  - Set: `browser(action="memory", memory_action="set", key="token", value="...")`
+  - Use without revealing: `run(actions=[{type:{selector:"#pwd", text:"{{mem:token}}"}}], report="map")`
 - Exporting state (no output dumps): `run(actions=[{"tool":"page","args":{"detail":"triage"},"export":{"cursor":"cursor","url":"triage.url"}}], report="none")`
 - Debug-first: `run(..., actions_output="errors", screenshot_on_error=true)`
 Robustness defaults (cognitive-cheap):

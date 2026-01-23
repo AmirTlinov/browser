@@ -7,7 +7,7 @@
   "tools": [
     {
       "name": "page",
-      "description": "Analyze current page structure and content.\n\nUSAGE:\n- Default (AI-native): page()  # triage + affordances + next actions\n- Fast frontend triage (delta capable): page(detail=\"triage\", since=<cursor>)\n- Form details: page(detail=\"forms\", form_index=0)\n- Links list: page(detail=\"links\", limit=20)\n- Main content: page(detail=\"content\")\n- Frontend issues: page(detail=\"diagnostics\")\n- Delta frontend issues: page(detail=\"diagnostics\", since=<cursor>)\n- Accessibility query: page(detail=\"ax\", role=\"button\", name=\"Save\")\n- Visual AX overlay: page(detail=\"ax\", role=\"button\", name=\"Save\", with_screenshot=true)\n- Resource waterfall: page(detail=\"resources\", sort=\"duration\")\n- Performance vitals: page(detail=\"performance\")\n- Frames/iframes map: page(detail=\"frames\")\n- Visual frames overlay: page(detail=\"frames\", with_screenshot=true)\n- Stable selectors: page(detail=\"locators\", kind=\"button\")\n- Visual locator overlay: page(detail=\"locators\", with_screenshot=true)\n- Super-report (one call): page(detail=\"audit\")\n- Super-report + net trace: page(detail=\"audit\", trace=true)\n- Page info: page(info=true)\n- Store full payload off-context: page(detail=\"diagnostics\", store=true)\n\nTHIS IS YOUR PRIMARY TOOL - call it first to understand the page.\n\nRESPONSE FORMAT:\n- Text results are returned as compact context-format Markdown ([LEGEND] + [CONTENT]), not JSON.\n",
+      "description": "Analyze current page structure and content.\n\nUSAGE:\n- Default (AI-native): page()  # triage + affordances + next actions\n- In MCP_TOOLSET=v2: page() defaults to detail=\"map\" (actions-first)\n- Fast frontend triage (delta capable): page(detail=\"triage\", since=<cursor>)\n- Form details: page(detail=\"forms\", form_index=0)\n- Links list: page(detail=\"links\", limit=20)\n- Main content: page(detail=\"content\")\n- Frontend issues: page(detail=\"diagnostics\")\n- Delta frontend issues: page(detail=\"diagnostics\", since=<cursor>)\n- Accessibility query: page(detail=\"ax\", role=\"button\", name=\"Save\")\n- Visual AX overlay: page(detail=\"ax\", role=\"button\", name=\"Save\", with_screenshot=true)\n- Resource waterfall: page(detail=\"resources\", sort=\"duration\")\n- Performance vitals: page(detail=\"performance\")\n- Frames/iframes map: page(detail=\"frames\")\n- Visual frames overlay: page(detail=\"frames\", with_screenshot=true)\n- Stable selectors: page(detail=\"locators\", kind=\"button\")\n- Visual locator overlay: page(detail=\"locators\", with_screenshot=true)\n- Capability map (actions-first): page(detail=\"map\")\n- Navigation graph (visited pages): page(detail=\"graph\")\n- Super-report (one call): page(detail=\"audit\")\n- Super-report + net trace: page(detail=\"audit\", trace=true)\n- Page info: page(info=true)\n- Store full payload off-context: page(detail=\"diagnostics\", store=true)\n\nTHIS IS YOUR PRIMARY TOOL - call it first to understand the page.\n\nRESPONSE FORMAT:\n- Text results are returned as compact context-format Markdown ([LEGEND] + [CONTENT]), not JSON.\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -27,6 +27,8 @@
               "performance",
               "frames",
               "locators",
+              "map",
+              "graph",
               "audit"
             ],
             "description": "Section to get details for"
@@ -233,7 +235,7 @@
     },
     {
       "name": "run",
-      "description": "Run an AI-native scenario using OAVR: Observe → Act → Verify → Report.\n\nThis is the recommended entrypoint for multi-step work:\n- Holds one shared CDP session across all actions (less flake, fewer round-trips).\n- Returns a compact report + proof so agents avoid extra \"check\" calls.\n\nINTERNAL ACTIONS (v2):\n`run()` can execute the same action steps as `flow`, including (common set):\n- navigate, click, type, scroll, form, wait\n- page (triage/diagnostics/ax/locators/resources/performance)\n- app (high-level app macros/adapters for complex web apps)\n- dialog (alert/confirm/prompt)\n- captcha (analyze/screenshot/click_blocks/submit)\n- fetch, storage, download\n- net(action=\"harLite\")  # Tier-0 network slice\n- net(action=\"trace\")    # Tier-0 deep trace (bounded, on-demand)\nThese are not separate top-level tools in v2; they are actions inside `run`.\n\nACTION FORMATS (same as flow steps):\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nSTATEFUL RUNS (export → interpolate):\n- You can export scalars from one action and reuse them in later actions via `{{var}}` / `${var}`.\n  This enables single-call pipelines (e.g., capture trace → read artifact → act on results) without extra tool calls.\n\nSAFETY:\n- Mark an action as irreversible (requires confirm_irreversible=true):\n  {\"tool\":\"click\",\"args\":{\"text\":\"Delete\"},\"irreversible\":true}\n\nROBUSTNESS:\n- If a blocking JS dialog is open, non-dialog actions fail fast with a dialog suggestion.\n- Optional: auto-handle dialogs (dismiss/accept) based on policy mode (strict vs permissive).\n- Optional: auto-recover from known CDP brick states and continue (bounded attempts).\n- If any action produces an image (e.g., CAPTCHA screenshot), the image is stored off-context\n  as an artifact and surfaced via `next` drilldown hints.\n\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Defaults to a delta observe report since the run start.\n",
+      "description": "Run an AI-native scenario using OAVR: Observe → Act → Verify → Report.\n\nThis is the recommended entrypoint for multi-step work:\n- Holds one shared CDP session across all actions (less flake, fewer round-trips).\n- Returns a compact report + proof so agents avoid extra \"check\" calls.\n\nDefault report behavior:\n- MCP_TOOLSET=v1/default: report=\"observe\"\n- MCP_TOOLSET=v2: report=\"map\"\n\nINTERNAL ACTIONS (v2):\n`run()` can execute the same action steps as `flow`, including (common set):\n- navigate, click, type, scroll, form, wait\n- page (triage/diagnostics/ax/locators/resources/performance)\n- app (high-level app macros/adapters for complex web apps)\n- dialog (alert/confirm/prompt)\n- captcha (analyze/screenshot/click_blocks/submit)\n- fetch, storage, download\n- net(action=\"harLite\")  # Tier-0 network slice\n- net(action=\"trace\")    # Tier-0 deep trace (bounded, on-demand)\nThese are not separate top-level tools in v2; they are actions inside `run`.\n\nHIGH-LEVERAGE INTERNAL ACTION:\n- act(ref=\"aff:...\")  # resolve a stable affordance ref from page(detail=\"locators\") / page(detail=\"map\") / page(detail=\"triage\")\n  This is the fastest way to click/focus without re-specifying selectors/text.\n- act(label=\"Save\", kind=\"button\")  # deterministic label resolver (exact match; uses stored affordances; may refresh once)\n\nACTION FORMATS (same as flow steps):\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nSTATEFUL RUNS (export → interpolate):\n- You can export scalars from one action and reuse them in later actions via `{{var}}` / `${var}`.\n  This enables single-call pipelines (e.g., capture trace → read artifact → act on results) without extra tool calls.\n\nSAFETY:\n- Mark an action as irreversible (requires confirm_irreversible=true):\n  {\"tool\":\"click\",\"args\":{\"text\":\"Delete\"},\"irreversible\":true}\n\nROBUSTNESS:\n- If a blocking JS dialog is open, non-dialog actions fail fast with a dialog suggestion.\n- Optional: auto-handle dialogs (dismiss/accept) based on policy mode (strict vs permissive).\n- Optional: auto-recover from known CDP brick states and continue (bounded attempts).\n- If any action produces an image (e.g., CAPTCHA screenshot), the image is stored off-context\n  as an artifact and surfaced via `next` drilldown hints.\n\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Defaults to a delta observe report since the run start.\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -365,7 +367,9 @@
               "observe",
               "audit",
               "triage",
-              "diagnostics"
+              "diagnostics",
+              "map",
+              "graph"
             ],
             "default": "observe",
             "description": "Attach one compact final report snapshot (default: observe)"
@@ -441,7 +445,9 @@
               "observe",
               "audit",
               "triage",
-              "diagnostics"
+              "diagnostics",
+              "map",
+              "graph"
             ],
             "default": "observe",
             "description": "Attach one compact final snapshot (default: observe)"
@@ -1326,7 +1332,7 @@
     },
     {
       "name": "browser",
-      "description": "Browser control: lifecycle + policy + DOM.\n\nUSAGE:\n- Check status: browser(action=\"status\")\n- Launch: browser(action=\"launch\")\n- Emergency recovery (CDP hung / dialog-brick): browser(action=\"recover\")  # add hard=true to restart owned Chrome\n- Get/set safety policy: browser(action=\"policy\", mode=\"strict\")  # or mode=\"permissive\"\n- Get DOM: browser(action=\"dom\", selector=\"#content\")\n- Store DOM as artifact (no huge dump): browser(action=\"dom\", store=true)\n- Get element: browser(action=\"element\", selector=\"#btn\")\n\nDRILLDOWN:\n- browser(action=\"artifact\", artifact_action=\"get\", id=\"...\", offset=0, max_chars=4000)\n\nRESPONSE (status):\n{\"running\": true, \"version\": \"Chrome/130.0\", \"port\": 9222}",
+      "description": "Browser control: lifecycle + policy + DOM.\n\nUSAGE:\n- Check status: browser(action=\"status\")\n- Launch: browser(action=\"launch\")\n- Emergency recovery (CDP hung / dialog-brick): browser(action=\"recover\")  # add hard=true to restart owned Chrome\n- Get/set safety policy: browser(action=\"policy\", mode=\"strict\")  # or mode=\"permissive\"\n- Get DOM: browser(action=\"dom\", selector=\"#content\")\n- Store DOM as artifact (no huge dump): browser(action=\"dom\", store=true)\n- Get element: browser(action=\"element\", selector=\"#btn\")\n- Agent memory (safe KV): browser(action=\"memory\", memory_action=\"set\", key=\"token\", value=\"...\")\n- Agent memory list: browser(action=\"memory\", memory_action=\"list\")\n- Agent memory get (redacted by default): browser(action=\"memory\", memory_action=\"get\", key=\"token\")\n- Use memory in run without revealing: run(actions=[{type:{selector:\"#pwd\", text:\"{{mem:token}}\"}}], report=\"map\")\n\nDRILLDOWN:\n- browser(action=\"artifact\", artifact_action=\"get\", id=\"...\", offset=0, max_chars=4000)\n\nRESPONSE (status):\n{\"running\": true, \"version\": \"Chrome/130.0\", \"port\": 9222}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1340,7 +1346,8 @@
               "policy",
               "dom",
               "element",
-              "artifact"
+              "artifact",
+              "memory"
             ],
             "default": "status"
           },
@@ -1413,6 +1420,57 @@
             "type": "boolean",
             "default": false,
             "description": "Overwrite export destination if exists (artifact_action='export')"
+          },
+          "memory_action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "get",
+              "set",
+              "delete",
+              "clear"
+            ],
+            "default": "list",
+            "description": "Memory operation (requires action='memory')"
+          },
+          "key": {
+            "type": "string",
+            "description": "Memory key (get/set/delete)"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Key prefix filter (list/clear)"
+          },
+          "value": {
+            "description": "Memory value (set)",
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "object",
+              "array",
+              "null"
+            ]
+          },
+          "reveal": {
+            "type": "boolean",
+            "default": false,
+            "description": "Reveal value on get (unsafe; blocked by strict policy for sensitive keys)"
+          },
+          "memory_max_chars": {
+            "type": "integer",
+            "default": 2000,
+            "description": "Max chars to return when reveal=true (memory get)"
+          },
+          "memory_max_bytes": {
+            "type": "integer",
+            "default": 20000,
+            "description": "Max stored bytes for set (memory set)"
+          },
+          "memory_max_keys": {
+            "type": "integer",
+            "default": 200,
+            "description": "Max keys for memory store (LRU-evicted)"
           }
         },
         "additionalProperties": false

@@ -13,17 +13,21 @@ Architecture:
 from __future__ import annotations
 
 import json
+import hashlib
 import os
+import re
 import threading
 import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit, urlunsplit
 
 from .config import BrowserConfig
 from .diagnostics import DIAGNOSTICS_SCRIPT_SOURCE, DIAGNOSTICS_SCRIPT_VERSION
 from .http_client import HttpClientError
+from .sensitivity import is_sensitive_key
 from .telemetry import Tier0Telemetry
 
 if TYPE_CHECKING:
@@ -1039,6 +1043,10 @@ class SessionManager:
             inst._affordances = {}
             inst._affordances_state = {}
             inst._affordances_lock = threading.Lock()
+            inst._nav_graph = {}
+            inst._nav_graph_lock = threading.Lock()
+            inst._agent_memory = {}
+            inst._agent_memory_lock = threading.Lock()
             inst._download_state = {}
             inst._download_lock = threading.Lock()
             inst._captcha_state = {}
@@ -1129,6 +1137,10 @@ class SessionManager:
             self._affordances.clear()
         with suppress(Exception):
             self._affordances_state.clear()
+        with suppress(Exception):
+            self._nav_graph.clear()
+        with suppress(Exception):
+            self._agent_memory.clear()
         with suppress(Exception):
             self._download_state.clear()
         with suppress(Exception):
@@ -1868,6 +1880,469 @@ class SessionManager:
                 return None, state if isinstance(state, dict) else None
             item = mapping.get(ref)
             return (item if isinstance(item, dict) else None, state if isinstance(state, dict) else None)
+
+    def resolve_affordance_by_label(
+        self,
+        tab_id: str,
+        *,
+        label: str,
+        kind: str | None = None,
+        index: int | None = None,
+        max_matches: int = 10,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[dict[str, Any]]]:
+        """Resolve an affordance by a deterministic, exact label match.
+
+        This is an *in-memory* resolver only:
+        - It never performs any CDP calls.
+        - It relies on affordances previously stored via set_affordances() (page locators/triage/map).
+
+        Semantics
+        - Exact match after whitespace normalization + lowercasing.
+        - If multiple matches exist and index is None: return (None, state, matches).
+        - If index is provided: select matches[index] (0-based), otherwise error.
+        """
+
+        if not (isinstance(tab_id, str) and tab_id):
+            return None, None, []
+
+        raw_label = str(label or "")
+        q = " ".join(raw_label.split()).strip().lower()
+        if not q:
+            return None, None, []
+
+        kind_norm = str(kind or "").strip().lower() if kind is not None else ""
+        if kind_norm in {"", "all"}:
+            kind_norm = ""
+        elif kind_norm not in {"button", "link", "input"}:
+            # Unknown kind: treat as non-match (caller should surface a validation error).
+            kind_norm = "__invalid__"
+
+        with self._affordances_lock:
+            mapping = self._affordances.get(tab_id)
+            state = self._affordances_state.get(tab_id)
+
+        state_out = state if isinstance(state, dict) else None
+        if not isinstance(mapping, dict) or not mapping:
+            return None, state_out, []
+
+        def _cand_label(meta: dict[str, Any] | None) -> str:
+            if not isinstance(meta, dict):
+                return ""
+            for k in ("text", "name", "fillKey", "id", "placeholder", "selector"):
+                v = meta.get(k)
+                if isinstance(v, str) and v.strip():
+                    return " ".join(v.split()).strip()
+            return ""
+
+        matches: list[dict[str, Any]] = []
+        for ref, spec in mapping.items():
+            if not (isinstance(ref, str) and ref.startswith("aff:")):
+                continue
+            if not isinstance(spec, dict):
+                continue
+            meta = spec.get("meta") if isinstance(spec.get("meta"), dict) else None
+
+            if kind_norm:
+                mk = str(meta.get("kind") or "").strip().lower() if isinstance(meta, dict) else ""
+                if mk != kind_norm:
+                    continue
+
+            lbl = _cand_label(meta)
+            if not lbl:
+                continue
+            if " ".join(lbl.split()).strip().lower() != q:
+                continue
+
+            matches.append(
+                {
+                    "ref": ref,
+                    **({"kind": meta.get("kind")} if isinstance(meta, dict) and meta.get("kind") else {}),
+                    "label": lbl,
+                    **({"tool": spec.get("tool")} if isinstance(spec.get("tool"), str) else {}),
+                }
+            )
+            if len(matches) >= max(0, int(max_matches)):
+                break
+
+        matches.sort(key=lambda m: (str(m.get("kind") or ""), str(m.get("label") or ""), str(m.get("ref") or "")))
+
+        if not matches:
+            return None, state_out, []
+        if len(matches) > 1 and index is None:
+            return None, state_out, matches
+
+        if index is None:
+            pick = 0
+        else:
+            try:
+                pick = int(index)
+            except Exception:
+                return None, state_out, matches
+
+        if pick < 0 or pick >= len(matches):
+            return None, state_out, matches
+
+        chosen_ref = matches[pick].get("ref")
+        if not isinstance(chosen_ref, str) or not chosen_ref:
+            return None, state_out, matches
+
+        chosen = mapping.get(chosen_ref)
+        if isinstance(chosen, dict):
+            return ({"ref": chosen_ref, **chosen}, state_out, matches)
+        return (None, state_out, matches)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Navigation graph (best-effort, bounded)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def note_nav_graph_observation(
+        self,
+        tab_id: str,
+        *,
+        url: str,
+        title: str | None = None,
+        link_edges: list[dict[str, Any]] | None = None,
+        max_nodes: int = 30,
+        max_edges: int = 60,
+    ) -> dict[str, Any] | None:
+        """Update the per-tab navigation graph from an observation (map/triage/locators).
+
+        This method is intentionally:
+        - in-memory only (no CDP calls)
+        - safe-by-default (drops query/fragment)
+        - bounded (prunes to max_nodes/max_edges)
+        """
+
+        if not (isinstance(tab_id, str) and tab_id):
+            return None
+
+        raw_url = str(url or "").strip()
+        if not raw_url:
+            return None
+
+        def _redact(u: str) -> str:
+            try:
+                parts = urlsplit(u)
+                return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+            except Exception:
+                return u
+
+        def _node_id(u: str) -> str:
+            digest = hashlib.sha1(u.encode("utf-8")).hexdigest()[:10]
+            return f"nav:{digest}"
+
+        def _edge_id(*, src: str, dst: str, kind: str, label: str | None, ref: str | None) -> str:
+            blob = "|".join(
+                [
+                    src,
+                    dst,
+                    kind,
+                    (label or ""),
+                    (ref or ""),
+                ]
+            )
+            digest = hashlib.sha1(blob.encode("utf-8")).hexdigest()[:10]
+            return f"edge:{digest}"
+
+        def _prune(nodes: dict[str, dict[str, Any]], edges: dict[str, dict[str, Any]]) -> None:
+            # Keep the most recently seen nodes.
+            keep_n = max(1, min(int(max_nodes), 200))
+            keep_e = max(0, min(int(max_edges), 500))
+
+            def _ts(d: dict[str, Any]) -> int:
+                try:
+                    return int(d.get("lastSeenAt") or 0)
+                except Exception:
+                    return 0
+
+            if len(nodes) > keep_n:
+                ordered = sorted(nodes.values(), key=lambda n: (-_ts(n), str(n.get("id") or "")))
+                keep_ids = {str(n.get("id")) for n in ordered[:keep_n] if isinstance(n, dict) and n.get("id")}
+                for nid in list(nodes.keys()):
+                    if nid not in keep_ids:
+                        nodes.pop(nid, None)
+                # Drop edges that reference missing nodes.
+                for eid, e in list(edges.items()):
+                    if not isinstance(e, dict):
+                        edges.pop(eid, None)
+                        continue
+                    if str(e.get("from") or "") not in nodes or str(e.get("to") or "") not in nodes:
+                        edges.pop(eid, None)
+
+            if len(edges) > keep_e:
+                ordered_e = sorted(edges.values(), key=lambda e: (-_ts(e), str(e.get("id") or "")))
+                keep_edge_ids = {str(e.get("id")) for e in ordered_e[:keep_e] if isinstance(e, dict) and e.get("id")}
+                for eid in list(edges.keys()):
+                    if eid not in keep_edge_ids:
+                        edges.pop(eid, None)
+
+        now_ms = int(time.time() * 1000)
+        url_redacted = _redact(raw_url)
+        cur_id = _node_id(url_redacted)
+        title_str = str(title).strip() if isinstance(title, str) and title.strip() else None
+
+        with self._nav_graph_lock:
+            graph = self._nav_graph.get(tab_id)
+            if not isinstance(graph, dict):
+                graph = {"nodes": {}, "edges": {}, "current": None, "updatedAt": None}
+                self._nav_graph[tab_id] = graph
+
+            nodes = graph.get("nodes")
+            edges = graph.get("edges")
+            if not isinstance(nodes, dict):
+                nodes = {}
+                graph["nodes"] = nodes
+            if not isinstance(edges, dict):
+                edges = {}
+                graph["edges"] = edges
+
+            prev_id = graph.get("current") if isinstance(graph.get("current"), str) else None
+
+            # Upsert current node.
+            node = nodes.get(cur_id)
+            if not isinstance(node, dict):
+                node = {"id": cur_id, "url": url_redacted, "firstSeenAt": now_ms, "visits": 0}
+            node["url"] = url_redacted
+            if title_str:
+                node["title"] = title_str
+            try:
+                node["visits"] = int(node.get("visits") or 0) + 1
+            except Exception:
+                node["visits"] = 1
+            node["lastSeenAt"] = now_ms
+            nodes[cur_id] = node
+
+            # Transition edge (between last observed page and current page).
+            if prev_id and prev_id != cur_id:
+                eid = _edge_id(src=prev_id, dst=cur_id, kind="nav", label=None, ref=None)
+                e = edges.get(eid)
+                if not isinstance(e, dict):
+                    e = {"id": eid, "from": prev_id, "to": cur_id, "kind": "nav", "count": 0, "firstSeenAt": now_ms}
+                try:
+                    e["count"] = int(e.get("count") or 0) + 1
+                except Exception:
+                    e["count"] = 1
+                e["lastSeenAt"] = now_ms
+                edges[eid] = e
+
+            graph["current"] = cur_id
+
+            # Link affordance edges (bounded).
+            if isinstance(link_edges, list):
+                for it in link_edges[:50]:
+                    if not isinstance(it, dict):
+                        continue
+                    to_raw = it.get("to")
+                    if not isinstance(to_raw, str) or not to_raw.strip():
+                        continue
+                    to_url = _redact(to_raw.strip())
+                    to_id = _node_id(to_url)
+
+                    # Create a node stub for the target.
+                    if to_id not in nodes:
+                        nodes[to_id] = {
+                            "id": to_id,
+                            "url": to_url,
+                            "firstSeenAt": now_ms,
+                            "visits": 0,
+                            "lastSeenAt": now_ms,
+                        }
+                    else:
+                        try:
+                            nodes[to_id]["lastSeenAt"] = max(int(nodes[to_id].get("lastSeenAt") or 0), now_ms)
+                        except Exception:
+                            nodes[to_id]["lastSeenAt"] = now_ms
+
+                    label = it.get("label") if isinstance(it.get("label"), str) and it.get("label") else None
+                    ref = it.get("ref") if isinstance(it.get("ref"), str) and it.get("ref") else None
+                    eid = _edge_id(src=cur_id, dst=to_id, kind="link", label=label, ref=ref)
+                    e = edges.get(eid)
+                    if not isinstance(e, dict):
+                        e = {
+                            "id": eid,
+                            "from": cur_id,
+                            "to": to_id,
+                            "kind": "link",
+                            **({"label": label} if label else {}),
+                            **({"ref": ref} if ref else {}),
+                            "count": 0,
+                            "firstSeenAt": now_ms,
+                        }
+                    try:
+                        e["count"] = int(e.get("count") or 0) + 1
+                    except Exception:
+                        e["count"] = 1
+                    e["lastSeenAt"] = now_ms
+                    edges[eid] = e
+
+            _prune(nodes, edges)
+            graph["updatedAt"] = now_ms
+
+            return {"current": cur_id, "nodes": len(nodes), "edges": len(edges), "updatedAt": now_ms}
+
+    def get_nav_graph_view(
+        self,
+        tab_id: str,
+        *,
+        node_limit: int = 30,
+        edge_limit: int = 60,
+    ) -> dict[str, Any] | None:
+        if not (isinstance(tab_id, str) and tab_id):
+            return None
+        node_limit = max(0, min(int(node_limit), 200))
+        edge_limit = max(0, min(int(edge_limit), 500))
+
+        with self._nav_graph_lock:
+            graph = self._nav_graph.get(tab_id)
+            if not isinstance(graph, dict):
+                return None
+            nodes = graph.get("nodes") if isinstance(graph.get("nodes"), dict) else {}
+            edges = graph.get("edges") if isinstance(graph.get("edges"), dict) else {}
+            current = graph.get("current") if isinstance(graph.get("current"), str) else None
+            updated_at = graph.get("updatedAt")
+
+            def _ts(d: dict[str, Any]) -> int:
+                try:
+                    return int(d.get("lastSeenAt") or 0)
+                except Exception:
+                    return 0
+
+            node_items = [n for n in nodes.values() if isinstance(n, dict)]
+            edge_items = [e for e in edges.values() if isinstance(e, dict)]
+            node_items.sort(key=lambda n: (-_ts(n), str(n.get("id") or "")))
+            edge_items.sort(key=lambda e: (-_ts(e), str(e.get("id") or "")))
+
+            return {
+                "summary": {"nodes": len(nodes), "edges": len(edges)},
+                **({"current": current} if current else {}),
+                "nodes": node_items[:node_limit],
+                "edges": edge_items[:edge_limit],
+                **({"updatedAt": updated_at} if updated_at is not None else {}),
+            }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Agent memory (safe-by-default KV)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def memory_set(
+        self,
+        *,
+        key: str,
+        value: Any,
+        max_bytes: int = 20_000,
+        max_keys: int = 200,
+    ) -> dict[str, Any]:
+        """Store a JSON-serializable value for later reuse.
+
+        Notes:
+        - Stored values are NOT echoed in tool outputs by default (handler controls reveal).
+        - Keys are global to this server instance (not per-tab).
+        - Values are bounded by size; oldest keys are evicted when over max_keys.
+        """
+
+        k = str(key or "").strip()
+        if not k:
+            raise ValueError("missing key")
+        if len(k) > 128:
+            raise ValueError("key too long")
+        if not re.match(r"^[A-Za-z0-9_.-]+$", k):
+            raise ValueError("invalid key")
+
+        try:
+            raw = json.dumps(value, ensure_ascii=True)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError("value is not JSON-serializable") from exc
+
+        b = len(raw.encode("utf-8"))
+        max_bytes = max(100, min(int(max_bytes), 500_000))
+        if b > max_bytes:
+            raise ValueError("value too large")
+
+        now_ms = int(time.time() * 1000)
+        sensitive = is_sensitive_key(k)
+
+        with self._agent_memory_lock:
+            entry = self._agent_memory.get(k)
+            if not isinstance(entry, dict):
+                entry = {"createdAt": now_ms}
+            entry.update(
+                {
+                    "key": k,
+                    "value": value,
+                    "bytes": b,
+                    "sensitive": bool(sensitive),
+                    "updatedAt": now_ms,
+                }
+            )
+            self._agent_memory[k] = entry
+
+            # Evict oldest keys if we exceed max_keys.
+            max_keys = max(1, min(int(max_keys), 2000))
+            if len(self._agent_memory) > max_keys:
+                ordered = [
+                    (str(kk), vv)
+                    for kk, vv in self._agent_memory.items()
+                    if isinstance(kk, str) and isinstance(vv, dict)
+                ]
+                ordered.sort(key=lambda it: int(it[1].get("updatedAt") or 0))
+                for kk, _vv in ordered[: max(0, len(self._agent_memory) - max_keys)]:
+                    self._agent_memory.pop(kk, None)
+
+        return {
+            "key": k,
+            "bytes": b,
+            "sensitive": bool(sensitive),
+            "updatedAt": now_ms,
+        }
+
+    def memory_get(self, *, key: str) -> dict[str, Any] | None:
+        k = str(key or "").strip()
+        if not k:
+            return None
+        with self._agent_memory_lock:
+            entry = self._agent_memory.get(k)
+            return dict(entry) if isinstance(entry, dict) else None
+
+    def memory_delete(self, *, key: str) -> bool:
+        k = str(key or "").strip()
+        if not k:
+            return False
+        with self._agent_memory_lock:
+            return self._agent_memory.pop(k, None) is not None
+
+    def memory_clear(self, *, prefix: str | None = None) -> int:
+        pref = str(prefix or "").strip()
+        with self._agent_memory_lock:
+            if not pref:
+                n = len(self._agent_memory)
+                self._agent_memory.clear()
+                return n
+            keys = [k for k in self._agent_memory if isinstance(k, str) and k.startswith(pref)]
+            for k in keys:
+                self._agent_memory.pop(k, None)
+            return len(keys)
+
+    def memory_list(self, *, prefix: str | None = None) -> list[dict[str, Any]]:
+        pref = str(prefix or "").strip()
+        with self._agent_memory_lock:
+            items = []
+            for k, entry in self._agent_memory.items():
+                if not isinstance(k, str):
+                    continue
+                if pref and not k.startswith(pref):
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                items.append(
+                    {
+                        "key": k,
+                        **({"bytes": entry.get("bytes")} if isinstance(entry.get("bytes"), int) else {}),
+                        **({"updatedAt": entry.get("updatedAt")} if isinstance(entry.get("updatedAt"), int) else {}),
+                        **({"sensitive": True} if entry.get("sensitive") is True else {}),
+                    }
+                )
+        items.sort(key=lambda it: str(it.get("key") or ""))
+        return items
 
     # ─────────────────────────────────────────────────────────────────────────
     # Downloads (best-effort, no output spam)

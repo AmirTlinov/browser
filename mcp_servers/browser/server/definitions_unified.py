@@ -627,6 +627,7 @@ PAGE_TOOL: dict[str, Any] = {
 
 USAGE:
 - Default (AI-native): page()  # triage + affordances + next actions
+- In MCP_TOOLSET=v2: page() defaults to detail="map" (actions-first)
 - Fast frontend triage (delta capable): page(detail="triage", since=<cursor>)
 - Form details: page(detail="forms", form_index=0)
 - Links list: page(detail="links", limit=20)
@@ -641,6 +642,8 @@ USAGE:
 - Visual frames overlay: page(detail="frames", with_screenshot=true)
 - Stable selectors: page(detail="locators", kind="button")
 - Visual locator overlay: page(detail="locators", with_screenshot=true)
+- Capability map (actions-first): page(detail="map")
+- Navigation graph (visited pages): page(detail="graph")
 - Super-report (one call): page(detail="audit")
 - Super-report + net trace: page(detail="audit", trace=true)
 - Page info: page(info=true)
@@ -670,6 +673,8 @@ RESPONSE FORMAT:
                     "performance",
                     "frames",
                     "locators",
+                    "map",
+                    "graph",
                     "audit",
                 ],
                 "description": "Section to get details for",
@@ -913,7 +918,7 @@ OUTPUT:
             },
             "final": {
                 "type": "string",
-                "enum": ["none", "observe", "audit", "triage", "diagnostics"],
+                "enum": ["none", "observe", "audit", "triage", "diagnostics", "map", "graph"],
                 "default": "observe",
                 "description": "Attach one compact final snapshot (default: observe)",
             },
@@ -960,6 +965,10 @@ This is the recommended entrypoint for multi-step work:
 - Holds one shared CDP session across all actions (less flake, fewer round-trips).
 - Returns a compact report + proof so agents avoid extra "check" calls.
 
+Default report behavior:
+- MCP_TOOLSET=v1/default: report="observe"
+- MCP_TOOLSET=v2: report="map"
+
 INTERNAL ACTIONS (v2):
 `run()` can execute the same action steps as `flow`, including (common set):
 - navigate, click, type, scroll, form, wait
@@ -971,6 +980,11 @@ INTERNAL ACTIONS (v2):
 - net(action="harLite")  # Tier-0 network slice
 - net(action="trace")    # Tier-0 deep trace (bounded, on-demand)
 These are not separate top-level tools in v2; they are actions inside `run`.
+
+HIGH-LEVERAGE INTERNAL ACTION:
+- act(ref="aff:...")  # resolve a stable affordance ref from page(detail="locators") / page(detail="map") / page(detail="triage")
+  This is the fastest way to click/focus without re-specifying selectors/text.
+- act(label="Save", kind="button")  # deterministic label resolver (exact match; uses stored affordances; may refresh once)
 
 ACTION FORMATS (same as flow steps):
 1) Explicit:
@@ -1105,7 +1119,7 @@ OUTPUT:
             },
             "report": {
                 "type": "string",
-                "enum": ["none", "observe", "audit", "triage", "diagnostics"],
+                "enum": ["none", "observe", "audit", "triage", "diagnostics", "map", "graph"],
                 "default": "observe",
                 "description": "Attach one compact final report snapshot (default: observe)",
             },
@@ -1457,6 +1471,10 @@ USAGE:
 - Get DOM: browser(action="dom", selector="#content")
 - Store DOM as artifact (no huge dump): browser(action="dom", store=true)
 - Get element: browser(action="element", selector="#btn")
+- Agent memory (safe KV): browser(action="memory", memory_action="set", key="token", value="...")
+- Agent memory list: browser(action="memory", memory_action="list")
+- Agent memory get (redacted by default): browser(action="memory", memory_action="get", key="token")
+- Use memory in run without revealing: run(actions=[{type:{selector:"#pwd", text:"{{mem:token}}"}}], report="map")
 
 DRILLDOWN:
 - browser(action="artifact", artifact_action="get", id="...", offset=0, max_chars=4000)
@@ -1469,7 +1487,7 @@ RESPONSE (status):
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["status", "launch", "recover", "policy", "dom", "element", "artifact"],
+                    "enum": ["status", "launch", "recover", "policy", "dom", "element", "artifact", "memory"],
                     "default": "status",
                 },
                 "hard": {
@@ -1524,6 +1542,39 @@ RESPONSE (status):
                     "type": "boolean",
                     "default": False,
                     "description": "Overwrite export destination if exists (artifact_action='export')",
+                },
+                # Agent memory (server-local, safe-by-default)
+                "memory_action": {
+                    "type": "string",
+                    "enum": ["list", "get", "set", "delete", "clear"],
+                    "default": "list",
+                    "description": "Memory operation (requires action='memory')",
+                },
+                "key": {"type": "string", "description": "Memory key (get/set/delete)"},
+                "prefix": {"type": "string", "description": "Key prefix filter (list/clear)"},
+                "value": {
+                    "description": "Memory value (set)",
+                    "type": ["string", "number", "boolean", "object", "array", "null"],
+                },
+                "reveal": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Reveal value on get (unsafe; blocked by strict policy for sensitive keys)",
+                },
+                "memory_max_chars": {
+                    "type": "integer",
+                    "default": 2000,
+                    "description": "Max chars to return when reveal=true (memory get)",
+                },
+                "memory_max_bytes": {
+                    "type": "integer",
+                    "default": 20000,
+                    "description": "Max stored bytes for set (memory set)",
+                },
+                "memory_max_keys": {
+                    "type": "integer",
+                    "default": 200,
+                    "description": "Max keys for memory store (LRU-evicted)",
                 },
             },
             "additionalProperties": False,

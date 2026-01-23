@@ -10,6 +10,7 @@ import time
 from typing import Any
 
 from ...config import BrowserConfig
+from ...server.redaction import redact_url
 from ...session import session_manager
 from ..base import PageContext, SmartToolError, get_session
 
@@ -90,6 +91,8 @@ def get_page_info(config: BrowserConfig) -> dict[str, Any]:
                 )
                 result = session.eval_js(js)
                 if isinstance(result, dict):
+                    if isinstance(result.get("url"), str) and result.get("url"):
+                        result["url"] = redact_url(str(result["url"]))
                     return {"pageInfo": result, "target": target["id"]}
         except Exception:
             # Fall through to CDP-only fallback (no Runtime.evaluate).
@@ -111,7 +114,11 @@ def get_page_info(config: BrowserConfig) -> dict[str, Any]:
                         if isinstance(cur.get("title"), str) and cur.get("title"):
                             title = cur.get("title")
             return {
-                "pageInfo": {**({"url": url} if url else {}), **({"title": title} if title else {}), "limited": True},
+                "pageInfo": {
+                    **({"url": redact_url(url)} if isinstance(url, str) and url else {}),
+                    **({"title": title} if title else {}),
+                    "limited": True,
+                },
                 "target": target["id"],
             }
         except (OSError, ValueError, KeyError) as e:

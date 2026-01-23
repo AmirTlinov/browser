@@ -15,8 +15,10 @@ from .ax import get_page_ax
 from .diagnostics import get_page_diagnostics
 from .extract import extract_content
 from .frames import get_page_frames
+from .graph import get_page_graph
 from .info import get_page_context, get_page_info
 from .locators import get_page_locators
+from .map import get_page_map
 from .performance import get_page_performance
 from .resources import get_page_resources
 from .triage import get_page_triage
@@ -28,7 +30,9 @@ __all__ = [
     "get_page_ax",
     "get_page_diagnostics",
     "get_page_frames",
+    "get_page_graph",
     "get_page_locators",
+    "get_page_map",
     "get_page_performance",
     "get_page_resources",
     "get_page_triage",

@@ -11,31 +11,9 @@ import json
 from typing import Any
 
 from ..config import BrowserConfig
+from ..sensitivity import is_sensitive_key
 from ..session import session_manager
 from .base import SmartToolError, get_session
-
-_SENSITIVE_SUBSTRINGS = (
-    "token",
-    "secret",
-    "password",
-    "passwd",
-    "pwd",
-    "auth",
-    "authorization",
-    "cookie",
-    "session",
-    "jwt",
-    "bearer",
-    "api-key",
-    "apikey",
-)
-
-
-def _is_sensitive_key(key: str) -> bool:
-    k = (key or "").strip().lower()
-    if not k:
-        return False
-    return any(s in k for s in _SENSITIVE_SUBSTRINGS)
 
 
 def _policy_mode() -> str:
@@ -81,7 +59,7 @@ def storage_action(
             suggestion='Switch to permissive via browser(action="policy", mode="permissive") if you have explicit user approval',
         )
 
-    if mode == "strict" and action == "get" and reveal and key and _is_sensitive_key(key):
+    if mode == "strict" and action == "get" and reveal and key and is_sensitive_key(key):
         raise SmartToolError(
             tool="storage",
             action="get",
@@ -154,7 +132,7 @@ def storage_action(
             for k in keys[: min(len(keys), 50)]:
                 if not isinstance(k, str):
                     continue
-                keys_out.append({"key": k, **({"sensitive": True} if _is_sensitive_key(k) else {})})
+                    keys_out.append({"key": k, **({"sensitive": True} if is_sensitive_key(k) else {})})
 
             return {
                 "storage": {
@@ -216,7 +194,7 @@ def storage_action(
             total_chars = res.get("totalChars") if isinstance(res.get("totalChars"), int) else None
             truncated = bool(res.get("truncated"))
             text = res.get("text") if isinstance(res.get("text"), str) else None
-            sensitive = _is_sensitive_key(k)
+            sensitive = is_sensitive_key(k)
 
             # Safe-by-default: don't reveal values unless explicitly requested.
             value_preview: str | None
