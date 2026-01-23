@@ -11,6 +11,7 @@
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
+        "default": {},
         "properties": {
           "detail": {
             "type": "string",
@@ -1107,6 +1108,7 @@
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
+        "default": {},
         "properties": {
           "code": {
             "type": "string",

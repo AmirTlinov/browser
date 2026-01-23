@@ -657,6 +657,9 @@ RESPONSE FORMAT:
     "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
+        # Some MCP clients omit arguments entirely when no params are provided.
+        # Defaulting to {} makes `page()` invocations reliable.
+        "default": {},
         "properties": {
             "detail": {
                 "type": "string",
@@ -1257,6 +1260,8 @@ RESPONSE EXAMPLE:
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
+            # Some MCP clients omit arguments entirely when no params are provided.
+            "default": {},
             "properties": {
                 "code": {"type": "string", "description": "JavaScript code to execute"},
             },
