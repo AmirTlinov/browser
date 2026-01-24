@@ -7,6 +7,7 @@ FEAT_JS_COND = JS condition support for run internal assert/when/repeat.
 FEAT_MACROS_PAGINATE = New run macros: scroll_to_end and paginate_next.
 FEAT_MACRO_EXPAND = New run macro: auto_expand for show-more/read-more expansion.
 FEAT_SMOKE_MACROS = Live-site smoke expanded for macro pagination/scroll (feature-flagged).
+FEAT_PAGE_AUTO_EXPAND = Page tool auto-expand prepass for collapsed content.
 
 [CONTENT]
 ## [REL_2026_01_24]
@@ -17,3 +18,4 @@ FEAT_SMOKE_MACROS = Live-site smoke expanded for macro pagination/scroll (featur
 - [FEAT_MACROS_PAGINATE]
 - [FEAT_MACRO_EXPAND]
 - [FEAT_SMOKE_MACROS]
+- [FEAT_PAGE_AUTO_EXPAND]

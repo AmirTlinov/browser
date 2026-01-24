@@ -738,6 +738,55 @@ RESPONSE FORMAT:
                     },
                 ],
             },
+            "auto_expand": {
+                "description": "Auto-expand collapsed content (best-effort; 'show more/read more' patterns).",
+                "oneOf": [
+                    {"type": "boolean"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "phrases": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Lowercased phrases to match (e.g., show more, read more).",
+                            },
+                            "selectors": {
+                                "oneOf": [
+                                    {"type": "string"},
+                                    {"type": "array", "items": {"type": "string"}},
+                                ],
+                                "description": "CSS selector(s) to scan for expand controls.",
+                            },
+                            "include_links": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "Allow anchor tags when they look like buttons (#/javascript:/role=button).",
+                            },
+                            "click_limit": {
+                                "type": "integer",
+                                "default": 6,
+                                "description": "Max clicks per iteration.",
+                            },
+                            "max_iters": {
+                                "type": "integer",
+                                "default": 6,
+                                "description": "Max expand iterations (bounded server-side).",
+                            },
+                            "settle_ms": {
+                                "type": "integer",
+                                "default": 150,
+                                "description": "Sleep after each click batch (ms) to allow hydration.",
+                            },
+                            "required": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "If true, fail the tool call when auto-expand errors.",
+                            },
+                        },
+                        "additionalProperties": False,
+                    },
+                ],
+            },
             "since": {
                 "type": "integer",
                 "description": "For detail='triage'/'diagnostics'/'resources': return only changes since this cursor (ms)",

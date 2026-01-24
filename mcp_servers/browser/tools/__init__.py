@@ -59,6 +59,7 @@ from .navigation import go_back, go_forward, navigate_to, reload_page
 from .network import browser_fetch, dump_dom_html, eval_js
 from .page import (
     analyze_page,
+    auto_expand_page,
     auto_scroll_page,
     extract_content,
     get_page_audit,
@@ -117,6 +118,7 @@ __all__ = [
     "screenshot",
     # Page analysis
     "analyze_page",
+    "auto_expand_page",
     "auto_scroll_page",
     "get_page_ax",
     "extract_content",
