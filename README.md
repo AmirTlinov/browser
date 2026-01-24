@@ -1,85 +1,72 @@
 Browser MCP Server
 ==================
 
-This repository hosts a lightweight Model Context Protocol (MCP) server (protocol `2025-06-18`) that exposes controlled Internet access to AI agents via a locally installed Chrome/Chromium browser.
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-2025--06--18-5c6ac4)
+![Modes](https://img.shields.io/badge/modes-extension%20%7C%20attach%20%7C%20launch-2ea44f)
 
-The server provides **full browser automation capabilities** via Chrome DevTools Protocol (CDP), including mouse control, keyboard input, scrolling, DOM manipulation, and screenshots.
+A lightweight Model Context Protocol (MCP) server that gives AI agents controlled, real-browser
+automation through Chrome/Chromium via Chrome DevTools Protocol (CDP).
 
-Highlights
-----------
-- Launches or reuses a Chrome instance with a dedicated profile and remote debugging port, using safe defaults.
-- Provides MCP tools to perform safe HTTP GET requests and headless DOM fetches via `--dump-dom`.
-- Full browser automation via Chrome DevTools Protocol (CDP): clicks, keyboard, scrolling, drag & drop.
-- Enforces basic safety through an allowlist of hosts and configurable timeouts/size limits.
+It is designed to be predictable and safe: allowlisted hosts, bounded timeouts, stable tooling, and
+one shared session for multi-step runs.
 
-Quick start
------------
+What you get
+------------
+- Drive a real browser: click, type, scroll, drag, screenshot, and navigate.
+- Make long sequences reliable with `run(...)` and `flow(...)` (single call, bounded, low noise).
+- Extension mode for your existing Chrome profile (no restart, no debug port).
 
-**✅ RECOMMENDED (No Restart): Extension Mode (Your Normal Chrome)**
-
-This is the best experience if you want the agent to drive *your* already-running Chrome
-profile (with your tabs, cookies, and extensions) **without** restarting with a
-`--remote-debugging-port`.
+Quick start (golden path)
+-------------------------
+1) One-time setup:
 
 ```bash
-# 0) One-time: install deps (native host auto-installs on first run)
 ./tools/setup
+```
 
-# 1) Install the extension (unpacked, dev mode)
-#    chrome://extensions → Developer mode → Load unpacked → vendor/browser_extension
-#
-# 2) Run the MCP server (defaults to extension mode)
+2) Diagnose environment:
+
+```bash
+./tools/doctor
+```
+
+3) Verify the repo is healthy:
+
+```bash
+./tools/gate
+```
+
+4) Run the server (extension mode is default):
+
+```bash
 ./scripts/run_browser_mcp.sh
 ```
 
-The extension auto-connects when installed/enabled. This mode is **portless** (no `127.0.0.1:<port>`
-gateway), so it avoids “gateway not reachable” and port-collision issues. The server will
-auto-install the Native Messaging host on startup (fail-soft). If you want to install the host
-manually, run `./tools/install_native_host`. For fast local diagnosis, run `./tools/extension_status`
-(it also runs inside `./tools/doctor`). The server also auto-heals common native-host drift by default.
-
-Multi-CLI: you can run multiple CLI sessions concurrently. The native broker multiplexes multiple
-Browser MCP server processes through one extension connection.
-
-**Alternative (Same Browser): Attach via CDP Port**
-
-Use this if you prefer the classic DevTools Protocol attach flow.
+Choose a mode
+-------------
+**Recommended: Extension mode (no restart).**
+- Drives your existing Chrome profile with your tabs/cookies/extensions.
+- No CDP port needed; fewer connection headaches.
 
 ```bash
-# 1) Start your browser with a CDP debugging port (localhost only!)
-./scripts/start_user_browser_cdp.sh
+./scripts/run_browser_mcp.sh
+```
 
-# 2) Run the MCP server in attach mode
+**Attach to a CDP port (classic).**
+
+```bash
+./scripts/start_user_browser_cdp.sh
 MCP_BROWSER_MODE=attach ./scripts/run_browser_mcp.sh
 ```
 
-**Alternative: Launch a Dedicated Browser (Portable Chromium)**
-
-Use this if you want a clean, disposable profile for automation.
+**Launch a dedicated Chromium (clean profile).**
 
 ```bash
-# 1. Install Python dependencies
 python -m pip install -r requirements.txt
-
-# 2. Download portable Chromium locally (one-time, ~165MB download)
 ./scripts/install_local_chromium.sh
-
-# 3. Run the MCP server in launch mode
 MCP_BROWSER_MODE=launch ./scripts/run_browser_mcp.sh
 ```
-
-**Alternative: System Chromium**
-
-If you prefer system-wide installation, avoid snap versions:
-
-```bash
-# Snap Chromium has issues (ignores --user-data-dir, SingletonLock/profile conflicts)
-# Use proper Chromium instead:
-./scripts/install_chromium.sh
-```
-
-**Defaults:** Profile `~/.gemini/browser-profile`, CDP port `9222`.
-
 
 Configuration
 -------------
@@ -89,7 +76,7 @@ Environment variables:
   2. System Chromium: `/usr/bin/chromium`, `/usr/bin/chromium-browser`, etc.
   3. System Chrome: `/usr/bin/google-chrome`, `/usr/bin/google-chrome-stable`, etc.
   4. Snap Chromium (last resort - has known issues)
-- `MCP_BROWSER_MODE` — lifecycle mode: `extension` (recommended), `attach`, or `launch`. Note: `scripts/run_browser_mcp.sh` defaults to `extension`.
+- `MCP_BROWSER_MODE` — lifecycle mode: `extension` (recommended), `attach`, or `launch`.
 - `MCP_BROWSER_PROFILE` — user-data-dir; default `~/.gemini/browser-profile`.
 - `MCP_BROWSER_PORT` — remote debugging port; default `9222`.
 - `MCP_BROWSER_FLAGS` — extra flags appended to Chrome launch.
@@ -99,18 +86,17 @@ Environment variables:
 - `MCP_EXTENSION_AUTO_LAUNCH` — auto-launch managed Chrome with the extension if no broker is found (default 0; opt-in).
 - `MCP_EXTENSION_PROFILE` — user-data-dir for the managed extension Chrome profile (default `~/.gemini/browser-extension-profile`).
 - `MCP_EXTENSION_IDS` — comma-separated extension IDs to allow in the native host manifest (optional).
-- `MCP_AUTO_PORT_FALLBACK` — if set to `1`, allows switching to a free port + an owned profile when the configured port is busy/unresponsive (default: `0` for deterministic behavior).
+- `MCP_AUTO_PORT_FALLBACK` — if set to `1`, allows switching to a free port + an owned profile when the configured port is busy/unresponsive (default: `0`).
 - `MCP_ALLOW_HOSTS` — comma-separated allowlist (e.g., `example.com,github.com`). Empty or `*` disables host filtering.
 - `MCP_HTTP_TIMEOUT` — request timeout seconds (default 10).
 - `MCP_HTTP_MAX_BYTES` — maximum bytes to return from HTTP responses (default 1_000_000).
-- `MCP_HEADLESS` — set to `1` for headless mode, `0` for visible window (default: `1`, headless).
+- `MCP_HEADLESS` — set to `1` for headless mode, `0` for visible window (default: `1`).
 - `MCP_WINDOW_SIZE` — initial window size in visible mode, format `width,height` (default: `1280,900`).
 
 Available tools
 ---------------
-
-This server exports a small set of **unified** tools. The canonical
-source of truth is `tools/list` (and the generated snapshot in `contracts/`).
+This server exports a small set of **unified** tools. The canonical source of truth is `tools/list`
+(and the generated snapshot in `contracts/`).
 
 | Tool | What it does |
 |------|--------------|
@@ -138,14 +124,14 @@ source of truth is `tools/list` (and the generated snapshot in `contracts/`).
 | `wait` | Wait for navigation/load/element/text |
 | `browser` | Launch/status; DOM/element helpers |
 
-**Output format:** tool text responses are returned as compact **context-format Markdown**
-(`"[LEGEND]" + "[CONTENT]"`), not JSON.
-
-Safety defaults
+Docs and guides
 ---------------
-- Enforce allowlist via `MCP_ALLOW_HOSTS=example.com,github.com`; `*` keeps permissive mode.
-- The launcher refuses to start Chrome if the CDP port is already occupied and reports a clear error.
-- Chrome is started with `--remote-allow-origins=*` so CDP WebSocket accepts localhost clients.
+- `docs/RUN_GUIDE.md` — minimal-call run/flow examples
+- `docs/AGENT_PLAYBOOK.md` — patterns for low-noise automation
+- `docs/MACROS.md` — macro catalog for `run(...)`
+- `docs/RUNBOOKS.md` — recording and replaying step lists
+- `docs/RELEASE_NOTES.md` — recent changes
+- `TROUBLESHOOTING.md` — common fixes
 
 Safety notes
 ------------
@@ -163,11 +149,17 @@ Architecture
 └──────────────────┘      └─────────────────┘      └─────────────────┘
 ```
 
-The server uses Chrome DevTools Protocol (CDP) directly via WebSocket for all browser automation, including cookie management and in-page fetch requests. This provides deterministic, extension-free operation with any Chrome/Chromium browser.
+The server uses Chrome DevTools Protocol (CDP) directly via WebSocket for all browser automation,
+including cookie management and in-page fetch requests.
 
 Testing
 -------
-Run the test suite:
+Recommended:
+```
+./tools/gate
+```
+
+Focused runs:
 ```
 pytest -q --maxfail=1 --cov=mcp_servers --cov-report=term-missing
 ```
