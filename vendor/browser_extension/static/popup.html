@@ -35,22 +35,35 @@
             <span class="slider"></span>
           </label>
         </div>
+
+        <div class="divider"></div>
+
+        <div class="actions">
+          <button id="reconnectBtn" class="btn">Reconnect</button>
+          <button id="copyDiagnosticsBtn" class="btn btn--ghost">Copy diagnostics</button>
+        </div>
+
+        <div id="statusHint" class="hint statusHint"></div>
       </section>
 
-      <section class="card">
-        <div class="kv">
-          <div class="k">Gateway</div>
-          <div class="v mono" id="gatewayUrl">—</div>
-        </div>
-        <div class="kv">
-          <div class="k">Configured</div>
-          <div class="v">
-            <input id="gatewayUrlInput" class="input mono" placeholder="ws://127.0.0.1:8765" />
+      <details class="advanced">
+        <summary>Advanced</summary>
+        <section class="card">
+          <div class="kv">
+            <div class="k">Transport</div>
+            <div class="v mono" id="transport">—</div>
           </div>
+        <div class="kv">
+          <div class="k">Broker</div>
+          <div class="v mono" id="brokerId">—</div>
         </div>
         <div class="kv">
-          <div class="k">Last good</div>
-          <div class="v mono" id="gatewayLastGood">—</div>
+          <div class="k">Peers</div>
+          <div class="v mono" id="peerCount">—</div>
+        </div>
+        <div class="kv">
+          <div class="k">Session</div>
+          <div class="v mono" id="sessionId">—</div>
         </div>
         <div class="kv">
           <div class="k">Extension ID</div>
@@ -61,19 +74,12 @@
           <div class="v mono" id="focusedTab">—</div>
         </div>
 
-        <div class="actions">
-          <button id="saveGatewayBtn" class="btn btn--ghost">Save</button>
-          <button id="resetGatewayBtn" class="btn btn--ghost">Reset</button>
-        </div>
-        <div class="actions">
-          <button id="reconnectBtn" class="btn">Reconnect</button>
-          <button id="copyExtIdBtn" class="btn btn--ghost">Copy ID</button>
+        <div class="kv kv--top">
+          <div class="k">Last error</div>
+          <div class="v mono" id="lastError">—</div>
         </div>
       </section>
-
-      <section class="footer">
-        <div id="lastError" class="error"></div>
-      </section>
+      </details>
     </div>
 
     <script src="popup.js"></script>

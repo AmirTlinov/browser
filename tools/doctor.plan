@@ -3,3 +3,4 @@
 
 python3 --version
 python3 -c "import sys; print('python_executable:', sys.executable)"
+./tools/extension_status

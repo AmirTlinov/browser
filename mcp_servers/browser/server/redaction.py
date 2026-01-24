@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from ..sensitivity import is_sensitive_key
 
 _SENSITIVE_KEYS = {
     "secret",
@@ -17,6 +20,7 @@ _SENSITIVE_KEYS = {
     "pass",
     "pwd",
     "token",
+    "auth",
     "authorization",
     "cookie",
     "set-cookie",
@@ -26,11 +30,106 @@ _SENSITIVE_KEYS = {
 }
 
 
+_URL_PLACEHOLDER_RE = re.compile(
+    r"(?:\{\{\s*(?:mem:|param:)?[A-Za-z0-9_.-]+\s*\}\}|\$\{\s*(?:mem:|param:)?[A-Za-z0-9_.-]+\s*\})"
+)
+
+
+def _is_placeholder_value(value: str) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return _URL_PLACEHOLDER_RE.search(value) is not None
+
+
+def _should_redact_url_key(key: str) -> bool:
+    lk = (key or "").strip().lower()
+    if not lk:
+        return False
+    if lk in _SENSITIVE_KEYS:
+        return True
+    return is_sensitive_key(lk)
+
+
+def _looks_like_query_string(value: str) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return "=" in value and ("&" in value or value.count("=") >= 1)
+
+
 def redact_url(url: str) -> str:
-    """Drop query+fragment (common place for secrets)."""
+    """Redact suspicious URL parameters without destroying normal queries.
+
+    - Keeps non-sensitive query params intact (e.g., q=search, filters).
+    - Redacts values for keys like token/auth/secret/api-key (key-based heuristic).
+    - Preserves placeholders ({{mem:...}} / {{param:...}}) as-is.
+    - Sanitizes fragment when it looks like a query string (OAuth-style).
+    - Removes userinfo (`user:pass@host`) from netloc.
+
+    Returns the original URL unchanged when no redaction is needed (avoids churn).
+    """
+    if not isinstance(url, str) or not url:
+        return url
     try:
         parts = urlsplit(url)
-        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    except Exception:
+        return url
+
+    changed = False
+    scheme = parts.scheme
+    netloc = parts.netloc
+    path = parts.path
+    query = parts.query
+    fragment = parts.fragment
+
+    if "@" in netloc:
+        netloc = netloc.split("@", 1)[1]
+        changed = True
+
+    if query:
+        pairs = parse_qsl(query, keep_blank_values=True)
+        redacted_any = False
+        out_pairs: list[tuple[str, str]] = []
+        for k, v in pairs:
+            if _should_redact_url_key(k) and isinstance(v, str) and v and not _is_placeholder_value(v):
+                out_pairs.append((k, "<redacted>"))
+                redacted_any = True
+            else:
+                out_pairs.append((k, v))
+        if redacted_any:
+            query = urlencode(out_pairs, doseq=True)
+            changed = True
+
+    if fragment and _looks_like_query_string(fragment):
+        pairs = parse_qsl(fragment, keep_blank_values=True)
+        redacted_any = False
+        out_pairs: list[tuple[str, str]] = []
+        for k, v in pairs:
+            if _should_redact_url_key(k) and isinstance(v, str) and v and not _is_placeholder_value(v):
+                out_pairs.append((k, "<redacted>"))
+                redacted_any = True
+            else:
+                out_pairs.append((k, v))
+        if redacted_any:
+            fragment = urlencode(out_pairs, doseq=True)
+            changed = True
+
+    if not changed:
+        return url
+
+    try:
+        return urlunsplit((scheme, netloc, path, query, fragment))
+    except Exception:
+        return url
+
+
+def redact_url_brief(url: str) -> str:
+    """Low-noise URL redaction (drops query+fragment; removes userinfo)."""
+    if not isinstance(url, str) or not url:
+        return url
+    try:
+        parts = urlsplit(url)
+        netloc = parts.netloc.split("@", 1)[1] if "@" in parts.netloc else parts.netloc
+        return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
     except Exception:
         return url
 

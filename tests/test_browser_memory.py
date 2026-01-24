@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 
 def test_browser_memory_set_list_get_delete_clear() -> None:
     from mcp_servers.browser.config import BrowserConfig

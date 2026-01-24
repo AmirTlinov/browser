@@ -355,20 +355,34 @@ def handle_click(config: BrowserConfig, launcher: BrowserLauncher, args: dict[st
 
     # Auto-wait after click
     if wait_after == "auto":
-        new_url = _wait_for_url_change(config, before_url, timeout=2.0) if before_url else None
-        if new_url:
-            _wait_for_condition(config, "load", timeout=5)
+        nav_res = _wait_for_condition(config, "navigation", timeout=4.0) if before_url else {"found": False}
+        if nav_res.get("found"):
+            _wait_for_condition(config, "load", timeout=8)
             result["page_changed"] = True
-            result["navigation"] = {"old_url": before_url, "new_url": new_url}
+            old_url = nav_res.get("old_url") if isinstance(nav_res, dict) else None
+            new_url = nav_res.get("new_url") if isinstance(nav_res, dict) else None
+            result["navigation"] = {
+                "old_url": old_url or before_url,
+                "new_url": new_url or before_url,
+            }
+            if isinstance(new_url, str) and new_url:
+                result["url"] = new_url
         else:
             time.sleep(0.1)  # Brief stabilization
             result["page_changed"] = False
     elif wait_after == "navigation":
-        new_url = _wait_for_url_change(config, before_url, timeout=10.0) if before_url else None
-        if new_url:
-            _wait_for_condition(config, "load", timeout=10)
+        nav_res = _wait_for_condition(config, "navigation", timeout=10.0) if before_url else {"found": False}
+        if nav_res.get("found"):
+            _wait_for_condition(config, "load", timeout=12)
             result["page_changed"] = True
-            result["navigation"] = {"old_url": before_url, "new_url": new_url}
+            old_url = nav_res.get("old_url") if isinstance(nav_res, dict) else None
+            new_url = nav_res.get("new_url") if isinstance(nav_res, dict) else None
+            result["navigation"] = {
+                "old_url": old_url or before_url,
+                "new_url": new_url or before_url,
+            }
+            if isinstance(new_url, str) and new_url:
+                result["url"] = new_url
         else:
             result["page_changed"] = False
 
@@ -605,14 +619,41 @@ def handle_form(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
     result: dict[str, Any] = {}
 
     if args.get("fill"):
+        submit = bool(args.get("submit", False))
+        wait_after = args.get("wait_after")
+        if wait_after is None:
+            wait_after = "auto" if submit else "none"
+
+        before_url: str | None = None
+        if submit and wait_after in {"auto", "navigation"}:
+            before_url = _best_effort_current_url(config)
+
         fill_result = tools.fill_form(
             config,
             data=args["fill"],
-            submit=args.get("submit", False),
+            submit=submit,
             form_index=args.get("form_index", 0),
         )
         result = fill_result
         result["action"] = "fill"
+
+        if submit and wait_after in {"auto", "navigation"}:
+            nav_timeout = 4.0 if wait_after == "auto" else 10.0
+            load_timeout = 8.0 if wait_after == "auto" else 12.0
+            nav_res = _wait_for_condition(config, "navigation", timeout=nav_timeout) if before_url else {"found": False}
+            if nav_res.get("found"):
+                _wait_for_condition(config, "load", timeout=load_timeout)
+                result["page_changed"] = True
+                old_url = nav_res.get("old_url") if isinstance(nav_res, dict) else None
+                new_url = nav_res.get("new_url") if isinstance(nav_res, dict) else None
+                result["navigation"] = {
+                    "old_url": old_url or before_url,
+                    "new_url": new_url or before_url,
+                }
+                if isinstance(new_url, str) and new_url:
+                    result["url"] = new_url
+            else:
+                result["page_changed"] = False
 
     elif args.get("select"):
         sel = args["select"]
@@ -1922,12 +1963,13 @@ def handle_download(config: BrowserConfig, launcher: BrowserLauncher, args: dict
     if src_path is None and isinstance(file_name, str) and file_name:
         try:
             from ...session import session_manager as _session_manager
+            from ...tools import downloads as _downloads
 
             tab_id = _session_manager.tab_id
             if tab_id:
                 dl_dir = _session_manager.get_download_dir(tab_id)
-                candidate = (dl_dir / file_name).resolve()
-                if candidate.exists() and candidate.is_file():
+                candidate = _downloads._resolve_download_path(file_name, dl_dir)
+                if candidate is not None:
                     src_path = candidate
         except Exception:
             src_path = None
@@ -2202,39 +2244,35 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
             gw_error = _session_manager.get_extension_gateway_error() if gw is None else None
 
             connected = bool(gw_status.get("connected"))
-            listening = bool(gw_status.get("listening"))
-            bind_error = gw_status.get("bindError") if isinstance(gw_status, dict) else None
+            health_summary: dict[str, Any] | None = None
+            if not connected:
+                # Fast local health check (no profile scanning).
+                try:
+                    from ...extension_health import collect_extension_health
 
+                    health = collect_extension_health(include_profiles=False)
+                    summary = health.get("summary") if isinstance(health, dict) else None
+                    if isinstance(summary, dict):
+                        health_summary = summary  # type: ignore[assignment]
+                except Exception:
+                    health_summary = None
             note = (
-                "Extension mode: connected"
+                "Extension mode (portless): connected"
                 if connected
                 else (
-                    "Extension mode: install/enable the Browser MCP extension in your normal Chrome. Connection should be automatic."
+                    "Extension mode (portless): install/enable the Browser MCP extension and install the native host "
+                    "(./tools/install_native_host). Connection should be automatic."
                 )
             )
-
-            if not connected and not listening and isinstance(bind_error, str) and bind_error:
-                candidates = (
-                    gw_status.get("portCandidates") if isinstance(gw_status.get("portCandidates"), list) else None
-                )
-                if candidates and all(isinstance(p, int) for p in candidates):
-                    lo = int(candidates[0])
-                    hi = int(candidates[-1])
-                    note = (
-                        f"Extension mode: gateway failed to bind (port conflict). "
-                        f"Tried {lo}-{hi}; stop other gateway processes or set MCP_EXTENSION_PORT to a free base port."
-                    )
-                else:
-                    note = (
-                        "Extension mode: gateway failed to bind (port conflict). "
-                        "Stop other gateway processes or set MCP_EXTENSION_PORT to a free base port."
-                    )
+            if health_summary and isinstance(health_summary.get("hint"), str) and health_summary.get("hint"):
+                note = f"Extension mode (portless): {health_summary['hint']}"
             result = {
                 "action": "status",
                 "mode": "extension",
                 "running": connected,
                 "gateway": gw_status,
                 **({"gatewayError": gw_error} if gw_error else {}),
+                **({"extensionHealth": health_summary} if health_summary else {}),
                 "note": note,
             }
         else:
@@ -2255,12 +2293,12 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
             # Best-effort: if the gateway wasn't created at startup (or failed), try again here.
             if gw is None:
                 try:
-                    from ...extension_gateway_shared import SharedExtensionGateway
+                    from ...extension_gateway_native_peer import NativeExtensionGatewayPeer
 
-                    gw = SharedExtensionGateway(
+                    gw = NativeExtensionGatewayPeer(
                         on_cdp_event=lambda tab_id, ev: _session_manager._ingest_tier0_event(tab_id, ev)  # noqa: SLF001
                     )
-                    gw.start(wait_timeout=0.5, require_listening=False)
+                    gw.start(wait_timeout=0.5)
                     _session_manager.set_extension_gateway(gw)  # type: ignore[arg-type]
                     gw_error = None
                 except Exception as exc:  # noqa: BLE001
@@ -2272,7 +2310,7 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
             # Best-effort: nudge the gateway thread to bind/retry.
             if gw is not None:
                 try:
-                    gw.start(wait_timeout=0.5, require_listening=False)
+                    gw.start(wait_timeout=0.5)
                 except Exception as exc:  # noqa: BLE001
                     gw_error = str(exc)
                     with suppress(Exception):
@@ -2339,20 +2377,27 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
 
             reset = _session_manager.recover_reset()
 
-            # Best-effort: create a fresh tab for the session (visible to the user).
-            new_tab: str | None = None
-            if before_connected:
+            try:
+                timeout = float(args.get("timeout", 5.0))
+            except Exception:
+                timeout = 5.0
+            timeout = max(1.0, min(timeout, 30.0))
+
+            after_connected = False
+            if gw is not None:
                 try:
-                    if isinstance(before_tab, str) and before_tab:
-                        _session_manager.close_tab(config, before_tab)
+                    after_connected = bool(gw.wait_for_connection(timeout=timeout))
                 except Exception:
-                    pass
+                    after_connected = bool(gw.is_connected())
+
+            # Create a fresh isolated tab for a predictable post-recovery state (non-destructive).
+            new_tab: str | None = None
+            if after_connected:
                 try:
                     new_tab = _session_manager.new_tab(config, "about:blank")
                 except Exception:
                     new_tab = None
 
-            after_connected = bool(gw is not None and gw.is_connected())
             result = {
                 "action": "recover",
                 "ok": bool(after_connected and new_tab),
@@ -2361,6 +2406,8 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
                 "after": {"connected": after_connected, "sessionTabId": new_tab},
                 "reset": reset,
             }
+            if not after_connected:
+                result["error"] = "extension_not_connected"
             return ToolResult.json(result)
 
         attach_mode = getattr(config, "mode", "launch") == "attach"
@@ -2370,8 +2417,10 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
         except Exception:
             timeout = 5.0
         timeout = max(1.0, min(timeout, 30.0))
+        probe_short = min(1.0, max(0.4, timeout / 3.0))
+        probe_long = min(3.0, max(0.6, timeout))
 
-        before_ready = launcher.cdp_ready(timeout=0.4)
+        before_ready = launcher.cdp_ready(timeout=probe_short)
         before_tab = _session_manager.tab_id
 
         # Always clear in-memory state to prevent leaks (safe even if Chrome is hung).
@@ -2392,7 +2441,7 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
                 except Exception:
                     new_tab = None
 
-            after_ready = launcher.cdp_ready(timeout=0.6)
+            after_ready = launcher.cdp_ready(timeout=probe_long)
             result = {
                 "action": "recover",
                 "ok": bool(after_ready and new_tab),
@@ -2447,7 +2496,7 @@ def handle_browser(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
             with suppress(Exception):
                 config.profile_path = launcher.config.profile_path
 
-        after_ready = launcher.cdp_ready(timeout=0.6)
+        after_ready = launcher.cdp_ready(timeout=probe_long)
 
         # Create a fresh isolated tab to ensure session recovery is complete.
         new_tab: str | None = None

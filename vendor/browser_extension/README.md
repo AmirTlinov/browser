@@ -1,6 +1,6 @@
 [LEGEND]
 EXTENSION = The MV3 Chrome extension installed into the user’s normal Chrome profile.
-GATEWAY = The local WebSocket server inside Browser MCP that the extension connects to.
+BROKER = The local Native Messaging host (`com.openai.browser_mcp`) that bridges the extension to Browser MCP server processes without TCP ports.
 EXTENSION_MODE = Browser MCP mode that uses the extension instead of a separate Chrome instance.
 KILL_SWITCH = A user-visible toggle that disables all agent control immediately.
 
@@ -9,14 +9,9 @@ KILL_SWITCH = A user-visible toggle that disables all agent control immediately.
 
 This [EXTENSION] enables [EXTENSION_MODE] by acting as a thin DevTools Protocol proxy:
 - The extension attaches to real tabs via `chrome.debugger`.
-- The extension connects to the local [GATEWAY] over WebSocket (`ws://127.0.0.1:8765` by default).
-  Discovery uses a quiet HTTP probe (`http://127.0.0.1:<port>/.well-known/browser-mcp-gateway`) to find a
-  running gateway without noisy `WebSocket(...)` failures in the extension console.
-  
-  Multi-CLI note (flagship UX): Browser MCP uses a leader lock so **only one** process binds the gateway
-  listener ports. Other Browser MCP processes connect as peers and proxy through that leader, so you can
-  run many CLI sessions concurrently (10+) while the extension stays connected 100% (no port conflicts).
-- For high-frequency input (drag/typing), the extension supports batched CDP (`cdp.sendMany`) so Browser MCP can send many events in one gateway round-trip.
+- The extension connects to a local [BROKER] over Native Messaging (portless: no `127.0.0.1:<port>` gateway).
+  The broker multiplexes multiple Browser MCP server peers through a single extension connection.
+- For high-frequency input (drag/typing), the extension supports batched CDP (`cdp.sendMany`) so Browser MCP can send many events in one bridge round-trip.
 - For low-noise control-plane calls (tabs/state), the extension supports RPC batching (`rpc.batch`) so Browser MCP can collapse multiple RPC calls into one message.
 - Browser MCP keeps its AI-native tools unchanged; only the transport changes.
 
@@ -30,24 +25,24 @@ For canvas apps, the extension also enables a clipboard write bridge:
 1. Open `chrome://extensions`.
 2. Enable **Developer mode** (Chrome limitation: extensions cannot enable this themselves).
 3. Click **Load unpacked** → select `vendor/browser_extension`.
-4. Pin the “Browser MCP” extension, open its popup, and keep the [KILL_SWITCH] **OFF** until you need control.
+4. Pin the “Browser MCP” extension and open its popup to verify it is enabled.
 
 ## Run Browser MCP in extension mode
 - Set `MCP_BROWSER_MODE=extension`.
-- Optional:
-  - `MCP_EXTENSION_PORT` (default `8765`)
-  - `MCP_EXTENSION_HOST` (default `127.0.0.1`)
-  - `MCP_EXTENSION_ID` (if you want the gateway to accept only your extension id)
-  - `MCP_EXTENSION_PORT_RANGE` (e.g. `8765-8775`) to control the auto-bind range
-  - `MCP_EXTENSION_PORT_SPAN` (default `50`) to control the default range size when `MCP_EXTENSION_PORT_RANGE` is not set
+- The server auto-installs the native host on startup (best-effort). You can also install it manually:
+  - `./tools/setup`
+  - `./tools/install_native_host`
+
+This mode is portless: the extension talks to the [BROKER] via Native Messaging and the Browser MCP server connects via local IPC.
 
 ## Popup controls
-- **Agent control** ([KILL_SWITCH]): when OFF, the extension refuses to execute any browser-changing commands.
-- The extension keeps the gateway connection healthy automatically; you generally don't need to touch the popup.
+- **Agent control** ([KILL_SWITCH]): when OFF, the extension refuses to execute any browser-changing commands and disconnects the native bridge (fail-closed).
+- The extension keeps the native bridge healthy automatically; you generally don't need to touch the popup.
+- Auto-launch of a managed Chrome is optional and disabled by default (`MCP_EXTENSION_AUTO_LAUNCH=1` to enable).
 - **Follow active tab**: when ON, Browser MCP will (by default) adopt your currently focused tab as the session tab.
   In multi-CLI usage, peer sessions default to isolated tabs to avoid cross-agent interference.
-- **Gateway (Configured)**: override the base gateway URL if needed (Save/Reset). In most cases you can keep the default.
-- **Gateway (Last good)**: shows the last working gateway URL discovered automatically (useful when multiple sessions/ports exist).
+- **Reconnect**: forces a reconnect to the native host (rarely needed).
+- **Copy diagnostics**: copies a small JSON snapshot for debugging.
 
 ## Known limitations (Chrome platform constraints)
 - Only one DevTools debugger can be attached to a tab at a time. If the extension cannot attach, close DevTools for that tab.

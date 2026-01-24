@@ -50,8 +50,9 @@ def tools_list() -> list[dict[str, Any]]:
         # - browser: lifecycle/status/recover
         # - page: perception (ax/dom/snapshot)
         # - run: batch steps (single MCP call)
+        # - runbook: reuse recorded step lists
         # - app: high-level macros for canvas apps (Miro/Figma/etc.)
-        allowed = {"browser", "page", "run", "app"}
+        allowed = {"browser", "page", "run", "runbook", "app"}
         return [t for t in UNIFIED_TOOL_DEFINITIONS if isinstance(t, dict) and t.get("name") in allowed]
     return UNIFIED_TOOL_DEFINITIONS
 

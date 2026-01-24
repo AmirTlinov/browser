@@ -16,6 +16,7 @@ import json
 import os
 import shutil
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -81,14 +82,10 @@ def save_items(*, items: dict[str, dict[str, Any]], path: Path | None = None) ->
         pass
 
     tmp.write_text(text, encoding="utf-8")
-    try:
+    with suppress(Exception):
         os.chmod(tmp, 0o600)
-    except Exception:
-        pass
     tmp.replace(p)
-    try:
+    with suppress(Exception):
         os.chmod(p, 0o600)
-    except Exception:
-        pass
 
     return {"ok": True, "path": str(p), "updatedAt": now_ms, "keys": len(items)}

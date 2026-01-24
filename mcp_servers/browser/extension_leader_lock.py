@@ -19,6 +19,11 @@ def _rescue_lock_path() -> Path:
     return base / "extension_gateway_rescue.lock"
 
 
+def _auto_launch_lock_path() -> Path:
+    base = Path.home() / ".gemini" / "browser-mcp"
+    return base / "extension_auto_launch.lock"
+
+
 @dataclass(slots=True)
 class LeaderLock:
     """Best-effort inter-process leader lock.
@@ -103,3 +108,7 @@ def default_leader_lock() -> LeaderLock:
 
 def rescue_leader_lock() -> LeaderLock:
     return LeaderLock(path=_rescue_lock_path())
+
+
+def auto_launch_lock() -> LeaderLock:
+    return LeaderLock(path=_auto_launch_lock_path())

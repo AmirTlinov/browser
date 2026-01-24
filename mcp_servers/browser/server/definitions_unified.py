@@ -888,6 +888,26 @@ OUTPUT:
                 "description": "List of steps to execute (explicit or shorthand format)",
                 "items": {"type": "object"},
             },
+            "start_at": {
+                "type": "integer",
+                "default": 0,
+                "description": "Start executing steps from this index (resume a partially completed flow)",
+            },
+            "record_memory_key": {
+                "type": "string",
+                "description": "Optional: record the original steps into agent memory under this key (runbook recorder)",
+            },
+            "record_mode": {
+                "type": "string",
+                "enum": ["sanitized", "raw"],
+                "default": "sanitized",
+                "description": "Recorder mode: sanitized (safe-by-default) or raw (stores literals; risky)",
+            },
+            "record_on_failure": {
+                "type": "boolean",
+                "default": False,
+                "description": "If true, record steps even when the flow fails (default: false)",
+            },
             "stop_on_error": {
                 "type": "boolean",
                 "default": True,
@@ -930,6 +950,54 @@ OUTPUT:
                 "default": 30,
                 "description": "Limit for final=audit/triage/diagnostics (default: 30)",
             },
+            "step_proof": {
+                "type": "boolean",
+                "default": False,
+                "description": "Attach compact per-step proof (internal; default: false)",
+            },
+            "proof_screenshot": {
+                "type": "string",
+                "enum": ["none", "artifact"],
+                "default": "none",
+                "description": "How to capture screenshots for proof (default: none)",
+            },
+            "screenshot_on_ambiguity": {
+                "type": "boolean",
+                "default": False,
+                "description": "Capture a screenshot when a step is ambiguous (default: false)",
+            },
+            "auto_dialog": {
+                "type": "string",
+                "enum": ["auto", "off", "dismiss", "accept"],
+                "default": "off",
+                "description": "Auto-handle blocking JS dialogs (default: off)",
+            },
+            "auto_recover": {
+                "type": "boolean",
+                "default": False,
+                "description": "Auto-recover from CDP brick states (default: false)",
+            },
+            "max_recoveries": {
+                "type": "integer",
+                "default": 0,
+                "description": "Maximum number of recovery attempts (default: 0)",
+            },
+            "recover_hard": {
+                "type": "boolean",
+                "default": False,
+                "description": "Prefer hard recovery (restart owned Chrome) when recovering (default: false)",
+            },
+            "recover_timeout": {
+                "type": "number",
+                "default": 5.0,
+                "description": "Recovery timeout seconds (default: 5.0)",
+            },
+            "timeout_profile": {
+                "type": "string",
+                "enum": ["fast", "default", "slow"],
+                "default": "default",
+                "description": "Optional timeout profile (sets sane defaults for timeouts and internal waits)",
+            },
             "action_timeout": {
                 "type": "number",
                 "default": 30.0,
@@ -945,6 +1013,16 @@ OUTPUT:
                 "default": 3.0,
                 "description": "Auto-download wait seconds (bounded; default: 3.0)",
             },
+            "auto_tab": {
+                "type": "boolean",
+                "default": False,
+                "description": "Auto-switch to a newly opened tab after click-like actions (best-effort; default: false)",
+            },
+            "auto_affordances": {
+                "type": "boolean",
+                "default": True,
+                "description": "Auto-refresh affordances when act(ref/label) looks stale (URL mismatch or missing refs; default: true)",
+            },
             "with_screenshot": {
                 "type": "boolean",
                 "default": False,
@@ -957,7 +1035,7 @@ OUTPUT:
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RUN (North Star v2)
+# RUN (North Star v3)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 RUN_TOOL: dict[str, Any] = {
@@ -983,6 +1061,36 @@ INTERNAL ACTIONS (v2):
 - net(action="harLite")  # Tier-0 network slice
 - net(action="trace")    # Tier-0 deep trace (bounded, on-demand)
 These are not separate top-level tools in v2; they are actions inside `run`.
+
+INTERNAL ACTIONS (v3 additions; only inside `run(actions=[...])`, not top-level tools):
+Schemas (shape):
+- assert: {"assert": {"timeout_s": 5, "url": "...", "title": "...", "selector": "...", "text": "..."}}
+- when: {"when": {"if": {"url": "...", "selector": "...", "text": "..."}, "then": [...], "else": [...]}}
+- macro: {"macro": {"name": "...", "args": {...}, "dry_run": true}}
+
+Notes:
+- Server-side only (no LLM execution); deterministic and bounded by run limits.
+- assert is fail-closed: timeout or mismatch fails the run.
+- when executes a single branch (no loops); else is optional.
+- macro is for compact, deterministic expansions (e.g., include saved step lists).
+
+INTERNAL ACTIONS (v4 additions; only inside `run(actions=[...])`, not top-level tools):
+Schemas (shape):
+- repeat: {"repeat": {"max_iters": 5, "until": {"selector": "...", "text": "...", "url": "..."}, "steps": [...], "max_time_s": 20, "backoff_s": 0.2, "backoff_factor": 1.5, "backoff_max_s": 2.0}}
+
+Notes:
+- repeat is bounded: max_iters is capped server-side (no unbounded loops).
+- If `until` is omitted, repeat runs exactly max_iters times and succeeds (like a for-loop).
+- If `until` is provided and never matches, repeat fails closed after max_iters.
+- Optional `max_time_s` adds a wall-clock budget for the whole repeat loop (fail-closed when exhausted).
+- Optional backoff (`backoff_s`, `backoff_factor`, `backoff_max_s`) sleeps between iterations (deterministic, bounded).
+
+Examples:
+1) {"assert": {"url": "https://example.com", "title": "Example Domain", "timeout_s": 5}}
+2) {"when": {"if": {"selector": "#login", "text": "Sign in"}, "then": [{"click": {"selector": "#login"}}], "else": [{"navigate": {"url": "https://example.com/login"}}]}}
+3) {"macro": {"name": "trace_then_screenshot", "args": {"trace": "harLite"}, "dry_run": true}}
+4) {"macro": {"name": "include_memory_steps", "args": {"memory_key": "workflow.login", "params": {"user": "alice"}}}}
+5) {"repeat": {"max_iters": 10, "until": {"selector": "#result"}, "steps": [{"scroll": {"direction": "down"}}]}}
 
 HIGH-LEVERAGE INTERNAL ACTION:
 - act(ref="aff:...")  # resolve a stable affordance ref from page(detail="locators") / page(detail="map") / page(detail="triage")
@@ -1024,6 +1132,21 @@ OUTPUT:
                 "minItems": 1,
                 "description": "List of actions to execute (explicit or shorthand format)",
                 "items": {"type": "object"},
+            },
+            "record_memory_key": {
+                "type": "string",
+                "description": "Optional: record the original actions into agent memory under this key (runbook recorder)",
+            },
+            "record_mode": {
+                "type": "string",
+                "enum": ["sanitized", "raw"],
+                "default": "sanitized",
+                "description": "Recorder mode: sanitized (safe-by-default) or raw (stores literals; risky)",
+            },
+            "record_on_failure": {
+                "type": "boolean",
+                "default": False,
+                "description": "If true, record actions even when the run fails (default: false)",
             },
             # Back-compat alias (deprecated)
             "steps": {
@@ -1073,6 +1196,12 @@ OUTPUT:
                 "default": 5.0,
                 "description": "Recovery timeout seconds (default: 5.0)",
             },
+            "timeout_profile": {
+                "type": "string",
+                "enum": ["fast", "default", "slow"],
+                "default": "default",
+                "description": "Optional timeout profile (sets sane defaults for timeouts and internal waits)",
+            },
             "action_timeout": {
                 "type": "number",
                 "default": 30.0,
@@ -1087,6 +1216,16 @@ OUTPUT:
                 "type": "number",
                 "default": 3.0,
                 "description": "Auto-download wait seconds (bounded; default: 3.0)",
+            },
+            "auto_tab": {
+                "type": "boolean",
+                "default": False,
+                "description": "Auto-switch to a newly opened tab after click-like actions (best-effort; default: false)",
+            },
+            "auto_affordances": {
+                "type": "boolean",
+                "default": True,
+                "description": "Auto-refresh affordances when act(ref/label) looks stale (URL mismatch or missing refs; default: true)",
             },
             "proof": {
                 "type": "boolean",
@@ -1139,6 +1278,63 @@ OUTPUT:
         },
         # NOTE: Some MCP clients (including OpenCode) reject top-level anyOf/oneOf/allOf.
         # We validate presence of actions/steps in the handler instead.
+        "additionalProperties": False,
+    },
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RUNBOOK
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RUNBOOK_TOOL: dict[str, Any] = {
+    "name": "runbook",
+    "description": """Runbooks: save and execute reusable step lists stored in agent memory.
+
+USAGE:
+- Save: runbook(action="save", key="runbook_login", steps=[...])
+- Run: runbook(action="run", key="runbook_login", params={...}, run_args={...})
+- List: runbook(action="list", limit=20)
+- Get: runbook(action="get", key="runbook_login")
+- Delete: runbook(action="delete", key="runbook_login")
+""",
+    "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["save", "run", "list", "get", "delete"],
+                "default": "list",
+                "description": "Runbook action",
+            },
+            "key": {"type": "string", "description": "Runbook key in agent memory"},
+            "steps": {
+                "type": "array",
+                "description": "Runbook step list (for action='save')",
+                "items": {"type": "object"},
+            },
+            "params": {"type": "object", "description": "Params for {{param:...}} placeholders (for action='run')"},
+            "run_args": {
+                "type": "object",
+                "description": "Optional run(...) arguments (for action='run'); actions are provided by the runbook",
+            },
+            "goal": {"type": "string", "description": "Optional goal string (for action='run')"},
+            "allow_sensitive": {
+                "type": "boolean",
+                "default": False,
+                "description": "Allow sensitive keys / literals (NOT encrypted; use carefully)",
+            },
+            "include_sensitive": {
+                "type": "boolean",
+                "default": False,
+                "description": "Include sensitive keys in list output (default: false)",
+            },
+            "limit": {
+                "type": "integer",
+                "default": 20,
+                "description": "Limit for list, and preview size for get (default: 20)",
+            },
+        },
         "additionalProperties": False,
     },
 }
@@ -1307,6 +1503,65 @@ Useful for authenticated API calls.""",
                 "headers": {"type": "object", "description": "Request headers"},
             },
             "required": ["url"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "storage",
+        "description": """Storage operations (localStorage / sessionStorage).
+
+USAGE:
+- List keys: storage(action="list", storage="local", limit=20)
+- Get value (preview): storage(action="get", key="theme", reveal=true)
+- Set one: storage(action="set", key="theme", value="dark")
+- Set many: storage(action="set_many", items={"k1":"v1","k2":"v2"})
+- Delete: storage(action="delete", key="theme")
+- Clear: storage(action="clear")
+
+NOTES:
+- Safe-by-default: strict policy blocks mutation and sensitive value reveal.
+- To store a revealed value off-context: storage(action="get", key="...", reveal=true, store=true)""",
+        "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "get", "set", "set_many", "delete", "clear"],
+                    "default": "list",
+                },
+                "storage": {
+                    "type": "string",
+                    "enum": ["local", "session"],
+                    "default": "local",
+                    "description": "Storage backend",
+                },
+                "key": {"type": "string", "description": "Storage key (get/set/delete)"},
+                "value": {
+                    "description": "Value to set (set)",
+                    "type": ["string", "number", "boolean", "object", "array", "null"],
+                    "items": {},
+                    "additionalProperties": True,
+                },
+                "items": {
+                    "type": "object",
+                    "description": "Key/value map for set_many",
+                    "additionalProperties": True,
+                },
+                "offset": {"type": "integer", "default": 0},
+                "limit": {"type": "integer", "default": 20},
+                "max_chars": {"type": "integer", "default": 2000},
+                "reveal": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Reveal value preview (unsafe; strict may block sensitive keys)",
+                },
+                "store": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Store revealed value off-context as an artifact (requires reveal=true)",
+                },
+            },
             "additionalProperties": False,
         },
     },
@@ -1666,6 +1921,7 @@ UNIFIED_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     PAGE_TOOL,
     RUN_TOOL,
     FLOW_TOOL,
+    RUNBOOK_TOOL,
     APP_TOOL,
     NAVIGATE_TOOL,
     CLICK_TOOL,
@@ -1684,4 +1940,4 @@ UNIFIED_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     *UTILITY_TOOLS,
 ]
 
-# Tool count: 25 (down from 54)
+# Tool count: 26 (down from 54)

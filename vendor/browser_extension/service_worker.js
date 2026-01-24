@@ -1,13 +1,12 @@
-// Browser MCP Extension (MV3): CDP proxy + local gateway bridge.
+// Browser MCP Extension (MV3): CDP proxy + portless native bridge.
 //
 // This runs in the user's normal Chrome and lets Browser MCP control tabs via:
 // - chrome.debugger (DevTools Protocol on real tabs)
-// - a local WebSocket gateway (Browser MCP server) on 127.0.0.1
+// - Chrome Native Messaging (no localhost TCP ports)
 
-const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:8765";
-const DEFAULT_GATEWAY_SPAN = 50;
-const GATEWAY_WELL_KNOWN_PATH = "/.well-known/browser-mcp-gateway";
 const STORAGE_KEY = "mcp_ext_state_v1";
+const PROFILE_ID_KEY = "mcp_profile_id_v1";
+const NATIVE_HOST_NAME = "com.openai.browser_mcp";
 
 // Forward only high-signal events (keep the bridge cognitively cheap).
 const FORWARD_EVENT_ALLOWLIST = new Set([
@@ -33,22 +32,15 @@ const FORWARD_EVENT_ALLOWLIST = new Set([
   "Log.entryAdded",
 ]);
 
-let ws = null;
-let wsConnected = false;
-let wsHandshakeOk = false;
-let wsGatewayUrl = null;
-let wsHelloAck = null;
+let nativePort = null;
+let nativeConnected = false;
+let nativeHandshakeOk = false;
+let nativeHelloAck = null;
 let connectInFlight = null;
 let reconnectTimer = null;
 let backoffMs = 500;
-// Keep reconnection bounded so starting Browser MCP later doesn't require a manual "Reconnect".
-// We avoid noisy WS spam by preferring quiet HTTP discovery when the gateway isn't up.
+// Keep reconnection bounded so installing the native host later doesn't require a manual "Reconnect".
 const MAX_BACKOFF_MS = 10_000;
-const MAX_WS_DISCOVERY_TRIES = 3;
-const MAX_WS_DISCOVERY_TRIES_UI = 12;
-
-// Cursor for low-noise WebSocket scanning fallback (rotates across attempts).
-let wsScanCursor = 0;
 
 let state = {
   // Flagship default: "just works" without a manual UI toggle.
@@ -57,24 +49,31 @@ let state = {
   enabled: true,
   followActive: false,
   focusedTabId: null,
-  gatewayUrl: DEFAULT_GATEWAY_URL,
-  // last known-good gateway url (auto-discovered). This must NOT overwrite `gatewayUrl`
-  // because `gatewayUrl` is user-configured; persisting discoveries can make the extension
-  // "stick" to a stale port and miss the default range after restarts.
-  lastGoodGatewayUrl: null,
   lastError: null,
 };
+
+let profileId = null;
 
 // tabId(number) -> true (best-effort local cache; MV3 can reset anytime)
 const attachedTabs = new Set();
 
-function log(level, message, meta) {
-  const payload = { type: "log", level, message, meta };
+function sendToGateway(payload) {
+  // Native-only (portless).
   try {
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+    if (nativePort && nativeHandshakeOk) {
+      nativePort.postMessage(payload);
+      return true;
+    }
   } catch (_e) {
     // ignore
   }
+
+  return false;
+}
+
+function log(level, message, meta) {
+  const payload = { type: "log", level, message, meta };
+  sendToGateway(payload);
 }
 
 function sleep(ms) {
@@ -258,131 +257,29 @@ function setLastError(message) {
   }
 }
 
-function getGatewayUrl() {
-  const url = String(state.gatewayUrl || DEFAULT_GATEWAY_URL).trim();
-  return url || DEFAULT_GATEWAY_URL;
-}
+async function ensureProfileId() {
+  if (typeof profileId === "string" && profileId) return profileId;
 
-function normalizeGatewayUrl(input) {
-  const raw = String(input || "").trim();
-  return raw || DEFAULT_GATEWAY_URL;
-}
-
-function parseWsUrl(input) {
   try {
-    const u = new URL(normalizeGatewayUrl(input));
-    const proto = String(u.protocol || "ws:");
-    const host = String(u.hostname || "127.0.0.1");
-    const port = Number(u.port || 8765);
-    const path = u.pathname && u.pathname !== "/" ? u.pathname : "";
-    if (!Number.isFinite(port)) return null;
-    return { proto, host, port, path };
-  } catch (_e) {
-    return null;
-  }
-}
-
-function wsToHttpOrigin(wsProto) {
-  const p = String(wsProto || "ws:").toLowerCase();
-  if (p === "wss:") return "https:";
-  return "http:";
-}
-
-function buildGatewayCandidates(baseUrls) {
-  // Build a de-duped list of ws:// candidates across multiple bases.
-  // We always include DEFAULT_GATEWAY_URL as a fallback, so stale persisted ports
-  // can't lock the extension out of the default range.
-  const bases = Array.isArray(baseUrls) ? baseUrls : [baseUrls];
-  const urls = [];
-  const seen = new Set();
-
-  for (const base of bases) {
-    const parsed = parseWsUrl(base);
-    if (!parsed) continue;
-
-    const span = DEFAULT_GATEWAY_SPAN;
-    for (let p = parsed.port; p <= parsed.port + span; p++) {
-      const candidate = `${parsed.proto}//${parsed.host}:${p}${parsed.path}`;
-      if (seen.has(candidate)) continue;
-      seen.add(candidate);
-      urls.push(candidate);
+    const stored = await chrome.storage.local.get({ [PROFILE_ID_KEY]: null });
+    const existing = stored?.[PROFILE_ID_KEY];
+    if (typeof existing === "string" && existing.trim()) {
+      profileId = existing.trim();
+      return profileId;
     }
-  }
-
-  // Hard fallback (in case parsing failed above).
-  if (!urls.length) urls.push(DEFAULT_GATEWAY_URL);
-  return urls;
-}
-
-function buildDiscoveryBaseUrls() {
-  const out = [];
-  const push = (u) => {
-    const s = String(u || "").trim();
-    if (!s) return;
-    if (!out.includes(s)) out.push(s);
-  };
-  push(state.lastGoodGatewayUrl);
-  push(getGatewayUrl());
-  push(DEFAULT_GATEWAY_URL);
-  return out;
-}
-
-async function fetchJsonWithTimeout(url, timeoutMs = 500) {
-  const ms = Math.max(150, Number(timeoutMs) || 0);
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), ms);
-  try {
-    const resp = await fetch(String(url), { method: "GET", cache: "no-store", signal: ctl.signal });
-    if (!resp || resp.ok !== true) return null;
-    const json = await resp.json().catch(() => null);
-    return json && typeof json === "object" ? json : null;
   } catch (_e) {
-    return null;
-  } finally {
-    clearTimeout(t);
+    // ignore
   }
-}
 
-async function probeGatewayWellKnown(wsUrl) {
-  const parsed = parseWsUrl(wsUrl);
-  if (!parsed) return null;
-
-  const httpProto = wsToHttpOrigin(parsed.proto);
-  const httpUrl = `${httpProto}//${parsed.host}:${parsed.port}${GATEWAY_WELL_KNOWN_PATH}`;
-  const json = await fetchJsonWithTimeout(httpUrl, 450);
-  if (!json || json.type !== "browserMcpGateway") return null;
-
-  const startedAt = Number(json.serverStartedAtMs || 0);
-  const gatewayPort = Number(json.gatewayPort || parsed.port);
-  const supportsPeers = json.supportsPeers === true;
-  return {
-    wsUrl: `${parsed.proto}//${parsed.host}:${gatewayPort}${parsed.path}`,
-    serverStartedAtMs: Number.isFinite(startedAt) ? startedAt : 0,
-    gatewayPort: Number.isFinite(gatewayPort) ? gatewayPort : parsed.port,
-    supportsPeers,
-    protocolVersion: String(json.protocolVersion || ""),
-    serverVersion: String(json.serverVersion || ""),
-  };
-}
-
-async function discoverBestGateway() {
-  const bases = buildDiscoveryBaseUrls();
-  const candidates = buildGatewayCandidates(bases);
-
-  // Probe via HTTP first (quiet), then open a WebSocket only to the best gateway.
-  const probes = [];
-  for (const wsUrl of candidates) probes.push(probeGatewayWellKnown(wsUrl));
-  const results = await Promise.all(probes);
-  const ok = results.filter(Boolean);
-  if (!ok.length) return null;
-
-  ok.sort((a, b) => {
-    const ap = a.supportsPeers ? 1 : 0;
-    const bp = b.supportsPeers ? 1 : 0;
-    if (ap !== bp) return bp - ap;
-    return Number(b.serverStartedAtMs || 0) - Number(a.serverStartedAtMs || 0);
-  });
-  return ok[0];
+  try {
+    const created = typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    profileId = String(created).trim() || `${Date.now()}-${Math.random()}`;
+    await chrome.storage.local.set({ [PROFILE_ID_KEY]: profileId });
+    return profileId;
+  } catch (_e) {
+    profileId = `${Date.now()}-${Math.random()}`;
+    return profileId;
+  }
 }
 
 function buildHelloPayload() {
@@ -392,6 +289,7 @@ function buildHelloPayload() {
     extensionId: chrome.runtime.id,
     extensionVersion: chrome.runtime.getManifest().version,
     userAgent: navigator.userAgent,
+    ...(profileId ? { profileId } : {}),
     capabilities: {
       debugger: true,
       tabs: true,
@@ -408,65 +306,71 @@ function buildHelloPayload() {
   };
 }
 
-function _normalizeStartedAtMs(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-async function tryConnectOnce(url, reason, timeoutMs = 1200) {
+async function tryConnectNativeOnce(reason, timeoutMs = 1200) {
   return await new Promise((resolve) => {
     let done = false;
-    let sock = null;
+    let port = null;
     const deadline = Math.max(250, Number(timeoutMs) || 0);
 
     const t = setTimeout(() => {
       if (done) return;
       done = true;
-      try { sock?.close(); } catch (_e) {}
+      try { port?.disconnect(); } catch (_e) {}
       resolve(null);
     }, deadline);
 
-    function finish(result) {
+    const finish = (result) => {
       if (done) return;
       done = true;
       clearTimeout(t);
       resolve(result);
-    }
+    };
+
+    let onMsg = null;
+    const cleanup = () => {
+      if (port && onMsg) {
+        try { port.onMessage.removeListener(onMsg); } catch (_e) {}
+      }
+    };
 
     try {
-      sock = new WebSocket(url);
+      port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
     } catch (_e) {
       clearTimeout(t);
       resolve(null);
       return;
     }
 
-    sock.onopen = () => {
-      try {
-        sock.send(JSON.stringify(buildHelloPayload()));
-      } catch (_e) {
-        // ignore
-      }
-    };
-
-    sock.onmessage = (evt) => {
-      let msg = null;
-      try {
-        msg = JSON.parse(evt.data);
-      } catch (_e) {
-        return;
-      }
+    onMsg = (msg) => {
       if (!msg || typeof msg !== "object") return;
       if (msg.type !== "helloAck") return;
-      finish({ ws: sock, url, ack: msg });
+      cleanup();
+      finish({ port, ack: msg });
     };
 
-    sock.onerror = () => finish(null);
-    sock.onclose = () => finish(null);
+    try {
+      port.onMessage.addListener(onMsg);
+      port.onDisconnect.addListener(() => {
+        cleanup();
+        finish(null);
+      });
+    } catch (_e) {
+      cleanup();
+      clearTimeout(t);
+      resolve(null);
+      return;
+    }
+
+    try {
+      port.postMessage(buildHelloPayload());
+    } catch (_e) {
+      // ignore
+    }
   });
 }
 
 function scheduleReconnect(reason) {
+  if (!state.enabled) return;
   if (reconnectTimer) return;
   const delay = Math.min(Math.max(backoffMs, 250), MAX_BACKOFF_MS);
   // Jitter reduces "thundering herd" when multiple Chrome profiles/extensions are enabled.
@@ -479,144 +383,69 @@ function scheduleReconnect(reason) {
 }
 
 function connect(reason) {
-  // Always attempt gateway connectivity. Browser MCP uses quiet HTTP discovery + backoff,
-  // so this stays low-noise even when the server isn't running.
+  if (!state.enabled) return;
   if (connectInFlight) return;
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  if (nativePort) return;
 
   connectInFlight = (async () => {
-    wsConnected = false;
-    wsHandshakeOk = false;
-    wsGatewayUrl = null;
-    wsHelloAck = null;
+    try { nativePort?.disconnect(); } catch (_e) {}
+    nativePort = null;
+    nativeConnected = false;
+    nativeHandshakeOk = false;
+    nativeHelloAck = null;
 
-    // Prefer a quiet HTTP discovery probe (no noisy WS failures in the extension console).
-    // It lets us pick the newest gateway when multiple Codex sessions are running.
-    let bestCandidate = null;
+    await ensureProfileId();
+
+    // Native Messaging only (portless).
+    let nativeRes = null;
     try {
-      bestCandidate = await discoverBestGateway();
+      nativeRes = await tryConnectNativeOnce(reason, 1200);
     } catch (_e) {
-      bestCandidate = null;
+      nativeRes = null;
     }
+    if (nativeRes && nativeRes.port && nativeRes.ack) {
+      nativePort = nativeRes.port;
+      nativeConnected = true;
+      nativeHandshakeOk = true;
+      nativeHelloAck = nativeRes.ack;
 
-    let successes = [];
-    if (bestCandidate && bestCandidate.wsUrl) {
-      const res = await tryConnectOnce(bestCandidate.wsUrl, reason, 1200);
-      if (res && res.ws && res.ack) successes = [res];
-    }
+      backoffMs = 200;
+      setLastError(null);
 
-    // Fallback: low-noise WS scanning (limited attempts per cycle + rotating cursor).
-    //
-    // IMPORTANT: in background mode we avoid scanning when discovery returns nothing.
-    // Otherwise, a missing gateway would produce noisy WebSocket connection errors in the
-    // extension console. A user can still force scanning via the popup "Reconnect".
-    if (!successes.length && (bestCandidate || reason === "ui_reconnect")) {
-      const candidates = buildGatewayCandidates(buildDiscoveryBaseUrls());
-      const maxTries = reason === "ui_reconnect" ? MAX_WS_DISCOVERY_TRIES_UI : MAX_WS_DISCOVERY_TRIES;
-      const tries = Math.max(1, Math.min(maxTries, candidates.length));
-
-      const scanned = [];
-      for (let i = 0; i < tries; i++) {
-        if (!state.enabled) break;
-        const idx = (wsScanCursor + i) % candidates.length;
-        const url = candidates[idx];
-        scanned.push(url);
-        const res = await tryConnectOnce(url, reason, 900);
-        if (res && res.ws && res.ack) successes.push(res);
-      }
-
-      if (candidates.length) wsScanCursor = (wsScanCursor + tries) % candidates.length;
-
-      // If we found multiple, keep newest among scanned.
-      if (successes.length > 1) {
-        successes.sort((a, b) => _normalizeStartedAtMs(b.ack?.serverStartedAtMs) - _normalizeStartedAtMs(a.ack?.serverStartedAtMs));
-        // Close losers (best-effort).
-        for (let i = 1; i < successes.length; i++) {
-          try { successes[i].ws?.close(1000, "superseded"); } catch (_e) {}
+      nativePort.onMessage.addListener((msg) => {
+        if (!msg || typeof msg !== "object") return;
+        if (msg.type === "rpc") {
+          handleRpc(msg).catch((e) => {
+            log("error", "rpc handler failed", { error: String(e?.message || e) });
+          });
         }
-        successes = [successes[0]];
-      }
-    }
+      });
 
-    if (!successes.length) {
-      ws = null;
-      wsConnected = false;
-      wsHandshakeOk = false;
-      wsGatewayUrl = null;
-      wsHelloAck = null;
-      if (state.enabled) setLastError("Gateway not reachable (is the MCP server running?)");
-      scheduleReconnect("ws_discovery_failed");
+      nativePort.onDisconnect.addListener(() => {
+        nativeConnected = false;
+        nativeHandshakeOk = false;
+        nativePort = null;
+        nativeHelloAck = null;
+        if (state.enabled) setLastError("Native bridge disconnected");
+        scheduleReconnect("native_disconnect");
+      });
+
+      log("info", "bridge connected", { reason, transport: "native", helloAck: nativeRes.ack || {} });
       return;
     }
 
-    const best = successes[0];
-
-    // Adopt the best connection and attach handlers.
-    ws = best.ws;
-    wsConnected = true;
-    wsHandshakeOk = true;
-    wsGatewayUrl = best.url;
-    wsHelloAck = best.ack;
-
-    backoffMs = 200;
-    setLastError(null);
-
-    // Persist last-known-good gateway without overwriting the user-configured `gatewayUrl`.
-    try {
-      state.lastGoodGatewayUrl = String(best.url || "");
-      await saveState();
-    } catch (_e) {
-      // ignore
+    if (state.enabled) {
+      setLastError("Native host not available yet. Start Browser MCP to auto-install; ensure this extension is installed in your profile.");
     }
-
-    ws.onmessage = (evt) => {
-      let msg = null;
-      try {
-        msg = JSON.parse(evt.data);
-      } catch (_e) {
-        return;
-      }
-      if (!msg || typeof msg !== "object") return;
-      if (msg.type === "rpc") {
-        handleRpc(msg).catch((e) => {
-          log("error", "rpc handler failed", { error: String(e?.message || e) });
-        });
-      }
-    };
-
-    ws.onclose = (ev) => {
-      wsConnected = false;
-      wsHandshakeOk = false;
-      ws = null;
-      wsGatewayUrl = null;
-      wsHelloAck = null;
-      if (state.enabled) {
-        const code = ev?.code ? Number(ev.code) : 0;
-        const reason = ev?.reason ? String(ev.reason) : "";
-        setLastError(`Gateway disconnected${code ? ` (code ${code})` : ""}${reason ? `: ${reason}` : ""}`);
-      }
-      scheduleReconnect("ws_close");
-    };
-
-    ws.onerror = () => {
-      wsConnected = false;
-      wsHandshakeOk = false;
-      if (state.enabled) setLastError("Gateway connection error");
-      try {
-        ws?.close();
-      } catch (_e) {
-        // ignore
-      }
-    };
-
-    log("info", "gateway connected", { reason, url: best.url, helloAck: best.ack || {} });
+    scheduleReconnect("native_connect_failed");
   })().finally(() => {
     connectInFlight = null;
   });
 }
 
 function ensureConnected(reason) {
-  if (wsConnected) return;
+  if (!state.enabled) return;
+  if (nativeConnected) return;
   connect(reason || "ensureConnected");
 }
 
@@ -624,11 +453,7 @@ function rpcReply(id, ok, result, errorMessage, errorData) {
   const out = { type: "rpcResult", id, ok: !!ok };
   if (ok) out.result = result;
   else out.error = { message: String(errorMessage || "rpc failed"), ...(errorData ? { data: errorData } : {}) };
-  try {
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(out));
-  } catch (_e) {
-    // ignore
-  }
+  sendToGateway(out);
 }
 
 function normalizeTab(tab) {
@@ -654,9 +479,11 @@ async function setEnabled(nextEnabled) {
 
   if (!enabled) {
     // Stop all gateway activity when the kill-switch is OFF (fail-closed).
-    try { ws?.close(); } catch (_e) {}
-    ws = null;
-    wsConnected = false;
+    try { nativePort?.disconnect(); } catch (_e) {}
+    nativePort = null;
+    nativeConnected = false;
+    nativeHandshakeOk = false;
+    nativeHelloAck = null;
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -843,24 +670,20 @@ async function dispatchRpc(method, params) {
   if (m === "tabs.activate") return await tabsActivate(p.tabId);
   if (m === "tabs.close") return await tabsClose(p.tabId);
   if (m === "state.get") {
-    const configuredUrl = getGatewayUrl();
-    const connectedUrl = wsGatewayUrl || null;
-    const lastGoodUrl = state.lastGoodGatewayUrl ? String(state.lastGoodGatewayUrl) : null;
+    const ack = nativeHelloAck;
     return {
       extensionId: chrome.runtime.id,
       enabled: !!state.enabled,
       followActive: !!state.followActive,
       focusedTabId: state.focusedTabId ?? null,
       gateway: {
-        connected: !!wsConnected,
-        handshakeOk: !!wsHandshakeOk,
-        listening: true,
-        url: connectedUrl || configuredUrl,
-        connectedUrl,
-        configuredUrl,
-        lastGoodUrl,
-        serverStartedAtMs: wsHelloAck?.serverStartedAtMs ?? null,
-        gatewayPort: wsHelloAck?.gatewayPort ?? null,
+        transport: "native",
+        connected: !!nativeConnected,
+        handshakeOk: !!nativeHandshakeOk,
+        brokerId: ack?.brokerId ?? null,
+        peerCount: ack?.peerCount ?? null,
+        sessionId: ack?.sessionId ?? null,
+        brokerStartedAtMs: ack?.brokerStartedAtMs ?? null,
       },
       lastError: state.lastError ?? null,
     };
@@ -976,21 +799,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
       if (message?.type === "ui.getState") {
-        const configuredUrl = getGatewayUrl();
-        const connectedUrl = wsGatewayUrl || null;
-        const lastGoodUrl = state.lastGoodGatewayUrl ? String(state.lastGoodGatewayUrl) : null;
+        const ack = nativeHelloAck;
         sendResponse({
           extensionId: chrome.runtime.id,
           enabled: !!state.enabled,
           followActive: !!state.followActive,
           focusedTabId: state.focusedTabId ?? null,
           gateway: {
-            connected: !!wsConnected,
-            listening: true,
-            url: connectedUrl || configuredUrl,
-            connectedUrl,
-            configuredUrl,
-            lastGoodUrl,
+            transport: "native",
+            connected: !!nativeConnected,
+            handshakeOk: !!nativeHandshakeOk,
+            brokerId: ack?.brokerId ?? null,
+            peerCount: ack?.peerCount ?? null,
+            sessionId: ack?.sessionId ?? null,
           },
           lastError: state.lastError ?? null,
         });
@@ -1007,25 +828,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
       if (message?.type === "ui.reconnect") {
-        try { ws?.close(); } catch (_e) {}
+        try { nativePort?.disconnect(); } catch (_e) {}
         ensureConnected("ui_reconnect");
-        sendResponse({ ok: true });
-        return;
-      }
-      if (message?.type === "ui.setGatewayUrl") {
-        const next = normalizeGatewayUrl(message.gatewayUrl);
-        state.gatewayUrl = next;
-        await saveState();
-        try { ws?.close(); } catch (_e) {}
-        ensureConnected("ui_setGatewayUrl");
-        sendResponse({ ok: true });
-        return;
-      }
-      if (message?.type === "ui.resetGatewayUrl") {
-        state.gatewayUrl = DEFAULT_GATEWAY_URL;
-        await saveState();
-        try { ws?.close(); } catch (_e) {}
-        ensureConnected("ui_resetGatewayUrl");
         sendResponse({ ok: true });
         return;
       }
@@ -1044,9 +848,7 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
   const tabId = source?.tabId;
   if (!tabId) return;
   try {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "cdpEvent", tabId: String(tabId), method, params: params || {} }));
-    }
+    sendToGateway({ type: "cdpEvent", tabId: String(tabId), method, params: params || {} });
   } catch (_e) {
     // ignore
   }
@@ -1071,40 +873,30 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
 chrome.runtime.onInstalled.addListener(async () => {
   await loadState();
-  // Flagship default: auto-enable on install/update.
-  if (!state.enabled) {
-    state.enabled = true;
-    state.followActive = false;
-    await saveState();
-  }
+  // Connect on install/update when enabled.
   ensureConnected("onInstalled");
   chrome.alarms.create("mcpKeepAlive", { periodInMinutes: 1 });
 });
 
 chrome.runtime.onStartup?.addListener(async () => {
   await loadState();
-  // Auto-connect even if the user previously disabled the toggle (keeps the bridge healthy).
+  // Auto-connect only when enabled (kill-switch must be fail-closed).
   ensureConnected("onStartup");
+  chrome.alarms.create("mcpKeepAlive", { periodInMinutes: 1 });
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm?.name !== "mcpKeepAlive") return;
+  if (!state.enabled) return;
   ensureConnected("alarm_keepalive");
-  try {
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping", ts: Date.now() }));
-  } catch (_e) {
-    // ignore
-  }
+  sendToGateway({ type: "ping", ts: Date.now() });
 });
 
 (async () => {
   await loadState();
-  // Flagship default: connect on boot (no manual toggle).
-  if (!state.enabled) {
-    state.enabled = true;
-    state.followActive = false;
-  }
+  // Connect on boot when enabled.
   ensureConnected("boot");
+  chrome.alarms.create("mcpKeepAlive", { periodInMinutes: 1 });
   const tab = await getActiveTab();
   if (tab?.id) state.focusedTabId = String(tab.id);
   await saveState();

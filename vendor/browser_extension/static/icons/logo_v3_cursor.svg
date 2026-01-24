@@ -1,0 +1,27 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Browser MCP Logo v3: Cursor - AI автоматизация браузера -->
+  <defs>
+    <linearGradient id="cursorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6366F1;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" style="stop-color:#C4B5FD;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:0" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Фоновое свечение -->
+  <circle cx="256" cy="256" r="220" fill="url(#glowGrad)" opacity="0.4"/>
+  
+  <!-- Круглый фон -->
+  <circle cx="256" cy="256" r="180" fill="url(#cursorGrad)"/>
+  
+  <!-- Курсор мыши (основной символ) -->
+  <path d="M180 120 L180 340 L240 280 L300 380 L340 360 L280 260 L360 260 Z" fill="white"/>
+  
+  <!-- Пульс/радиоволны автоматизации -->
+  <circle cx="200" cy="200" r="60" stroke="white" stroke-width="6" fill="none" opacity="0.3"/>
+  <circle cx="200" cy="200" r="100" stroke="white" stroke-width="4" fill="none" opacity="0.2"/>
+  <circle cx="200" cy="200" r="140" stroke="white" stroke-width="2" fill="none" opacity="0.1"/>
+</svg>

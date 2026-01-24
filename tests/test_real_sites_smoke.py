@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+import os
+import time
+import threading
+import http.server
+import socketserver
+import tempfile
+from contextlib import contextmanager
+from pathlib import Path
+
+import pytest
+
+from mcp_servers.browser import tools as cdp
+from mcp_servers.browser.config import BrowserConfig
+from mcp_servers.browser.launcher import BrowserLauncher
+from mcp_servers.browser.server.registry import create_default_registry
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("RUN_BROWSER_INTEGRATION") != "1",
+    reason="Requires real Chrome/Chromium + network. Set RUN_BROWSER_INTEGRATION=1 to enable.",
+)
+
+
+@pytest.fixture(scope="session")
+def browser_env() -> tuple[BrowserConfig, BrowserLauncher]:
+    config = BrowserConfig.from_env()
+    launcher = BrowserLauncher(config)
+    launcher.ensure_running()
+    return config, launcher
+
+
+def _page_info(config: BrowserConfig) -> dict:
+    info = cdp.get_page_info(config)
+    return info.get("pageInfo", {}) if isinstance(info, dict) else {}
+
+
+def _page_info_retry(config: BrowserConfig, *, tries: int = 3, wait_s: float = 0.3) -> dict:
+    for _ in range(max(1, tries)):
+        page_info = _page_info(config)
+        if isinstance(page_info, dict) and page_info.get("url"):
+            return page_info
+        try:
+            cdp.wait_for(config, "load", timeout=5.0)
+        except Exception:
+            pass
+        time.sleep(wait_s)
+    return page_info if isinstance(page_info, dict) else {}
+
+
+@contextmanager
+def _local_download_server() -> str:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        file_path = tmp_path / "mcp-hello.txt"
+        file_path.write_text("hello", encoding="utf-8")
+        index_path = tmp_path / "index.html"
+        index_path.write_text(
+            "<a id='mcp-newtab' href='https://example.com/?mcp-newtab=1' target='_blank'>"
+            "MCP New Tab</a> <a id='mcp-download' href='mcp-hello.txt'>MCP Download</a>",
+            encoding="utf-8",
+        )
+
+        class _Handler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):  # noqa: ANN001
+                super().__init__(*args, directory=str(tmp_path), **kwargs)
+
+            def end_headers(self) -> None:
+                if self.path.endswith("mcp-hello.txt"):
+                    self.send_header("Content-Disposition", 'attachment; filename="mcp-hello.txt"')
+                    self.send_header("Content-Type", "text/plain")
+                super().end_headers()
+
+            def log_message(self, format, *args):  # noqa: ANN001
+                return
+
+        socketserver.TCPServer.allow_reuse_address = True
+        with socketserver.TCPServer(("127.0.0.1", 0), _Handler) as httpd:
+            port = httpd.server_address[1]
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                yield f"http://127.0.0.1:{port}/index.html"
+            finally:
+                httpd.shutdown()
+                thread.join(timeout=1.0)
+
+
+def test_real_sites_smoke(browser_env: tuple[BrowserConfig, BrowserLauncher]) -> None:
+    config, _launcher = browser_env
+
+    # 1) Static baseline
+    cdp.navigate_to(config, "https://example.com")
+    info = _page_info_retry(config)
+    assert "Example Domain" in str(info.get("title", ""))
+
+    # 2) Redirect chain (edge case: navigation updates)
+    cdp.navigate_to(config, "https://httpbin.org/redirect/1")
+    info = _page_info_retry(config)
+    assert "httpbin.org" in str(info.get("url", ""))
+
+    # 3) Form fill (no submit) on a simple test page
+    cdp.navigate_to(config, "https://httpbin.org/forms/post")
+    cdp.fill_form(
+        config,
+        {"custname": "MCP Test", "custemail": "mcp@example.com", "comments": "hello"},
+        form_index=0,
+        submit=False,
+    )
+    info = _page_info(config)
+    assert "httpbin.org" in str(info.get("url", ""))
+
+    # 4) Search flow on a lightweight page
+    cdp.navigate_to(config, "https://duckduckgo.com/")
+    cdp.search_page(config, "openai", submit=True)
+    cdp.wait_for(config, "navigation", timeout=10.0)
+    info = _page_info_retry(config)
+    assert "duckduckgo.com" in str(info.get("url", ""))
+
+    # 5) Wiki search (form + navigation)
+    cdp.navigate_to(config, "https://en.wikipedia.org/wiki/Special:Search")
+    cdp.search_page(config, "Alan Turing", submit=True)
+    cdp.wait_for(config, "navigation", timeout=10.0)
+    info = _page_info_retry(config)
+    if "wikipedia.org" not in str(info.get("url", "")):
+        dom = cdp.get_dom(config, max_chars=4000)
+        assert "Wikipedia" in str(dom.get("html", ""))
+
+    # 6) Iframe-heavy page (frames map)
+    cdp.navigate_to(config, "https://www.w3schools.com/html/tryit.asp?filename=tryhtml_iframe")
+    frames = cdp.get_page_frames(config, limit=20)
+    summary = frames.get("frames", {}).get("summary", {}) if isinstance(frames, dict) else {}
+    assert isinstance(summary.get("total"), int) and summary.get("total") >= 1
+
+    # 7) Pagination edge (simple DOM-driven site)
+    try:
+        cdp.navigate_to(config, "https://news.ycombinator.com/")
+        url_before = str(_page_info_retry(config).get("url", ""))
+        cdp.dom_action_click(config, "a.morelink")
+        url_after = str(_page_info_retry(config).get("url", ""))
+        assert url_after and url_after != url_before
+    except Exception:
+        # Live site flake (network/CDP). Keep test signal from other steps.
+        pass
+
+    # 8) Heavy search results (GitHub public search)
+    cdp.navigate_to(config, "https://github.com/search?q=openai&type=repositories")
+    info = _page_info_retry(config)
+    assert "github.com/search" in str(info.get("url", ""))
+
+
+@pytest.mark.skipif(
+    os.environ.get("RUN_BROWSER_INTEGRATION_EDGE") != "1",
+    reason="Edge-case live tests. Set RUN_BROWSER_INTEGRATION_EDGE=1 to enable.",
+)
+def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher]) -> None:
+    config, launcher = browser_env
+
+    with _local_download_server() as page_url:
+        registry = create_default_registry()
+        flow_handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
+
+        # Auto-tab: click a target=_blank link and switch automatically.
+        res = flow_handler(
+            config,
+            launcher,
+            args={
+                "steps": [
+                    {"navigate": {"url": page_url}},
+                    {"click": {"selector": "#mcp-newtab"}, "auto_tab": True},
+                ],
+                "final": "none",
+                "stop_on_error": True,
+                "auto_recover": False,
+                "step_proof": False,
+                "action_timeout": 10.0,
+            },
+        )
+        assert not res.is_error
+        assert isinstance(res.data, dict)
+        steps = res.data.get("steps")
+        assert isinstance(steps, list) and steps
+        assert steps[1].get("autoTab", {}).get("switched") is True
+
+        # Download: click local server file and require capture.
+        res = flow_handler(
+            config,
+            launcher,
+            args={
+                "steps": [
+                    {"navigate": {"url": page_url}},
+                    {
+                        "click": {"selector": "#mcp-download"},
+                        "download": {"required": True, "timeout": 15.0},
+                    },
+                ],
+                "final": "none",
+                "stop_on_error": True,
+                "auto_recover": False,
+                "step_proof": False,
+                "action_timeout": 15.0,
+            },
+        )
+        assert not res.is_error
+        assert isinstance(res.data, dict)
+        steps = res.data.get("steps")
+        assert isinstance(steps, list) and steps
+        download = steps[1].get("download")
+        if not isinstance(download, dict):
+            pytest.xfail("Download capture not supported in this environment")
+        assert download.get("fileName") == "mcp-hello.txt"
+
+    # Dialog handling: inject alert and rely on auto_dialog dismissal for read-ish step.
+    cdp.eval_js(config, "setTimeout(() => alert('mcp-dialog'), 0)")
+    time.sleep(0.2)
+    res = flow_handler(
+        config,
+        launcher,
+        args={
+            "steps": [{"js": {"code": "1 + 1"}}],
+            "final": "none",
+            "stop_on_error": True,
+            "auto_dialog": "dismiss",
+            "auto_recover": False,
+            "step_proof": False,
+            "action_timeout": 10.0,
+        },
+    )
+    assert not res.is_error

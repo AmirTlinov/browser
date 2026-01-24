@@ -28,6 +28,54 @@ class _DownloadCandidate:
     started_from_temp: bool = False
 
 
+def _read_xdg_download_dir() -> Path | None:
+    cfg = Path.home() / ".config" / "user-dirs.dirs"
+    if not cfg.exists():
+        return None
+    try:
+        lines = cfg.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except Exception:
+        return None
+    for line in lines:
+        if not line.startswith("XDG_DOWNLOAD_DIR="):
+            continue
+        raw = line.split("=", 1)[1].strip()
+        if raw.startswith("\"") and raw.endswith("\""):
+            raw = raw[1:-1]
+        raw = raw.replace("$HOME", str(Path.home()))
+        try:
+            raw = str(Path(raw).expanduser())
+        except Exception:
+            pass
+        candidate = Path(raw)
+        return candidate
+    return None
+
+
+def _default_download_dirs(primary_dir: Path) -> list[Path]:
+    dirs: list[Path] = []
+    xdg_dir = _read_xdg_download_dir()
+    if xdg_dir and xdg_dir != primary_dir:
+        dirs.append(xdg_dir)
+    home_downloads = Path.home() / "Downloads"
+    if home_downloads != primary_dir and home_downloads not in dirs:
+        dirs.append(home_downloads)
+    return [d for d in dirs if d.exists() and d.is_dir()]
+
+
+def _resolve_download_path(file_name: str, primary_dir: Path) -> Path | None:
+    if not file_name:
+        return None
+    for directory in [primary_dir, *_default_download_dirs(primary_dir)]:
+        try:
+            candidate = (directory / file_name).resolve()
+        except Exception:
+            continue
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
 def wait_for_download(
     config: BrowserConfig,
     *,
@@ -78,41 +126,54 @@ def wait_for_download(
             )
 
         dl_dir = session_manager.get_download_dir(session.tab_id)
+        fallback_dirs = _default_download_dirs(dl_dir)
         if isinstance(baseline, list) and baseline:
             baseline_set = {str(n) for n in baseline if isinstance(n, str) and n}
         else:
             baseline_set = {p.name for p in dl_dir.iterdir() if p.is_file()}
+        fallback_baselines: dict[Path, set[str]] = {}
+        for directory in fallback_dirs:
+            try:
+                fallback_baselines[directory] = {p.name for p in directory.iterdir() if p.is_file()}
+            except Exception:
+                fallback_baselines[directory] = set()
 
         deadline = time.time() + timeout_f
         candidate: _DownloadCandidate | None = None
         last_size: int | None = None
         stable_since: float | None = None
 
-        def _list_files() -> list[Path]:
+        def _list_files(directory: Path) -> list[Path]:
             try:
-                return [p for p in dl_dir.iterdir() if p.is_file()]
+                return [p for p in directory.iterdir() if p.is_file()]
             except Exception:
                 return []
 
-        while time.time() < deadline:
-            files = _list_files()
-            new_files = [p for p in files if p.name not in baseline_set]
-
-            # Prefer in-progress Chrome downloads (.crdownload), then follow to final name.
+        def _pick_candidate(files: list[Path], baseline: set[str]) -> _DownloadCandidate | None:
+            new_files = [p for p in files if p.name not in baseline]
+            if not new_files:
+                return None
             tmp = [p for p in new_files if p.name.endswith(".crdownload")]
             if tmp:
                 tmp.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
                 t = tmp[0]
                 final_name = t.name[: -len(".crdownload")]
                 if final_name:
-                    candidate = _DownloadCandidate(path=dl_dir / final_name, started_from_temp=True)
+                    return _DownloadCandidate(path=t.parent / final_name, started_from_temp=True)
+            finals = [p for p in new_files if not p.name.endswith(".crdownload")]
+            if finals:
+                finals.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
+                return _DownloadCandidate(path=finals[0], started_from_temp=False)
+            return None
 
-            # If no temp file observed, accept a new final file.
+        while time.time() < deadline:
+            candidate = _pick_candidate(_list_files(dl_dir), baseline_set)
             if candidate is None:
-                finals = [p for p in new_files if not p.name.endswith(".crdownload")]
-                if finals:
-                    finals.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
-                    candidate = _DownloadCandidate(path=finals[0], started_from_temp=False)
+                for directory in fallback_dirs:
+                    base = fallback_baselines.get(directory, set())
+                    candidate = _pick_candidate(_list_files(directory), base)
+                    if candidate is not None:
+                        break
 
             if candidate is not None and candidate.path.exists():
                 try:

@@ -1,0 +1,30 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Browser MCP Logo v1: Orbit - символизирует браузер + связь -->
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#06B6D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Внешнее кольцо (браузер/орбита) -->
+  <circle cx="256" cy="256" r="200" stroke="url(#grad1)" stroke-width="24" fill="none" opacity="0.3"/>
+  
+  <!-- Динамическая орбита -->
+  <ellipse cx="256" cy="256" rx="200" ry="80" stroke="url(#grad2)" stroke-width="16" fill="none" transform="rotate(-25 256 256)"/>
+  
+  <!-- Центральный узел (MCP) -->
+  <circle cx="256" cy="256" r="70" fill="url(#grad1)"/>
+  
+  <!-- Внутренний символ связи -->
+  <path d="M230 256 L256 230 L282 256 L256 282 Z" fill="white" opacity="0.9"/>
+  
+  <!-- Орбитальные точки (endpoints) -->
+  <circle cx="256" cy="56" r="20" fill="url(#grad2)"/>
+  <circle cx="416" cy="336" r="16" fill="url(#grad2)" opacity="0.8"/>
+  <circle cx="96" cy="336" r="16" fill="url(#grad2)" opacity="0.8"/>
+</svg>

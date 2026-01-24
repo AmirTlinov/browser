@@ -33,14 +33,14 @@ def default_browser_mcp_architecture_spec() -> dict[str, Any]:
                 "id": "mcp",
                 "label": "Browser MCP server (Python)\n• tools: page/run/click/type/...\n• session + telemetry\n• bounded context",
             },
-            {"id": "gw", "label": "ExtensionGateway (WS localhost)\nws://127.0.0.1:8765"},
+            {"id": "gw", "label": "Native Broker (portless)\n• nativeMessaging (extension)\n• IPC (server peers)"},
             {"id": "ext", "label": "Browser Extension (MV3)\n• chrome.debugger\n• event allowlist\n• kill-switch"},
             {"id": "tab", "label": "User Chrome Tab (any site/app)\n(Miro/Figma/etc.)"},
         ],
         "edges": [
             {"from": "agent", "to": "mcp", "label": "MCP stdio JSON-RPC"},
-            {"from": "mcp", "to": "gw", "label": "WS RPC"},
-            {"from": "gw", "to": "ext", "label": "WS client"},
+            {"from": "mcp", "to": "gw", "label": "IPC peer (no TCP ports)"},
+            {"from": "gw", "to": "ext", "label": "Native Messaging"},
             {"from": "ext", "to": "tab", "label": "CDP via chrome.debugger"},
         ],
     }

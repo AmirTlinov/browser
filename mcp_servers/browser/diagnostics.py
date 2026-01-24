@@ -96,7 +96,70 @@ DIAGNOSTICS_SCRIPT_SOURCE = r"""
   function sanitizeUrl(input) {
     try {
       const u = new URL(String(input || ""), g.location ? g.location.href : undefined);
-      u.search = "";
+      // Keep non-sensitive query params for debugging, but redact obvious secrets.
+      const SENSITIVE_SUBSTRINGS = [
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "pwd",
+        "authorization",
+        "cookie",
+        "session",
+        "jwt",
+        "bearer",
+        "api-key",
+        "api_key",
+        "apikey",
+      ];
+
+      const PLACEHOLDER_RE =
+        /(?:\{\{\s*(?:mem:|param:)?[A-Za-z0-9_.-]+\s*\}\}|\$\{\s*(?:mem:|param:)?[A-Za-z0-9_.-]+\s*\})/;
+
+      function isPlaceholderValue(v) {
+        try {
+          if (typeof v !== "string") return false;
+          return PLACEHOLDER_RE.test(v);
+        } catch (_e) {
+          return false;
+        }
+      }
+
+      function isSensitiveKey(k) {
+        const lk = String(k || "").trim().toLowerCase();
+        if (!lk) return false;
+        // Avoid false positives like "author" / "authorship", but still catch plain "auth".
+        if (lk === "auth") return true;
+        for (const s of SENSITIVE_SUBSTRINGS) {
+          if (lk.includes(s)) return true;
+        }
+        return false;
+      }
+
+      // Drop userinfo (`user:pass@host`).
+      try {
+        if (u.username || u.password) {
+          u.username = "";
+          u.password = "";
+        }
+      } catch (_e) {
+        // ignore
+      }
+
+      try {
+        const params = new URLSearchParams(u.search || "");
+        let redacted = false;
+        for (const [k, v] of params.entries()) {
+          if (isSensitiveKey(k) && v && !isPlaceholderValue(v)) {
+            params.set(k, "<redacted>");
+            redacted = true;
+          }
+        }
+        if (redacted) u.search = params.toString();
+      } catch (_e) {
+        // ignore
+      }
+
       u.hash = "";
       return u.toString();
     } catch (_e) {

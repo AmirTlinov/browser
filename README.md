@@ -22,6 +22,9 @@ profile (with your tabs, cookies, and extensions) **without** restarting with a
 `--remote-debugging-port`.
 
 ```bash
+# 0) One-time: install deps (native host auto-installs on first run)
+./tools/setup
+
 # 1) Install the extension (unpacked, dev mode)
 #    chrome://extensions → Developer mode → Load unpacked → vendor/browser_extension
 #
@@ -29,11 +32,14 @@ profile (with your tabs, cookies, and extensions) **without** restarting with a
 ./scripts/run_browser_mcp.sh
 ```
 
-The extension auto-connects when installed/enabled.
+The extension auto-connects when installed/enabled. This mode is **portless** (no `127.0.0.1:<port>`
+gateway), so it avoids “gateway not reachable” and port-collision issues. The server will
+auto-install the Native Messaging host on startup (fail-soft). If you want to install the host
+manually, run `./tools/install_native_host`. For fast local diagnosis, run `./tools/extension_status`
+(it also runs inside `./tools/doctor`). The server also auto-heals common native-host drift by default.
 
-Multi-CLI: you can run multiple CLI sessions concurrently (10+). Browser MCP elects a single local
-gateway leader and other sessions proxy through it, so the extension stays connected without port
-conflicts.
+Multi-CLI: you can run multiple CLI sessions concurrently. The native broker multiplexes multiple
+Browser MCP server processes through one extension connection.
 
 **Alternative (Same Browser): Attach via CDP Port**
 
@@ -87,6 +93,12 @@ Environment variables:
 - `MCP_BROWSER_PROFILE` — user-data-dir; default `~/.gemini/browser-profile`.
 - `MCP_BROWSER_PORT` — remote debugging port; default `9222`.
 - `MCP_BROWSER_FLAGS` — extra flags appended to Chrome launch.
+- `MCP_EXTENSION_RPC_TIMEOUT` — extension-mode RPC/CDP timeout seconds (default 8).
+- `MCP_EXTENSION_CONNECT_TIMEOUT` — wait-for-extension connect timeout seconds (default 4).
+- `MCP_NATIVE_HOST_AUTO_INSTALL` — auto-install Native Messaging host on startup (default 1; set 0 to disable).
+- `MCP_EXTENSION_AUTO_LAUNCH` — auto-launch managed Chrome with the extension if no broker is found (default 0; opt-in).
+- `MCP_EXTENSION_PROFILE` — user-data-dir for the managed extension Chrome profile (default `~/.gemini/browser-extension-profile`).
+- `MCP_EXTENSION_IDS` — comma-separated extension IDs to allow in the native host manifest (optional).
 - `MCP_AUTO_PORT_FALLBACK` — if set to `1`, allows switching to a free port + an owned profile when the configured port is busy/unresponsive (default: `0` for deterministic behavior).
 - `MCP_ALLOW_HOSTS` — comma-separated allowlist (e.g., `example.com,github.com`). Empty or `*` disables host filtering.
 - `MCP_HTTP_TIMEOUT` — request timeout seconds (default 10).

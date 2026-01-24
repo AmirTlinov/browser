@@ -5,7 +5,7 @@
 
 - protocolVersion: `2025-06-18`
 - server: `browser` v`0.1.0`
-- tools: `25`
+- tools: `27`
 
 ## Tools
 
@@ -14,6 +14,7 @@
 | `page` | Analyze current page structure and content. |
 | `run` | Run an AI-native scenario using OAVR: Observe → Act → Verify → Report. |
 | `flow` | DEPRECATED: use `run(...)` instead. |
+| `runbook` | Runbooks: save and execute reusable step lists stored in agent memory. |
 | `app` | High-level app macros/adapters for complex web apps (Miro/Figma/etc.). |
 | `navigate` | Navigate to URL or perform navigation action. |
 | `click` | Universal click tool - by text, selector, or coordinates. |
@@ -29,6 +30,7 @@
 | `js` | Execute JavaScript in browser context. |
 | `http` | Make HTTP request (not through browser). |
 | `fetch` | Make fetch request from browser context (with cookies/session). |
+| `storage` | Storage operations (localStorage / sessionStorage). |
 | `upload` | Upload file to file input. |
 | `download` | Wait for a download to complete and optionally store it as an artifact. |
 | `dialog` | Handle JavaScript alert/confirm/prompt dialogs. |

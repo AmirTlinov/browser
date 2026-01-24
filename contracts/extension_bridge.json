@@ -2,11 +2,13 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://openai.com/browser-mcp/contracts/extension_bridge.json",
   "title": "Browser MCP Extension Bridge Protocol",
-  "description": "WebSocket message schema for the local bridge between the Chrome extension and Browser MCP server (extension mode).",
+  "description": "Message schema for the local bridge between the Chrome extension, native host broker, and Browser MCP server (extension mode).",
   "type": "object",
   "oneOf": [
     { "$ref": "#/$defs/hello" },
     { "$ref": "#/$defs/helloAck" },
+    { "$ref": "#/$defs/peerHello" },
+    { "$ref": "#/$defs/peerHelloAck" },
     { "$ref": "#/$defs/rpc" },
     { "$ref": "#/$defs/rpcResult" },
     { "$ref": "#/$defs/cdpEvent" },
@@ -41,6 +43,10 @@
         "extensionId": { "type": "string" },
         "extensionVersion": { "type": "string" },
         "userAgent": { "type": "string" },
+        "profileId": {
+          "description": "A stable per-Chrome-profile identifier persisted by the extension. Used to disambiguate multiple profiles when selecting a broker.",
+          "type": "string"
+        },
         "capabilities": { "type": "object" },
         "state": {
           "type": "object",
@@ -69,6 +75,11 @@
         "serverVersion": { "type": "string" },
         "serverStartedAtMs": { "type": "integer" },
         "gatewayPort": { "type": "integer" },
+        "transport": { "type": "string" },
+        "brokerId": { "type": "string" },
+        "brokerPid": { "type": "integer" },
+        "brokerStartedAtMs": { "type": "integer" },
+        "peerCount": { "type": "integer" },
         "state": {
           "type": "object",
           "additionalProperties": false,
@@ -86,6 +97,28 @@
       },
       "required": ["type", "protocolVersion", "sessionId"]
     },
+    "peerHello": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "peerHello" },
+        "protocolVersion": { "type": "string" },
+        "peerId": { "type": "string" },
+        "pid": { "type": "integer" }
+      },
+      "required": ["type"]
+    },
+    "peerHelloAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "peerHelloAck" },
+        "protocolVersion": { "type": "string" },
+        "serverStartedAtMs": { "type": "integer" },
+        "peerCount": { "type": "integer" }
+      },
+      "required": ["type", "protocolVersion"]
+    },
     "rpc": {
       "type": "object",
       "additionalProperties": false,
@@ -93,6 +126,7 @@
         "type": { "const": "rpc" },
         "id": { "type": ["string", "integer"] },
         "method": { "type": "string" },
+        "timeoutMs": { "type": "integer" },
         "params": { "type": "object" }
       },
       "required": ["type", "id", "method"]

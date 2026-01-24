@@ -1,0 +1,37 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Browser MCP Logo v4: Node - граф связей / протокол -->
+  <defs>
+    <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0EA5E9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0284C7;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38BDF8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0EA5E9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Связи между узлами -->
+  <line x1="256" y1="256" x2="120" y2="120" stroke="url(#lineGrad)" stroke-width="12" stroke-linecap="round"/>
+  <line x1="256" y1="256" x2="392" y2="120" stroke="url(#lineGrad)" stroke-width="12" stroke-linecap="round"/>
+  <line x1="256" y1="256" x2="120" y2="392" stroke="url(#lineGrad)" stroke-width="12" stroke-linecap="round"/>
+  <line x1="256" y1="256" x2="392" y2="392" stroke="url(#lineGrad)" stroke-width="12" stroke-linecap="round"/>
+  <line x1="256" y1="256" x2="256" y2="80" stroke="url(#lineGrad)" stroke-width="12" stroke-linecap="round"/>
+  
+  <!-- Центральный узел (MCP сервер) -->
+  <circle cx="256" cy="256" r="80" fill="url(#nodeGrad)"/>
+  <circle cx="256" cy="256" r="40" fill="white" opacity="0.9"/>
+  
+  <!-- Периферийные узлы (браузеры/клиенты) -->
+  <circle cx="120" cy="120" r="40" fill="url(#nodeGrad)"/>
+  <circle cx="392" cy="120" r="40" fill="url(#nodeGrad)"/>
+  <circle cx="120" cy="392" r="40" fill="url(#nodeGrad)"/>
+  <circle cx="392" cy="392" r="40" fill="url(#nodeGrad)"/>
+  <circle cx="256" cy="80" r="32" fill="url(#nodeGrad)"/>
+  
+  <!-- Иконки в узлах -->
+  <rect x="105" y="105" width="30" height="30" rx="4" fill="white" opacity="0.8"/>
+  <rect x="377" y="105" width="30" height="30" rx="4" fill="white" opacity="0.8"/>
+  <rect x="105" y="377" width="30" height="30" rx="4" fill="white" opacity="0.8"/>
+  <rect x="377" y="377" width="30" height="30" rx="4" fill="white" opacity="0.8"/>
+</svg>

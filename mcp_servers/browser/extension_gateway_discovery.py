@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from .extension_gateway import EXTENSION_GATEWAY_WELL_KNOWN_PATH
+from .extension_gateway import EXTENSION_BRIDGE_PROTOCOL_VERSION, EXTENSION_GATEWAY_WELL_KNOWN_PATH
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +121,108 @@ def _probe_one(host: str, port: int, *, timeout: float) -> GatewayDiscovery | No
     )
 
 
+def _probe_one_ws(host: str, port: int, *, timeout: float) -> GatewayDiscovery | None:
+    try:
+        from websockets.sync.client import connect  # type: ignore[import-not-found]
+    except Exception:
+        return None
+
+    url = f"ws://{host}:{int(port)}"
+    peer_id = f"probe-{int(time.time() * 1000)}-{os.getpid()}"
+    timeout_s = max(0.05, float(timeout))
+
+    def _recv_json(ws):  # type: ignore[no-untyped-def]
+        try:
+            raw = ws.recv(timeout=timeout_s)
+        except Exception:
+            return None
+        try:
+            if isinstance(raw, (bytes, bytearray)):
+                raw = raw.decode("utf-8", "ignore")
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    try:
+        with connect(
+            url,
+            open_timeout=timeout_s,
+            close_timeout=timeout_s,
+            ping_interval=None,
+            ping_timeout=None,
+        ) as ws:
+            hello = {
+                "type": "peerHello",
+                "peerId": peer_id,
+                "pid": int(os.getpid()),
+                "protocolVersion": EXTENSION_BRIDGE_PROTOCOL_VERSION,
+            }
+            ws.send(json.dumps(hello, separators=(",", ":")))
+            ack = _recv_json(ws)
+            if not isinstance(ack, dict) or ack.get("type") != "peerHelloAck":
+                return None
+
+            started = 0
+            try:
+                started = int(ack.get("serverStartedAtMs") or 0)
+            except Exception:
+                started = 0
+
+            gw_port = port
+            try:
+                gw_port = int(ack.get("gatewayPort") or port)
+            except Exception:
+                gw_port = port
+
+            # Request gateway status to determine extension connectivity.
+            req_id = 1
+            ws.send(
+                json.dumps(
+                    {"type": "rpc", "id": req_id, "method": "gateway.status", "timeoutMs": int(timeout_s * 1000)},
+                    separators=(",", ":"),
+                )
+            )
+
+            status = None
+            for _ in range(3):
+                msg = _recv_json(ws)
+                if not isinstance(msg, dict):
+                    continue
+                if msg.get("type") != "rpcResult":
+                    continue
+                try:
+                    if int(msg.get("id") or 0) != req_id:
+                        continue
+                except Exception:
+                    continue
+                if msg.get("ok") is True and isinstance(msg.get("result"), dict):
+                    status = msg.get("result")
+                break
+
+            ext_connected = bool(status.get("connected")) if isinstance(status, dict) else False
+            started_at = started
+            if isinstance(status, dict):
+                try:
+                    started_at = int(status.get("serverStartedAtMs") or started)
+                except Exception:
+                    started_at = started
+
+            return GatewayDiscovery(
+                host=str(host),
+                port=int(gw_port),
+                server_started_at_ms=max(0, started_at),
+                extension_connected=bool(ext_connected),
+                peer_count=0,
+                supports_peers=True,
+                protocol_version=str(ack.get("protocolVersion") or ""),
+                server_version="",
+                pid=0,
+            )
+    except Exception:
+        return None
+
+
 def discover_best_gateway(*, timeout: float = 0.25, require_peers: bool = False) -> GatewayDiscovery | None:
     host = (os.environ.get("MCP_EXTENSION_HOST") or "127.0.0.1").strip() or "127.0.0.1"
     ports = _port_candidates()
@@ -138,6 +241,22 @@ def discover_best_gateway(*, timeout: float = 0.25, require_peers: bool = False)
                 r = None
             if isinstance(r, GatewayDiscovery):
                 results.append(r)
+
+    if not results:
+        # HTTP discovery can fail because WS servers don't handle plain GET requests.
+        # Fall back to a short WS probe on a small subset of ports.
+        ws_ports = ports[: min(6, len(ports))]
+        if ws_ports:
+            max_ws_workers = min(4, max(1, len(ws_ports)))
+            with ThreadPoolExecutor(max_workers=max_ws_workers) as ex:
+                futs = [ex.submit(_probe_one_ws, host, p, timeout=timeout) for p in ws_ports]
+                for f in futs:
+                    try:
+                        r = f.result(timeout=max(0.05, float(timeout) + 0.4))
+                    except Exception:
+                        r = None
+                    if isinstance(r, GatewayDiscovery):
+                        results.append(r)
 
     if not results:
         return None

@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _print_human(health: dict) -> None:
+    summary = health.get("summary") if isinstance(health, dict) else None
+    if not isinstance(summary, dict):
+        summary = {}
+
+    ext = health.get("extension") if isinstance(health, dict) else None
+    if not isinstance(ext, dict):
+        ext = {}
+
+    native = health.get("nativeHost") if isinstance(health, dict) else None
+    if not isinstance(native, dict):
+        native = {}
+
+    broker = health.get("broker") if isinstance(health, dict) else None
+    if not isinstance(broker, dict):
+        broker = {}
+
+    print("== extension_status ==")
+    print(f"status: {summary.get('status') or 'unknown'}")
+    if summary.get("reason"):
+        print(f"reason: {summary.get('reason')}")
+    if summary.get("hint"):
+        print(f"hint:   {summary.get('hint')}")
+
+    expected_id = ext.get("expectedId")
+    if expected_id:
+        print(f"expected_extension_id: {expected_id}")
+
+    first_manifest = native.get("firstManifestPath")
+    if first_manifest:
+        print(f"native_host_manifest:  {first_manifest}")
+    else:
+        print("native_host_manifest:  (not found)")
+
+    wrapper_path = native.get("wrapperPath")
+    wrapper_exists = native.get("wrapperExists")
+    if wrapper_path:
+        print(f"native_host_wrapper:   {wrapper_path} (exists={bool(wrapper_exists)})")
+
+    runtime_dir = broker.get("runtimeDir")
+    if runtime_dir:
+        print(f"broker_runtime_dir:    {runtime_dir}")
+    print(f"broker_connected:      {bool(broker.get('connected'))}")
+
+    if isinstance(health.get("profiles"), dict):
+        prof = health["profiles"]
+        ids = prof.get("discoveredExtensionIds")
+        if isinstance(ids, list) and ids:
+            sample = ", ".join(str(x) for x in ids[:3])
+            more = f" (+{len(ids) - 3} more)" if len(ids) > 3 else ""
+            print(f"discovered_extension_ids: {sample}{more}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Diagnose Browser MCP extension mode (portless native bridge).")
+    parser.add_argument("--json", action="store_true", help="Print full JSON health payload")
+    parser.add_argument("--deep", action="store_true", help="Scan browser profiles (can be slow)")
+    parser.add_argument("--strict", action="store_true", help="Exit non-zero when status is not ok")
+    args = parser.parse_args(argv)
+
+    root = _repo_root()
+    sys.path.insert(0, str(root))
+
+    from mcp_servers.browser.extension_health import collect_extension_health
+
+    health = collect_extension_health(root=root, include_profiles=bool(args.deep))
+    if args.json:
+        print(json.dumps(health, ensure_ascii=False, indent=2))
+    else:
+        _print_human(health)
+
+    ok = bool(isinstance(health, dict) and isinstance(health.get("ok"), bool) and health.get("ok"))
+    if args.strict and not ok:
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

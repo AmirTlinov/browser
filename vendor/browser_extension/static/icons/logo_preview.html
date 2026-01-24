@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser MCP — Logo Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+      min-height: 100vh;
+      padding: 40px;
+      color: #fff;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 40px;
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #3B82F6, #8B5CF6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 40px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 24px;
+      padding: 32px;
+      text-align: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+    .card h2 {
+      margin-bottom: 16px;
+      color: #a5b4fc;
+    }
+    .card p {
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+    }
+    .logo-preview {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .logo-preview img {
+      width: 200px;
+      height: 200px;
+    }
+    .sizes {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      align-items: flex-end;
+    }
+    .sizes .size {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .sizes img {
+      border-radius: 8px;
+      background: #fff;
+      padding: 4px;
+    }
+    .sizes span {
+      font-size: 0.7rem;
+      color: #64748b;
+    }
+    footer {
+      text-align: center;
+      margin-top: 60px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 Browser MCP — Варианты логотипа</h1>
+  
+  <div class="grid">
+    <div class="card">
+      <h2>V1: Orbit</h2>
+      <p>Орбита + связь — символизирует браузер как центр и MCP как связующий протокол</p>
+      <div class="logo-preview">
+        <img src="logo_v1_orbit.svg" alt="Orbit Logo">
+      </div>
+      <div class="sizes">
+        <div class="size"><img src="logo_v1_orbit.svg" width="128" height="128"><span>128px</span></div>
+        <div class="size"><img src="logo_v1_orbit.svg" width="48" height="48"><span>48px</span></div>
+        <div class="size"><img src="logo_v1_orbit.svg" width="32" height="32"><span>32px</span></div>
+        <div class="size"><img src="logo_v1_orbit.svg" width="16" height="16"><span>16px</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>V2: Window</h2>
+      <p>Окно браузера + молния — автоматизация и скорость через протокол</p>
+      <div class="logo-preview">
+        <img src="logo_v2_window.svg" alt="Window Logo">
+      </div>
+      <div class="sizes">
+        <div class="size"><img src="logo_v2_window.svg" width="128" height="128"><span>128px</span></div>
+        <div class="size"><img src="logo_v2_window.svg" width="48" height="48"><span>48px</span></div>
+        <div class="size"><img src="logo_v2_window.svg" width="32" height="32"><span>32px</span></div>
+        <div class="size"><img src="logo_v2_window.svg" width="16" height="16"><span>16px</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>V3: Cursor</h2>
+      <p>Курсор + пульс — AI-автоматизация, активные действия в браузере</p>
+      <div class="logo-preview">
+        <img src="logo_v3_cursor.svg" alt="Cursor Logo">
+      </div>
+      <div class="sizes">
+        <div class="size"><img src="logo_v3_cursor.svg" width="128" height="128"><span>128px</span></div>
+        <div class="size"><img src="logo_v3_cursor.svg" width="48" height="48"><span>48px</span></div>
+        <div class="size"><img src="logo_v3_cursor.svg" width="32" height="32"><span>32px</span></div>
+        <div class="size"><img src="logo_v3_cursor.svg" width="16" height="16"><span>16px</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>V4: Node</h2>
+      <p>Граф связей — MCP как центральный хаб, соединяющий множество браузеров</p>
+      <div class="logo-preview">
+        <img src="logo_v4_node.svg" alt="Node Logo">
+      </div>
+      <div class="sizes">
+        <div class="size"><img src="logo_v4_node.svg" width="128" height="128"><span>128px</span></div>
+        <div class="size"><img src="logo_v4_node.svg" width="48" height="48"><span>48px</span></div>
+        <div class="size"><img src="logo_v4_node.svg" width="32" height="32"><span>32px</span></div>
+        <div class="size"><img src="logo_v4_node.svg" width="16" height="16"><span>16px</span></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Откройте этот файл в браузере:</p>
+    <code>vendor/browser_extension/static/icons/logo_preview.html</code>
+  </footer>
+</body>
+</html>

@@ -27,6 +27,31 @@ def _norm_text(text: str) -> str:
     return " ".join((text or "").split()).casefold()
 
 
+_AX_ROLE_ALIASES: dict[str, set[str]] = {
+    "input": {"textbox", "searchbox", "combobox", "listbox", "textfield", "text"},
+    "text": {"textbox", "textfield", "text"},
+    "textfield": {"textbox", "textfield", "text"},
+    "textbox": {"textbox", "textfield", "text"},
+    "searchbox": {"searchbox", "textbox", "textfield", "text"},
+    "textarea": {"textbox", "textfield", "text"},
+    "combobox": {"combobox"},
+    "listbox": {"listbox"},
+}
+
+
+def _normalize_role_query(role: str | None) -> tuple[str | None, set[str] | None]:
+    r = _norm_text(role) if isinstance(role, str) and role.strip() else ""
+    if not r:
+        return None, None
+    aliases = _AX_ROLE_ALIASES.get(r)
+    if aliases:
+        allowed = {a for a in aliases if a}
+        # Avoid over-filtering queryAXTree when role has multiple aliases.
+        query_role = r if len(allowed) == 1 else None
+        return query_role, allowed
+    return r, {r}
+
+
 def _get_ax_nodes(session) -> list[dict[str, Any]]:
     """Fetch full AX tree nodes (best-effort)."""
     try:
@@ -103,9 +128,13 @@ def _search_ax_items(
     *,
     role: str | None,
     name: str | None,
+    allowed_roles: set[str] | None = None,
     hard_limit: int = 2000,
 ) -> list[dict[str, Any]]:
-    q_role = _norm_text(role) if isinstance(role, str) and role.strip() else ""
+    if allowed_roles:
+        role_set = {_norm_text(r) for r in allowed_roles if isinstance(r, str) and r.strip()}
+    else:
+        role_set = {_norm_text(role)} if isinstance(role, str) and role.strip() else set()
     q_name = _norm_text(name) if isinstance(name, str) and name.strip() else ""
 
     scored: list[tuple[int, dict[str, Any]]] = []
@@ -120,7 +149,7 @@ def _search_ax_items(
         node_role = _norm_text(str(_ax_value(node.get("role")) or ""))
         node_name = _norm_text(str(_ax_value(node.get("name")) or ""))
 
-        if q_role and node_role != q_role:
+        if role_set and node_role not in role_set:
             continue
 
         score = _score_match(query_name=q_name, node_name=node_name)
@@ -235,10 +264,11 @@ def query_ax(
         )
 
     with get_session(config) as (session, target):
-        nodes = _query_ax_tree(session, role=role, name=name)
+        query_role, role_filter = _normalize_role_query(role)
+        nodes = _query_ax_tree(session, role=query_role, name=name)
         if nodes is None or not nodes:
             nodes = _get_ax_nodes(session)
-        items = _search_ax_items(nodes, role=role, name=name)
+        items = _search_ax_items(nodes, role=role, name=name, allowed_roles=role_filter)
         total = len(items)
         page_items = items[offset : offset + limit]
 
@@ -275,10 +305,11 @@ def click_accessibility(
         )
 
     with get_session(config) as (session, target):
-        nodes = _query_ax_tree(session, role=role, name=name)
+        query_role, role_filter = _normalize_role_query(role)
+        nodes = _query_ax_tree(session, role=query_role, name=name)
         if nodes is None or not nodes:
             nodes = _get_ax_nodes(session)
-        items = _search_ax_items(nodes, role=role, name=name)
+        items = _search_ax_items(nodes, role=role, name=name, allowed_roles=role_filter)
         if not items:
             raise SmartToolError(
                 tool="click",

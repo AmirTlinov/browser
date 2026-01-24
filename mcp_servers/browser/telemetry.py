@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from .server.redaction import redact_url
+from .server.redaction import redact_url_brief as redact_url
 
 
 def _sha256_hex(text: str) -> str:

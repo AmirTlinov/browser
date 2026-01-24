@@ -40,9 +40,9 @@ def _require_extension_gateway(config: BrowserConfig):
     gw = session_manager.get_extension_gateway()
     if gw is not None and not gw.is_connected():
         try:
-            connect_timeout = float(os.environ.get("MCP_EXTENSION_CONNECT_TIMEOUT") or 2.0)
+            connect_timeout = float(os.environ.get("MCP_EXTENSION_CONNECT_TIMEOUT") or 4.0)
         except Exception:
-            connect_timeout = 2.0
+            connect_timeout = 4.0
         connect_timeout = max(0.0, min(connect_timeout, 15.0))
         if connect_timeout > 0:
             gw.wait_for_connection(timeout=connect_timeout)
@@ -52,7 +52,7 @@ def _require_extension_gateway(config: BrowserConfig):
             tool="clipboard",
             action="write",
             reason="Extension is not connected",
-            suggestion="Ensure the Browser MCP extension is installed/enabled and the gateway is running",
+            suggestion="Ensure the Browser MCP extension is installed/enabled and the native host is installed (./tools/install_native_host)",
         )
     return gw
 

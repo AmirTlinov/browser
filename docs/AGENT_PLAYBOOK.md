@@ -1,8 +1,20 @@
-[LEGEND]
+ [LEGEND]
 PLAYBOOK = A small set of high-leverage usage patterns for agents.
 OVERVIEW_FIRST = The habit: request a compact overview before drilldowns.
+COMPLEX_FLOW = A 1–3 call pattern for multi-step scenarios: map → run (assert/when/macro/act) → artifacts.
+ACTION_MAP = The actions-first map returned by `page(detail="map")`.
+V3_INTERNAL_ACTIONS = The v3+ `run(...)` internal action keys: `assert`, `when`, `repeat`, `macro`.
+ASSERT = A run-internal check that fails fast when a condition is unmet.
+WHEN = A run-internal conditional that gates nested actions.
+REPEAT = A run-internal bounded loop that repeats nested actions (`repeat`) without external MCP calls.
+MACRO = A run-internal action that expands into regular steps (see `docs/MACROS.md`).
+MACRO_SPEC = The macro input shape: `{macro:{name:"...", args:{...}, dry_run:true}}`.
+TOOL_COUNTS = A per-tool histogram returned by `flow.flow.toolCounts` / `run.run.toolCounts`.
+RUN_GUIDE = A minimal-call run/macro/runbook quickref (`docs/RUN_GUIDE.md`).
+AUTO_TAB = Auto-switch to a newly opened tab after click-like actions.
+AUTO_AFFORDANCES = Auto-refresh affordances when `act(ref/label)` looks stale.
 
-[CONTENT]
+ [CONTENT]
 This is the [PLAYBOOK] for using the MCP browser server with minimal [NOISE|LEGEND.md].
 
 ## [OVERVIEW_FIRST] (default)
@@ -15,6 +27,17 @@ Then choose exactly one drilldown ([DRILLDOWN|LEGEND.md]) based on the task:
 - Cross-page memory: `page(detail="graph")` (visited nodes + discovered links)
 - Interact: `page(detail="locators")` → `click(...)` / `type(...)` / `form(...)`
 - Iframes/SSO/CAPTCHA layout: `page(detail="frames")` (CDP frame tree) → `page(detail="frames", with_screenshot=true)` (visual boxes)
+
+Tips:
+- Use `auto_tab=true` when a click is expected to open a new tab ([AUTO_TAB]).
+- Keep `auto_affordances=true` (default) to make `act(ref/label)` resilient across navigation ([AUTO_AFFORDANCES]).
+
+## Minimal-call decision (fast)
+- If a [CANVAS_APP|LEGEND.md]: prefer `app(...)` (or `run(actions=[{"tool":"app",...}])`) over chatty click/drag loops.
+- If the workflow repeats across sessions: record a runbook via `run(..., record_memory_key="...")` and execute via `runbook(action="run", ...)` (see `docs/RUNBOOKS.md`).
+- If you need reuse *inside* a larger `run`: use `macro: include_memory_steps` (see `docs/MACROS.md`).
+- If a task can fit in 1–2 calls: use `run(...)` directly or `page(detail="map")` → `run(...)`.
+- For branching/retries: use internal `assert/when/repeat` instead of external loops.
 - Interact (visual disambiguation): `page(detail="locators", with_screenshot=true)` → pick `n` → `click(x=..., y=...)`
 - Interact (complex UI): `page(detail="ax", role="button", name="...")` → `click(text="...", role="button", strategy="ax")`
 - Interact (complex UI, disambiguation): `page(detail="ax", role="button", name="...", with_screenshot=true)` → pick `n` → `click(ref="dom:...")`
@@ -22,6 +45,28 @@ Then choose exactly one drilldown ([DRILLDOWN|LEGEND.md]) based on the task:
 - Iframe-safe input focus: `form(focus_key="Email", form_index=0)` (works across same-origin iframes + open shadow DOM)
 - Stable handle typing: `page(detail="ax", ...)` → `type(ref="dom:123", text="...")` (or `backendDOMNodeId=...`)
 - Stable handle hover/drag: `mouse(action="hover", ref="dom:123")` / `mouse(action="drag", from_ref="dom:123", to_ref="dom:456")`
+
+## [COMPLEX_FLOW]
+1) `page(detail="map")` to capture the [ACTION_MAP] and stable `aff:` refs.
+2) `run(...)` with short, deterministic [V3_INTERNAL_ACTIONS]:
+   - [ASSERT] early to guard preconditions (cheap checks first).
+   - [WHEN] to skip optional branches without extra [NOISE|LEGEND.md].
+   - [REPEAT] to do bounded retries/scroll-until patterns without external loops.
+   - [MACRO] to expand into bounded step sequences (not app adapters).
+   - `act` to execute stable actions from the map.
+   - Macro input follows [MACRO_SPEC].
+3) Use returned [ARTIFACT|LEGEND.md] ids for drilldowns via the `artifact` tool.
+
+Example (shape only, keep actions short):
+```
+page(detail="map")
+run(actions=[
+  {"assert": {"...": "..."}},
+  {"when": {"...": "..."}},
+  {"macro": {"name": "dismiss_overlays", "args": {}, "dry_run": true}},
+  {"act": {"ref": "aff:..."}}
+])
+```
 - Drag to coordinates: `mouse(action="drag", from_ref="dom:123", to_x=300, to_y=300)`
 - Stable handle scroll: `scroll(ref="dom:123")`
 - Element screenshot (stable handle): `screenshot(ref="dom:123")`
@@ -35,6 +80,10 @@ It runs multiple actions and returns one compact report (optionally with a scree
 - Stable UI actions: `page(detail="map")` (or `page(detail="locators")`) → `run(actions=[{act:{ref:"aff:..."}}])`
 - Even fewer calls: `run(actions=[{navigate:{url:"..."}},{act:{label:"Save", kind:"button"}}], report="map")`
 - Cross-page memory in one call: `run(actions=[...], report="graph")`
+- Runbook recorder: `run(..., record_memory_key="runbook_login")` to store a reusable step list.
+- Runbook execution: `runbook(action="run", key="runbook_login", params={...})` (see `docs/RUNBOOKS.md`).
+- Low-noise observability: [TOOL_COUNTS] tells you how “chatty” a run was.
+- Full quickref: [RUN_GUIDE].
 - Safe agent memory KV:
   - Set: `browser(action="memory", memory_action="set", key="token", value="...")`
   - Persist (non-sensitive): `browser(action="memory", memory_action="save")`

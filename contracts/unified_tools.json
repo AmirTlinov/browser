@@ -236,7 +236,7 @@
     },
     {
       "name": "run",
-      "description": "Run an AI-native scenario using OAVR: Observe → Act → Verify → Report.\n\nThis is the recommended entrypoint for multi-step work:\n- Holds one shared CDP session across all actions (less flake, fewer round-trips).\n- Returns a compact report + proof so agents avoid extra \"check\" calls.\n\nDefault report behavior:\n- MCP_TOOLSET=v1/default: report=\"observe\"\n- MCP_TOOLSET=v2: report=\"map\"\n\nINTERNAL ACTIONS (v2):\n`run()` can execute the same action steps as `flow`, including (common set):\n- navigate, click, type, scroll, form, wait\n- page (triage/diagnostics/ax/locators/resources/performance)\n- app (high-level app macros/adapters for complex web apps)\n- dialog (alert/confirm/prompt)\n- captcha (analyze/screenshot/click_blocks/submit)\n- fetch, storage, download\n- net(action=\"harLite\")  # Tier-0 network slice\n- net(action=\"trace\")    # Tier-0 deep trace (bounded, on-demand)\nThese are not separate top-level tools in v2; they are actions inside `run`.\n\nHIGH-LEVERAGE INTERNAL ACTION:\n- act(ref=\"aff:...\")  # resolve a stable affordance ref from page(detail=\"locators\") / page(detail=\"map\") / page(detail=\"triage\")\n  This is the fastest way to click/focus without re-specifying selectors/text.\n- act(label=\"Save\", kind=\"button\")  # deterministic label resolver (exact match; uses stored affordances; may refresh once)\n\nACTION FORMATS (same as flow steps):\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nSTATEFUL RUNS (export → interpolate):\n- You can export scalars from one action and reuse them in later actions via `{{var}}` / `${var}`.\n  This enables single-call pipelines (e.g., capture trace → read artifact → act on results) without extra tool calls.\n\nSAFETY:\n- Mark an action as irreversible (requires confirm_irreversible=true):\n  {\"tool\":\"click\",\"args\":{\"text\":\"Delete\"},\"irreversible\":true}\n\nROBUSTNESS:\n- If a blocking JS dialog is open, non-dialog actions fail fast with a dialog suggestion.\n- Optional: auto-handle dialogs (dismiss/accept) based on policy mode (strict vs permissive).\n- Optional: auto-recover from known CDP brick states and continue (bounded attempts).\n- If any action produces an image (e.g., CAPTCHA screenshot), the image is stored off-context\n  as an artifact and surfaced via `next` drilldown hints.\n\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Defaults to a delta observe report since the run start.\n",
+      "description": "Run an AI-native scenario using OAVR: Observe → Act → Verify → Report.\n\nThis is the recommended entrypoint for multi-step work:\n- Holds one shared CDP session across all actions (less flake, fewer round-trips).\n- Returns a compact report + proof so agents avoid extra \"check\" calls.\n\nDefault report behavior:\n- MCP_TOOLSET=v1/default: report=\"observe\"\n- MCP_TOOLSET=v2: report=\"map\"\n\nINTERNAL ACTIONS (v2):\n`run()` can execute the same action steps as `flow`, including (common set):\n- navigate, click, type, scroll, form, wait\n- page (triage/diagnostics/ax/locators/resources/performance)\n- app (high-level app macros/adapters for complex web apps)\n- dialog (alert/confirm/prompt)\n- captcha (analyze/screenshot/click_blocks/submit)\n- fetch, storage, download\n- net(action=\"harLite\")  # Tier-0 network slice\n- net(action=\"trace\")    # Tier-0 deep trace (bounded, on-demand)\nThese are not separate top-level tools in v2; they are actions inside `run`.\n\nINTERNAL ACTIONS (v3 additions; only inside `run(actions=[...])`, not top-level tools):\nSchemas (shape):\n- assert: {\"assert\": {\"timeout_s\": 5, \"url\": \"...\", \"title\": \"...\", \"selector\": \"...\", \"text\": \"...\"}}\n- when: {\"when\": {\"if\": {\"url\": \"...\", \"selector\": \"...\", \"text\": \"...\"}, \"then\": [...], \"else\": [...]}}\n- macro: {\"macro\": {\"name\": \"...\", \"args\": {...}, \"dry_run\": true}}\n\nNotes:\n- Server-side only (no LLM execution); deterministic and bounded by run limits.\n- assert is fail-closed: timeout or mismatch fails the run.\n- when executes a single branch (no loops); else is optional.\n- macro is for compact, deterministic expansions (e.g., include saved step lists).\n\nINTERNAL ACTIONS (v4 additions; only inside `run(actions=[...])`, not top-level tools):\nSchemas (shape):\n- repeat: {\"repeat\": {\"max_iters\": 5, \"until\": {\"selector\": \"...\", \"text\": \"...\", \"url\": \"...\"}, \"steps\": [...], \"max_time_s\": 20, \"backoff_s\": 0.2, \"backoff_factor\": 1.5, \"backoff_max_s\": 2.0}}\n\nNotes:\n- repeat is bounded: max_iters is capped server-side (no unbounded loops).\n- If `until` is omitted, repeat runs exactly max_iters times and succeeds (like a for-loop).\n- If `until` is provided and never matches, repeat fails closed after max_iters.\n- Optional `max_time_s` adds a wall-clock budget for the whole repeat loop (fail-closed when exhausted).\n- Optional backoff (`backoff_s`, `backoff_factor`, `backoff_max_s`) sleeps between iterations (deterministic, bounded).\n\nExamples:\n1) {\"assert\": {\"url\": \"https://example.com\", \"title\": \"Example Domain\", \"timeout_s\": 5}}\n2) {\"when\": {\"if\": {\"selector\": \"#login\", \"text\": \"Sign in\"}, \"then\": [{\"click\": {\"selector\": \"#login\"}}], \"else\": [{\"navigate\": {\"url\": \"https://example.com/login\"}}]}}\n3) {\"macro\": {\"name\": \"trace_then_screenshot\", \"args\": {\"trace\": \"harLite\"}, \"dry_run\": true}}\n4) {\"macro\": {\"name\": \"include_memory_steps\", \"args\": {\"memory_key\": \"workflow.login\", \"params\": {\"user\": \"alice\"}}}}\n5) {\"repeat\": {\"max_iters\": 10, \"until\": {\"selector\": \"#result\"}, \"steps\": [{\"scroll\": {\"direction\": \"down\"}}]}}\n\nHIGH-LEVERAGE INTERNAL ACTION:\n- act(ref=\"aff:...\")  # resolve a stable affordance ref from page(detail=\"locators\") / page(detail=\"map\") / page(detail=\"triage\")\n  This is the fastest way to click/focus without re-specifying selectors/text.\n- act(label=\"Save\", kind=\"button\")  # deterministic label resolver (exact match; uses stored affordances; may refresh once)\n\nACTION FORMATS (same as flow steps):\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nSTATEFUL RUNS (export → interpolate):\n- You can export scalars from one action and reuse them in later actions via `{{var}}` / `${var}`.\n  This enables single-call pipelines (e.g., capture trace → read artifact → act on results) without extra tool calls.\n\nSAFETY:\n- Mark an action as irreversible (requires confirm_irreversible=true):\n  {\"tool\":\"click\",\"args\":{\"text\":\"Delete\"},\"irreversible\":true}\n\nROBUSTNESS:\n- If a blocking JS dialog is open, non-dialog actions fail fast with a dialog suggestion.\n- Optional: auto-handle dialogs (dismiss/accept) based on policy mode (strict vs permissive).\n- Optional: auto-recover from known CDP brick states and continue (bounded attempts).\n- If any action produces an image (e.g., CAPTCHA screenshot), the image is stored off-context\n  as an artifact and surfaced via `next` drilldown hints.\n\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Defaults to a delta observe report since the run start.\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -252,6 +252,24 @@
             "items": {
               "type": "object"
             }
+          },
+          "record_memory_key": {
+            "type": "string",
+            "description": "Optional: record the original actions into agent memory under this key (runbook recorder)"
+          },
+          "record_mode": {
+            "type": "string",
+            "enum": [
+              "sanitized",
+              "raw"
+            ],
+            "default": "sanitized",
+            "description": "Recorder mode: sanitized (safe-by-default) or raw (stores literals; risky)"
+          },
+          "record_on_failure": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, record actions even when the run fails (default: false)"
           },
           "steps": {
             "type": "array",
@@ -307,6 +325,16 @@
             "default": 5.0,
             "description": "Recovery timeout seconds (default: 5.0)"
           },
+          "timeout_profile": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "default",
+              "slow"
+            ],
+            "default": "default",
+            "description": "Optional timeout profile (sets sane defaults for timeouts and internal waits)"
+          },
           "action_timeout": {
             "type": "number",
             "default": 30.0,
@@ -321,6 +349,16 @@
             "type": "number",
             "default": 3.0,
             "description": "Auto-download wait seconds (bounded; default: 3.0)"
+          },
+          "auto_tab": {
+            "type": "boolean",
+            "default": false,
+            "description": "Auto-switch to a newly opened tab after click-like actions (best-effort; default: false)"
+          },
+          "auto_affordances": {
+            "type": "boolean",
+            "default": true,
+            "description": "Auto-refresh affordances when act(ref/label) looks stale (URL mismatch or missing refs; default: true)"
           },
           "proof": {
             "type": "boolean",
@@ -404,6 +442,29 @@
               "type": "object"
             }
           },
+          "start_at": {
+            "type": "integer",
+            "default": 0,
+            "description": "Start executing steps from this index (resume a partially completed flow)"
+          },
+          "record_memory_key": {
+            "type": "string",
+            "description": "Optional: record the original steps into agent memory under this key (runbook recorder)"
+          },
+          "record_mode": {
+            "type": "string",
+            "enum": [
+              "sanitized",
+              "raw"
+            ],
+            "default": "sanitized",
+            "description": "Recorder mode: sanitized (safe-by-default) or raw (stores literals; risky)"
+          },
+          "record_on_failure": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, record steps even when the flow fails (default: false)"
+          },
           "stop_on_error": {
             "type": "boolean",
             "default": true,
@@ -458,6 +519,66 @@
             "default": 30,
             "description": "Limit for final=audit/triage/diagnostics (default: 30)"
           },
+          "step_proof": {
+            "type": "boolean",
+            "default": false,
+            "description": "Attach compact per-step proof (internal; default: false)"
+          },
+          "proof_screenshot": {
+            "type": "string",
+            "enum": [
+              "none",
+              "artifact"
+            ],
+            "default": "none",
+            "description": "How to capture screenshots for proof (default: none)"
+          },
+          "screenshot_on_ambiguity": {
+            "type": "boolean",
+            "default": false,
+            "description": "Capture a screenshot when a step is ambiguous (default: false)"
+          },
+          "auto_dialog": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "off",
+              "dismiss",
+              "accept"
+            ],
+            "default": "off",
+            "description": "Auto-handle blocking JS dialogs (default: off)"
+          },
+          "auto_recover": {
+            "type": "boolean",
+            "default": false,
+            "description": "Auto-recover from CDP brick states (default: false)"
+          },
+          "max_recoveries": {
+            "type": "integer",
+            "default": 0,
+            "description": "Maximum number of recovery attempts (default: 0)"
+          },
+          "recover_hard": {
+            "type": "boolean",
+            "default": false,
+            "description": "Prefer hard recovery (restart owned Chrome) when recovering (default: false)"
+          },
+          "recover_timeout": {
+            "type": "number",
+            "default": 5.0,
+            "description": "Recovery timeout seconds (default: 5.0)"
+          },
+          "timeout_profile": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "default",
+              "slow"
+            ],
+            "default": "default",
+            "description": "Optional timeout profile (sets sane defaults for timeouts and internal waits)"
+          },
           "action_timeout": {
             "type": "number",
             "default": 30.0,
@@ -473,6 +594,16 @@
             "default": 3.0,
             "description": "Auto-download wait seconds (bounded; default: 3.0)"
           },
+          "auto_tab": {
+            "type": "boolean",
+            "default": false,
+            "description": "Auto-switch to a newly opened tab after click-like actions (best-effort; default: false)"
+          },
+          "auto_affordances": {
+            "type": "boolean",
+            "default": true,
+            "description": "Auto-refresh affordances when act(ref/label) looks stale (URL mismatch or missing refs; default: true)"
+          },
           "with_screenshot": {
             "type": "boolean",
             "default": false,
@@ -482,6 +613,67 @@
         "required": [
           "steps"
         ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "runbook",
+      "description": "Runbooks: save and execute reusable step lists stored in agent memory.\n\nUSAGE:\n- Save: runbook(action=\"save\", key=\"runbook_login\", steps=[...])\n- Run: runbook(action=\"run\", key=\"runbook_login\", params={...}, run_args={...})\n- List: runbook(action=\"list\", limit=20)\n- Get: runbook(action=\"get\", key=\"runbook_login\")\n- Delete: runbook(action=\"delete\", key=\"runbook_login\")\n",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "save",
+              "run",
+              "list",
+              "get",
+              "delete"
+            ],
+            "default": "list",
+            "description": "Runbook action"
+          },
+          "key": {
+            "type": "string",
+            "description": "Runbook key in agent memory"
+          },
+          "steps": {
+            "type": "array",
+            "description": "Runbook step list (for action='save')",
+            "items": {
+              "type": "object"
+            }
+          },
+          "params": {
+            "type": "object",
+            "description": "Params for {{param:...}} placeholders (for action='run')"
+          },
+          "run_args": {
+            "type": "object",
+            "description": "Optional run(...) arguments (for action='run'); actions are provided by the runbook"
+          },
+          "goal": {
+            "type": "string",
+            "description": "Optional goal string (for action='run')"
+          },
+          "allow_sensitive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow sensitive keys / literals (NOT encrypted; use carefully)"
+          },
+          "include_sensitive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Include sensitive keys in list output (default: false)"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 20,
+            "description": "Limit for list, and preview size for get (default: 20)"
+          }
+        },
         "additionalProperties": false
       }
     },
@@ -1173,6 +1365,82 @@
         "required": [
           "url"
         ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "storage",
+      "description": "Storage operations (localStorage / sessionStorage).\n\nUSAGE:\n- List keys: storage(action=\"list\", storage=\"local\", limit=20)\n- Get value (preview): storage(action=\"get\", key=\"theme\", reveal=true)\n- Set one: storage(action=\"set\", key=\"theme\", value=\"dark\")\n- Set many: storage(action=\"set_many\", items={\"k1\":\"v1\",\"k2\":\"v2\"})\n- Delete: storage(action=\"delete\", key=\"theme\")\n- Clear: storage(action=\"clear\")\n\nNOTES:\n- Safe-by-default: strict policy blocks mutation and sensitive value reveal.\n- To store a revealed value off-context: storage(action=\"get\", key=\"...\", reveal=true, store=true)",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "get",
+              "set",
+              "set_many",
+              "delete",
+              "clear"
+            ],
+            "default": "list"
+          },
+          "storage": {
+            "type": "string",
+            "enum": [
+              "local",
+              "session"
+            ],
+            "default": "local",
+            "description": "Storage backend"
+          },
+          "key": {
+            "type": "string",
+            "description": "Storage key (get/set/delete)"
+          },
+          "value": {
+            "description": "Value to set (set)",
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "object",
+              "array",
+              "null"
+            ],
+            "items": {},
+            "additionalProperties": true
+          },
+          "items": {
+            "type": "object",
+            "description": "Key/value map for set_many",
+            "additionalProperties": true
+          },
+          "offset": {
+            "type": "integer",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "default": 20
+          },
+          "max_chars": {
+            "type": "integer",
+            "default": 2000
+          },
+          "reveal": {
+            "type": "boolean",
+            "default": false,
+            "description": "Reveal value preview (unsafe; strict may block sensitive keys)"
+          },
+          "store": {
+            "type": "boolean",
+            "default": false,
+            "description": "Store revealed value off-context as an artifact (requires reveal=true)"
+          }
+        },
         "additionalProperties": false
       }
     },

@@ -415,6 +415,59 @@ def test_locators_available_on_regular_https_page(monkeypatch: pytest.MonkeyPatc
     assert isinstance(items, list) and items
 
 
+def test_locators_input_editable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tier-0 AX locators should classify editable focusable nodes as inputs."""
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.session import session_manager
+    from mcp_servers.browser.tools.page import locators as locators_tool
+
+    class DummySession:
+        tab_id = "tab1"
+
+        def send(self, method: str, params=None):  # noqa: ANN001
+            if method == "Accessibility.getFullAXTree":
+                return {
+                    "nodes": [
+                        {
+                            "ignored": False,
+                            "role": {"value": "generic"},
+                            "name": {"value": "Search"},
+                            "backendDOMNodeId": 321,
+                            "properties": [
+                                {"name": "focusable", "value": {"value": True}},
+                                {"name": "editable", "value": {"value": True}},
+                            ],
+                        }
+                    ]
+                }
+            if method == "Page.getNavigationHistory":
+                return {"currentIndex": 0, "entries": [{"url": "https://example.com/"}]}
+            return {}
+
+        def eval_js(self, expression: str, *, timeout: float | None = None):  # noqa: ANN001,ARG002
+            return None
+
+    @contextmanager
+    def fake_get_session(_cfg: BrowserConfig, timeout: float = 5.0, **kwargs):  # noqa: ARG001
+        yield DummySession(), {"id": "tab1"}
+
+    monkeypatch.setattr(locators_tool, "get_session", fake_get_session)
+    monkeypatch.setattr(session_manager, "ensure_telemetry", lambda _sess: {"enabled": True})
+    monkeypatch.setattr(session_manager, "tier0_snapshot", lambda *a, **k: {"dialogOpen": False})
+    monkeypatch.setattr(session_manager, "ensure_diagnostics", lambda _sess: {"enabled": True, "available": False})
+    monkeypatch.setattr(session_manager, "set_affordances", lambda *a, **k: None)
+    session_manager._session_tab_id = "tab1"
+
+    cfg = BrowserConfig.from_env()
+    res = locators_tool.get_page_locators(cfg, kind="all", offset=0, limit=20)
+    locs = res.get("locators")
+    assert isinstance(locs, dict)
+    items = locs.get("items")
+    assert isinstance(items, list) and items
+    assert items[0].get("kind") == "input"
+    assert items[0].get("inputType") == "text"
+
+
 def test_flow_watchdog_action_timeout_does_not_hang(monkeypatch: pytest.MonkeyPatch) -> None:
     """flow should return promptly if a step dispatch hangs (watchdog)."""
     from mcp_servers.browser.config import BrowserConfig

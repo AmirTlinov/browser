@@ -154,6 +154,9 @@ def get_page_diagnostics(
                     except Exception:
                         pass
 
+            if isinstance(snapshot, dict):
+                snapshot = _filter_diagnostics_noise(snapshot)
+
             insights = _derive_insights(snapshot)
 
             if clear:
@@ -223,6 +226,70 @@ _FRAME_BLOCK_PATTERNS = [
     re.compile(r"frame-ancestors", re.IGNORECASE),
     re.compile(r"refused to display .* in a frame", re.IGNORECASE),
 ]
+
+_EXTENSION_NOISE_PATTERNS = [
+    re.compile(r"cannot redefine property: ethereum", re.IGNORECASE),
+    re.compile(r"defineproperty.*ethereum", re.IGNORECASE),
+]
+
+_EXTENSION_SCHEME_PATTERNS = [
+    re.compile(r"chrome-extension://", re.IGNORECASE),
+    re.compile(r"moz-extension://", re.IGNORECASE),
+    re.compile(r"safari-extension://", re.IGNORECASE),
+    re.compile(r"ms-browser-extension://", re.IGNORECASE),
+    re.compile(r"extension://", re.IGNORECASE),
+]
+
+
+def _is_extension_noise_text(text: str) -> bool:
+    if not isinstance(text, str) or not text:
+        return False
+    if any(pat.search(text) for pat in _EXTENSION_NOISE_PATTERNS):
+        return True
+    return any(pat.search(text) for pat in _EXTENSION_SCHEME_PATTERNS)
+
+
+def _filter_diagnostics_noise(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Remove known extension-origin noise (wallet/content scripts) from diagnostics reports."""
+    if not isinstance(snapshot, dict):
+        return snapshot
+
+    def console_keep(entry: dict[str, Any]) -> bool:
+        args = entry.get("args")
+        if isinstance(args, list):
+            for arg in args:
+                if _is_extension_noise_text(str(arg)):
+                    return False
+        return True
+
+    def error_keep(entry: dict[str, Any]) -> bool:
+        msg = entry.get("message") if isinstance(entry, dict) else None
+        if isinstance(msg, str) and _is_extension_noise_text(msg):
+            return False
+        filename = entry.get("filename") if isinstance(entry, dict) else None
+        if isinstance(filename, str) and _is_extension_noise_text(filename):
+            return False
+        url = entry.get("url") if isinstance(entry, dict) else None
+        return not (isinstance(url, str) and _is_extension_noise_text(url))
+
+    def rejection_keep(entry: dict[str, Any]) -> bool:
+        msg = entry.get("message") if isinstance(entry, dict) else None
+        if isinstance(msg, str) and _is_extension_noise_text(msg):
+            return False
+        stack = entry.get("stack") if isinstance(entry, dict) else None
+        return not (isinstance(stack, str) and _is_extension_noise_text(stack))
+
+    cleaned = dict(snapshot)
+    console_entries = cleaned.get("console")
+    if isinstance(console_entries, list):
+        cleaned["console"] = [e for e in console_entries if isinstance(e, dict) and console_keep(e)]
+    errors = cleaned.get("errors")
+    if isinstance(errors, list):
+        cleaned["errors"] = [e for e in errors if isinstance(e, dict) and error_keep(e)]
+    rejections = cleaned.get("unhandledRejections")
+    if isinstance(rejections, list):
+        cleaned["unhandledRejections"] = [e for e in rejections if isinstance(e, dict) and rejection_keep(e)]
+    return cleaned
 
 
 def _derive_insights(snapshot: dict[str, Any]) -> list[dict[str, Any]]:

@@ -45,6 +45,7 @@ def main() -> int:
 
     print("\nOK: setup")
     print("Next: ./tools/lint && ./tools/gate")
+    print("Optional: ./tools/install_native_host  # extension transport without local ports")
     return 0
 
 

@@ -96,6 +96,62 @@ rm -rf ~/.gemini/browser-profile/SingletonLock
 
 ---
 
+## Extension: Native Bridge Not Connected
+
+Extension mode is **portless**: the Browser MCP Chrome extension talks to a local Native Messaging host
+(`com.openai.browser_mcp`) and Browser MCP server processes connect via local IPC (no `127.0.0.1:<port>` gateway).
+
+### Checklist
+
+```bash
+# 1) Ensure deps are installed
+./tools/setup
+
+# 2) Load/reload the unpacked extension
+#    chrome://extensions → Developer mode → Load unpacked → vendor/browser_extension
+
+# 3) Start the server (extension mode is default)
+./scripts/run_browser_mcp.sh
+```
+
+The server auto-installs the Native Messaging host on startup. If the extension popup still shows
+**Not connected** with “Native host not available”, re-run `./tools/install_native_host` and reload the extension
+(it must be enabled). Auto-launch is opt-in via `MCP_EXTENSION_AUTO_LAUNCH=1`.
+
+Note: Chrome rejects Native Messaging manifests that are group-writable. The installer now enforces
+`0644` permissions automatically. If you hand-edit the manifest, keep it non-group-writable.
+
+### Fast Local Diagnosis
+
+```bash
+./tools/extension_status
+# Deep scan (can be slow on large profiles)
+./tools/extension_status --deep --json
+```
+
+### Auto-Heal (Default ON)
+
+Browser MCP will auto-heal common Native Messaging drift (missing/invalid manifest, bad permissions) in extension mode.
+
+```bash
+# Disable auto-heal (debugging)
+export MCP_EXTENSION_AUTO_HEAL=0
+
+# Tune intervals (seconds)
+export MCP_EXTENSION_AUTO_HEAL_INTERVAL=30
+export MCP_EXTENSION_AUTO_HEAL_MAX_ATTEMPTS=3
+```
+
+### CI Gate (Optional)
+
+```bash
+# Make ./tools/gate also require extension connectivity (for integration CI)
+export MCP_EXTENSION_GATE=1
+./tools/gate
+```
+
+---
+
 ## Browser Not Opening (Visible Mode)
 
 ### Check

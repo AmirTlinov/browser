@@ -121,6 +121,46 @@ html, body {
   margin-top: 10px;
 }
 
+.divider {
+  height: 1px;
+  background: var(--card-border);
+  opacity: 0.75;
+  margin: 10px 0;
+}
+
+.statusHint {
+  margin-top: 8px;
+}
+
+details.advanced {
+  margin-bottom: 10px;
+}
+
+details.advanced > summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 2px;
+  user-select: none;
+}
+
+details.advanced > summary::-webkit-details-marker { display: none; }
+
+details.advanced[open] > summary {
+  color: rgba(255, 255, 255, 0.80);
+}
+
+.kv--top {
+  align-items: start;
+}
+
+.kv--top .v {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .btn {
   flex: 1;
   padding: 8px 10px;

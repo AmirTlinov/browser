@@ -17,10 +17,11 @@
     "downloads",
     "offscreen",
     "clipboardWrite",
-    "alarms"
+    "alarms",
+    "nativeMessaging"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; connect-src ws://127.0.0.1:* http://127.0.0.1:*; frame-src http://localhost:*;"
+    "extension_pages": "script-src 'self'; connect-src 'self';"
   },
   "host_permissions": [
     "<all_urls>"

@@ -89,7 +89,11 @@ def _tier0_locators_from_ax(*, session: Any, kind: str, offset: int, limit: int)
         "radio": ("input", "radio"),
         "switch": ("input", "switch"),
         "textbox": ("input", "text"),
+        "textfield": ("input", "text"),
+        "text": ("input", "text"),
+        "textarea": ("input", "text"),
         "searchbox": ("input", "search"),
+        "searchfield": ("input", "search"),
         "combobox": ("input", "combobox"),
         "listbox": ("input", "listbox"),
         "menuitem": ("button", None),
@@ -115,12 +119,17 @@ def _tier0_locators_from_ax(*, session: Any, kind: str, offset: int, limit: int)
 
         focusable = _ax_bool_prop(n, "focusable")
         disabled = _ax_bool_prop(n, "disabled")
+        editable = _ax_bool_prop(n, "editable")
 
         if mapped is None:
             if focusable is not True:
                 continue
-            kind_name = "button"
-            input_type = None
+            if editable is True:
+                kind_name = "input"
+                input_type = "text"
+            else:
+                kind_name = "button"
+                input_type = None
         else:
             kind_name, input_type = mapped
 

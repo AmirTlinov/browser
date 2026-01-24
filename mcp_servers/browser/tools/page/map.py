@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from ...config import BrowserConfig
-from ...server.redaction import redact_url
+from ...server.redaction import redact_url_brief
 from ...session import session_manager
 from ..base import SmartToolError
 from .diagnostics import get_page_diagnostics
@@ -118,9 +118,9 @@ def _compact_actions(loc_payload: dict[str, Any] | None, *, limit: int) -> dict[
         # Optional link target (redacted for safety).
         href = it.get("href")
         if kind == "link" and isinstance(href, str) and href.strip():
-            entry["href"] = redact_url(href)
+            entry["href"] = redact_url_brief(href)
             if isinstance(ref, str) and ref.startswith("aff:"):
-                link_edges.append({"ref": ref, "label": label, "to": redact_url(href)})
+                link_edges.append({"ref": ref, "label": label, "to": redact_url_brief(href)})
 
         # Optional input hints.
         if kind == "input":
@@ -198,7 +198,7 @@ def get_page_map(
             if k in page_info:
                 v = page_info.get(k)
                 if k == "url" and isinstance(v, str) and v:
-                    page[k] = redact_url(v)
+                    page[k] = redact_url_brief(v)
                 else:
                     page[k] = v
 
@@ -207,7 +207,7 @@ def get_page_map(
             if k in diag_snapshot:
                 v = diag_snapshot.get(k)
                 if k == "url" and isinstance(v, str) and v:
-                    page[k] = redact_url(v)
+                    page[k] = redact_url_brief(v)
                 else:
                     page[k] = v
 

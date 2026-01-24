@@ -18,6 +18,7 @@ dev = [
 
 [project.scripts]
 browser-mcp = "mcp_servers.browser.main:main"
+browser-mcp-native-host = "mcp_servers.browser.native_host:main"
 
 [build-system]
 requires = ["hatchling"]

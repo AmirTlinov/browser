@@ -2,4 +2,6 @@
 # Lines are executed in a shell, in order (after doc checks).
 
 ( [ -x .venv/bin/python ] && PYTHONPATH="vendor/python:$PYTHONPATH" .venv/bin/python -m compileall -q mcp_servers ) || PYTHONPATH="vendor/python:$PYTHONPATH" python3 -m compileall -q mcp_servers
+( [ -x .venv/bin/python ] && PYTHONPATH="vendor/python:$PYTHONPATH" .venv/bin/python scripts/structure_gate.py ) || PYTHONPATH="vendor/python:$PYTHONPATH" python3 scripts/structure_gate.py
 ( [ -x .venv/bin/python ] && PYTHONPATH="vendor/python:$PYTHONPATH" .venv/bin/python -m pytest -q --maxfail=1 ) || PYTHONPATH="vendor/python:$PYTHONPATH" python3 -m pytest -q --maxfail=1
+if [ "${MCP_EXTENSION_GATE:-0}" = "1" ]; then ./tools/extension_status --strict; fi

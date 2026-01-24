@@ -298,8 +298,9 @@ def test_server_list_tools_output(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "click" in tool_names
     assert "scroll" in tool_names
     assert "download" in tool_names
+    assert "storage" in tool_names
     # Keep the tool surface small, but allow deliberate additions.
-    assert len(tools) == 25
+    assert len(tools) == 27
 
 
 def test_server_list_tools_toolset_v2(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -318,7 +319,7 @@ def test_server_list_tools_toolset_v2(monkeypatch: pytest.MonkeyPatch) -> None:
     data = sent[0]
     tools = data["result"]["tools"]
     tool_names = [t["name"] for t in tools]
-    assert tool_names == ["page", "run", "app", "browser"]
+    assert tool_names == ["page", "run", "runbook", "app", "browser"]
 
 
 def test_server_initialize(monkeypatch: pytest.MonkeyPatch) -> None:

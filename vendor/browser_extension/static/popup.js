@@ -25,14 +25,6 @@ async function reconnect() {
   return await chrome.runtime.sendMessage({ type: "ui.reconnect" });
 }
 
-async function setGatewayUrl(gatewayUrl) {
-  return await chrome.runtime.sendMessage({ type: "ui.setGatewayUrl", gatewayUrl: String(gatewayUrl || "") });
-}
-
-async function resetGatewayUrl() {
-  return await chrome.runtime.sendMessage({ type: "ui.resetGatewayUrl" });
-}
-
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(String(text || ""));
@@ -44,20 +36,26 @@ async function copyToClipboard(text) {
 
 function render(state) {
   const connected = !!state?.gateway?.connected;
+  const enabled = !!state?.enabled;
 
-  if (!state?.enabled) setBadge("badge--warn", "Disabled");
-  else if (connected) setBadge("badge--ok", "Connected");
-  else setBadge("badge--warn", "Waiting…");
+  if (!enabled) setBadge("badge--warn", "Disabled");
+  else if (connected) setBadge("badge--ok", "Ready");
+  else setBadge("badge--danger", "Not connected");
 
-  $("enabledToggle").checked = !!state?.enabled;
+  $("enabledToggle").checked = enabled;
   $("followToggle").checked = !!state?.followActive;
 
-  $("gatewayUrl").textContent = state?.gateway?.connectedUrl || state?.gateway?.url || "ws://127.0.0.1:8765";
-  $("gatewayUrlInput").value = state?.gateway?.configuredUrl || "ws://127.0.0.1:8765";
-  $("gatewayLastGood").textContent = state?.gateway?.lastGoodUrl || "—";
+  if (!enabled) $("statusHint").textContent = "Agent control is OFF.";
+  else if (connected) $("statusHint").textContent = "";
+  else $("statusHint").textContent = state?.lastError ? String(state.lastError) : "Native bridge is not connected.";
+
+  $("transport").textContent = state?.gateway?.transport || "native";
+  $("brokerId").textContent = state?.gateway?.brokerId || "—";
+  $("peerCount").textContent = state?.gateway?.peerCount ?? "—";
+  $("sessionId").textContent = state?.gateway?.sessionId ?? "—";
   $("extId").textContent = state?.extensionId || "—";
   $("focusedTab").textContent = state?.focusedTabId ?? "—";
-  $("lastError").textContent = state?.lastError ? String(state.lastError) : "";
+  $("lastError").textContent = state?.lastError ? String(state.lastError) : "—";
 }
 
 async function refresh() {
@@ -83,24 +81,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     await refresh();
   });
 
-  $("saveGatewayBtn").addEventListener("click", async () => {
-    await setGatewayUrl($("gatewayUrlInput").value);
-    await refresh();
-  });
-
-  $("resetGatewayBtn").addEventListener("click", async () => {
-    await resetGatewayUrl();
-    await refresh();
-  });
-
-  $("gatewayUrlInput").addEventListener("keydown", async (e) => {
-    if (e.key !== "Enter") return;
-    await setGatewayUrl($("gatewayUrlInput").value);
-    await refresh();
-  });
-
-  $("copyExtIdBtn").addEventListener("click", async () => {
-    const ok = await copyToClipboard($("extId").textContent);
+  $("copyDiagnosticsBtn").addEventListener("click", async () => {
+    const st = await getState();
+    const ok = await copyToClipboard(JSON.stringify(st || {}, null, 2));
     if (!ok) $("lastError").textContent = "Failed to copy";
   });
 

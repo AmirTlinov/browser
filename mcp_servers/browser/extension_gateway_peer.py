@@ -109,7 +109,7 @@ class ExtensionGatewayPeer:
             return {
                 "listening": False,
                 "connected": bool(self._extension_connected),
-                "peerConnected": self._ws is not None,
+                "peerConnected": self._connected.is_set(),
                 "peerId": self._peer_id,
                 **({"gatewayHost": self._gateway_host} if self._gateway_host else {}),
                 **({"gatewayPort": self._gateway_port} if isinstance(self._gateway_port, int) else {}),
@@ -164,11 +164,20 @@ class ExtensionGatewayPeer:
         with self._lock:
             ws = self._ws
             loop = self._loop
-            if ws is None or loop is None:
-                raise HttpClientError(
-                    "Extension peer is not connected. Start another Browser MCP session as leader, "
-                    "or wait for the gateway to appear."
-                )
+
+        # Best-effort: give the background peer thread a short chance to connect.
+        if (ws is None or loop is None) and self._wait_for_peer_socket(timeout=1.5):
+            with self._lock:
+                ws = self._ws
+                loop = self._loop
+
+        if ws is None or loop is None:
+            raise HttpClientError(
+                "Extension peer is not connected. Start another Browser MCP session as leader, "
+                "or wait for the gateway to appear."
+            )
+
+        with self._lock:
             req_id = self._next_id
             self._next_id += 1
             fut = Future()
@@ -328,7 +337,6 @@ class ExtensionGatewayPeer:
                         self._leader_started_at_ms = int(disc.server_started_at_ms)
                         self._extension_connected = bool(disc.extension_connected)
                         self._last_error = None
-                    self._connected.set()
                     backoff_s = 0.25
 
                     hello = {
@@ -350,6 +358,9 @@ class ExtensionGatewayPeer:
                         ack = None
                     if not (isinstance(ack, dict) and ack.get("type") == "peerHelloAck"):
                         raise RuntimeError("peer helloAck invalid")
+
+                    # Mark peer as ready only after a successful hello/ack handshake.
+                    self._connected.set()
 
                     poll_task = asyncio.create_task(_poll_status(ws))
 
@@ -389,12 +400,24 @@ class ExtensionGatewayPeer:
         with self._lock:
             self._ws = None
             self._extension_connected = False
+            self._connected.clear()
             pending = list(self._pending.items())
             self._pending.clear()
         for _req_id, fut in pending:
             with contextlib.suppress(Exception):
                 if not fut.done():
                     fut.set_exception(HttpClientError("Extension peer disconnected"))
+
+    def _wait_for_peer_socket(self, *, timeout: float) -> bool:
+        deadline = time.time() + max(0.0, float(timeout))
+        while time.time() < deadline:
+            with self._lock:
+                if self._ws is not None and self._loop is not None and self._connected.is_set():
+                    return True
+            # Give the peer thread a chance to connect.
+            with contextlib.suppress(Exception):
+                self._connected.wait(timeout=0.05)
+        return False
 
     async def _peer_rpc(self, ws, method: str, params: dict[str, Any], *, timeout: float) -> Any:  # type: ignore[no-untyped-def]
         req_id = None
