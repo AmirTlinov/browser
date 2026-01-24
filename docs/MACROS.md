@@ -28,6 +28,7 @@ For canvas-app automation, use `app(...)` (see `docs/APPS.md`).
 - `scroll_to_end`: bounded auto-scroll until the page is at the end.
 - `retry_click`: bounded retry clicking until a condition holds.
 - `paginate_next`: bounded click-next loop (stops when Next is missing/disabled).
+- `auto_expand`: bounded “Show more/Read more” expander before extraction.
 - `goto_if_needed`: avoid a navigation if already on the target page.
 - `assert_then`: guard + execute a bounded follow-up step list.
 - `include_memory_steps`: pull a stored runbook into a larger `run(...)` call.
@@ -161,6 +162,27 @@ Example:
 ```
 run(actions=[
   {"macro": {"name": "paginate_next", "args": {"next_selector": "button.next", "max_iters": 8}}}
+])
+```
+
+### auto_expand
+Purpose: bounded “show more/read more” expander pass before extraction (uses [JS_COND]).
+
+Args:
+- `phrases` (optional list) — phrases to match (default: show/read/see more, expand, show all, load more).
+- `selectors` (optional string or list) — CSS selectors to scan (default: `button, [role=button], summary, details`).
+- `include_links` (optional bool, default: false) — allow anchor tags (only `#`/`javascript:` or role=button).
+- `click_limit` (optional, default: 6) — max clicks per iteration.
+- `max_iters` (optional, default: 6)
+- `timeout_s` (optional, default: 0.4) — per-condition wait timeout.
+- `wait` (optional object) — wait args after each click batch (e.g., `{for:"networkidle"}`).
+- `settle_ms` (optional) — convert to a small backoff between iterations.
+- Pass-through `repeat` tuning (optional): `max_time_s`, `backoff_s`, `backoff_factor`, `backoff_max_s`, `backoff_jitter`.
+
+Example:
+```
+run(actions=[
+  {"macro": {"name": "auto_expand", "args": {"phrases": ["show more", "read more"]}}}
 ])
 ```
 

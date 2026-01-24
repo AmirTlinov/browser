@@ -1134,6 +1134,7 @@ Examples:
 3) {"macro": {"name": "trace_then_screenshot", "args": {"trace": "harLite"}, "dry_run": true}}
 4) {"macro": {"name": "include_memory_steps", "args": {"memory_key": "workflow.login", "params": {"user": "alice"}}}}
 5) {"repeat": {"max_iters": 10, "until": {"selector": "#result"}, "steps": [{"scroll": {"direction": "down"}}]}}
+6) {"macro": {"name": "auto_expand", "args": {"phrases": ["show more", "read more"]}}}
 6) {"repeat": {"max_iters": 8, "until": {"js": "window.scrollY > 2000"}, "steps": [{"scroll": {"direction": "down"}}]}}
 
 HIGH-LEVERAGE INTERNAL ACTION:

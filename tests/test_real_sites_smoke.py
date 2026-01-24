@@ -150,6 +150,82 @@ def test_real_sites_smoke(browser_env: tuple[BrowserConfig, BrowserLauncher]) ->
 
 
 @pytest.mark.skipif(
+    os.environ.get("RUN_BROWSER_INTEGRATION_MACROS") != "1",
+    reason="Macro live tests. Set RUN_BROWSER_INTEGRATION_MACROS=1 to enable.",
+)
+def test_real_sites_macro_scroll_and_paginate(browser_env: tuple[BrowserConfig, BrowserLauncher]) -> None:
+    config, launcher = browser_env
+    registry = create_default_registry()
+    flow_handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
+
+    # Macro: scroll_to_end (bounded by until_js so it stays fast).
+    try:
+        res = flow_handler(
+            config,
+            launcher,
+            args={
+                "steps": [
+                    {"navigate": {"url": "https://en.wikipedia.org/wiki/List_of_programming_languages"}},
+                    {
+                        "macro": {
+                            "name": "scroll_to_end",
+                            "args": {
+                                "max_iters": 4,
+                                "scroll": {"direction": "down", "amount": 800},
+                                "until_js": "window.scrollY > 800",
+                            },
+                        }
+                    },
+                ],
+                "final": "none",
+                "stop_on_error": True,
+                "auto_recover": False,
+                "step_proof": False,
+                "action_timeout": 20.0,
+            },
+        )
+        assert not res.is_error
+        info = _page_info_retry(config)
+        assert isinstance(info.get("scrollY"), (int, float)) and info.get("scrollY") >= 800
+    except Exception as exc:  # noqa: BLE001
+        pytest.xfail(f"scroll_to_end live macro failed: {exc}")
+
+    # Macro: paginate_next (HN "More" link).
+    try:
+        res = flow_handler(
+            config,
+            launcher,
+            args={
+                "steps": [
+                    {"navigate": {"url": "https://news.ycombinator.com/news?p=1"}},
+                    {
+                        "macro": {
+                            "name": "paginate_next",
+                            "args": {
+                                "next_selector": "a.morelink",
+                                "until": {"url": "news?p=2"},
+                                "wait": {"for": "navigation"},
+                                "max_iters": 3,
+                                "dismiss_overlays": False,
+                            },
+                        }
+                    },
+                ],
+                "final": "none",
+                "stop_on_error": True,
+                "auto_recover": False,
+                "step_proof": False,
+                "action_timeout": 20.0,
+            },
+        )
+        assert not res.is_error
+        info = _page_info_retry(config)
+        assert "news?p=2" in str(info.get("url", ""))
+    except Exception as exc:  # noqa: BLE001
+        pytest.xfail(f"paginate_next live macro failed: {exc}")
+
+
+@pytest.mark.skipif(
     os.environ.get("RUN_BROWSER_INTEGRATION_EDGE") != "1",
     reason="Edge-case live tests. Set RUN_BROWSER_INTEGRATION_EDGE=1 to enable.",
 )

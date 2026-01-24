@@ -17,6 +17,30 @@ DEFAULT_SCROLL_END_JS = (
     "})()"
 )
 
+DEFAULT_EXPAND_PHRASES = [
+    "show more",
+    "read more",
+    "see more",
+    "expand",
+    "show all",
+    "load more",
+]
+DEFAULT_EXPAND_SELECTORS = "button, [role=button], summary, details"
+
+
+def _as_str_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    if isinstance(value, list):
+        out: list[str] = []
+        for it in value:
+            if isinstance(it, str) and it.strip():
+                out.append(it.strip())
+        return out
+    return []
+
 
 def expand_scroll_until_visible(*, args: dict[str, Any], args_note: dict[str, Any]) -> dict[str, Any]:
     selector = args.get("selector")
@@ -262,4 +286,167 @@ def expand_paginate_next(*, args: dict[str, Any], args_note: dict[str, Any]) -> 
     }
     if wait_args:
         plan_args["wait"] = list(wait_args.keys())[:6]
+    return {"ok": True, "steps": [{"repeat": repeat}], "plan_args": plan_args}
+
+
+def _build_auto_expand_js(
+    *,
+    phrases: list[str],
+    selectors: str,
+    include_links: bool,
+    max_clicks: int,
+    do_click: bool,
+) -> str:
+    phrases_json = json.dumps([p.lower() for p in phrases if p.strip()])
+    selectors_json = json.dumps(selectors)
+    do_click_js = "true" if do_click else "false"
+    include_links_js = "true" if include_links else "false"
+    return (
+        "(() => {"
+        f"  const phrases = {phrases_json};"
+        f"  const selector = {selectors_json};"
+        f"  const includeLinks = {include_links_js};"
+        f"  const maxClicks = {int(max_clicks)};"
+        f"  const doClick = {do_click_js};"
+        "  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();"
+        "  const matches = (el) => {"
+        "    const text = norm(el.textContent || '');"
+        "    const aria = norm(el.getAttribute && el.getAttribute('aria-label'));"
+        "    const title = norm(el.getAttribute && el.getAttribute('title'));"
+        "    const hay = text || aria || title;"
+        "    if (!hay) return false;"
+        "    return phrases.some((p) => hay.includes(p));"
+        "  };"
+        "  const isVisible = (el) => {"
+        "    if (!el) return false;"
+        "    const style = window.getComputedStyle(el);"
+        "    if (style && (style.visibility === 'hidden' || style.display === 'none')) return false;"
+        "    const rects = el.getClientRects();"
+        "    return !!(rects && rects.length);"
+        "  };"
+        "  const isDisabled = (el) => {"
+        "    if (el.disabled) return true;"
+        "    const aria = el.getAttribute && el.getAttribute('aria-disabled');"
+        "    return aria === 'true';"
+        "  };"
+        "  const allowLink = (el) => {"
+        "    if (el.tagName !== 'A') return true;"
+        "    if (!includeLinks) return false;"
+        "    const href = (el.getAttribute('href') || '').trim().toLowerCase();"
+        "    if (!href || href === '#' || href.startsWith('#') || href.startsWith('javascript:')) return true;"
+        "    const role = (el.getAttribute('role') || '').toLowerCase();"
+        "    return role === 'button';"
+        "  };"
+        "  const nodes = Array.from(document.querySelectorAll(selector));"
+        "  let count = 0;"
+        "  let clicked = 0;"
+        "  for (const el of nodes) {"
+        "    if (!isVisible(el) || isDisabled(el)) continue;"
+        "    if (el.dataset && el.dataset.mcpExpanded === '1') continue;"
+        "    if (!allowLink(el)) continue;"
+        "    if (!matches(el)) continue;"
+        "    if (el.tagName === 'DETAILS') {"
+        "      count += 1;"
+        "      if (doClick && !el.open && clicked < maxClicks) {"
+        "        el.open = true;"
+        "        clicked += 1;"
+        "        try { el.dataset.mcpExpanded = '1'; } catch (e) {}"
+        "      }"
+        "      continue;"
+        "    }"
+        "    const ariaExpanded = el.getAttribute && el.getAttribute('aria-expanded');"
+        "    if (ariaExpanded === 'true') continue;"
+        "    count += 1;"
+        "    if (doClick && clicked < maxClicks) {"
+        "      try { el.click(); } catch (e) {}"
+        "      clicked += 1;"
+        "      try { el.dataset.mcpExpanded = '1'; } catch (e) {}"
+        "    }"
+        "  }"
+        "  if (!doClick) return count === 0;"
+        "  return {clicked, total: count};"
+        "})()"
+    )
+
+
+def expand_auto_expand(*, args: dict[str, Any], args_note: dict[str, Any]) -> dict[str, Any]:
+    phrases = _as_str_list(args.get("phrases")) or DEFAULT_EXPAND_PHRASES
+    selectors_raw = args.get("selectors")
+    selectors = DEFAULT_EXPAND_SELECTORS
+    if isinstance(selectors_raw, str) and selectors_raw.strip():
+        selectors = selectors_raw.strip()
+    elif isinstance(selectors_raw, list):
+        selectors = ", ".join(_as_str_list(selectors_raw)) or DEFAULT_EXPAND_SELECTORS
+
+    include_links = bool(args.get("include_links", False))
+
+    try:
+        max_clicks = int(args.get("click_limit", 6))
+    except Exception:
+        max_clicks = 6
+    max_clicks = max(1, min(max_clicks, 40))
+
+    try:
+        max_iters = int(args.get("max_iters", 6))
+    except Exception:
+        max_iters = 6
+    max_iters = max(1, min(max_iters, 50))
+
+    try:
+        timeout_s = float(args.get("timeout_s", 0.4))
+    except Exception:
+        timeout_s = 0.4
+    timeout_s = max(0.0, min(timeout_s, 10.0))
+
+    count_js = _build_auto_expand_js(
+        phrases=phrases,
+        selectors=selectors,
+        include_links=include_links,
+        max_clicks=max_clicks,
+        do_click=False,
+    )
+    click_js = _build_auto_expand_js(
+        phrases=phrases,
+        selectors=selectors,
+        include_links=include_links,
+        max_clicks=max_clicks,
+        do_click=True,
+    )
+
+    body_steps: list[dict[str, Any]] = [{"js": {"code": click_js}}]
+    wait_args = args.get("wait") if isinstance(args.get("wait"), dict) else None
+    if wait_args:
+        body_steps.append({"wait": wait_args})
+
+    repeat: dict[str, Any] = {
+        "max_iters": int(max_iters),
+        "until": {"js": count_js},
+        "timeout_s": float(timeout_s),
+        "steps": body_steps,
+    }
+
+    settle_ms = args.get("settle_ms")
+    if settle_ms is not None and "backoff_s" not in args:
+        try:
+            repeat["backoff_s"] = max(0.0, min(float(settle_ms) / 1000.0, 10.0))
+        except Exception:
+            repeat["backoff_s"] = 0.2
+    elif "backoff_s" not in args:
+        repeat["backoff_s"] = 0.2
+
+    for k in ("max_time_s", "backoff_s", "backoff_factor", "backoff_max_s", "backoff_jitter", "jitter_seed"):
+        v = args.get(k)
+        if v is not None and not isinstance(v, bool):
+            repeat[k] = v
+
+    plan_args: dict[str, Any] = {
+        "phrases": phrases[:8],
+        "selectors": selectors,
+        "include_links": bool(include_links),
+        "click_limit": int(max_clicks),
+        "max_iters": int(max_iters),
+    }
+    if wait_args:
+        plan_args["wait"] = list(wait_args.keys())[:6]
+
     return {"ok": True, "steps": [{"repeat": repeat}], "plan_args": plan_args}

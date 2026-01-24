@@ -20,6 +20,7 @@ Use this when you want the fewest MCP calls per scenario. Start here, then drill
 - Complex UI with stable affordances? Use [TWO_CALL_FLOW].
 - Need retries or branching? Use internal `assert/when/repeat` inside `run(...)`.
 - Need lazy-loaded content? Use `page(detail="content", auto_scroll=true)` first.
+- Need collapsed content expanded? Use `run(actions=[{"macro":{"name":"auto_expand"}}])` before extraction.
 
 ## [ONE_CALL_FLOW] patterns
 Basic form:
