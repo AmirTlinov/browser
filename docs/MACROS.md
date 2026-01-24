@@ -7,6 +7,7 @@ MACRO_DRY_RUN = When true, return a plan/steps without executing them.
 TRACE_KIND = `harLite` or `trace`.
 MEM_PLACEHOLDER = Macro-time placeholder syntax: `{{mem:key}}` or `${mem:key}`.
 PARAM_PLACEHOLDER = Macro-time placeholder syntax: `{{param:key}}` or `${param:key}`.
+JS_COND = A JS expression evaluated in-page that must return a truthy value.
 
  [CONTENT]
 # Run macros
@@ -24,7 +25,9 @@ For canvas-app automation, use `app(...)` (see `docs/APPS.md`).
 - `dismiss_overlays`: clear blocking dialogs before clicks.
 - `login_basic`: fill a basic login form with `form(fill=..., submit=true)`.
 - `scroll_until_visible`: bounded scroll-until (uses internal `repeat`).
+- `scroll_to_end`: bounded auto-scroll until the page is at the end.
 - `retry_click`: bounded retry clicking until a condition holds.
+- `paginate_next`: bounded click-next loop (stops when Next is missing/disabled).
 - `goto_if_needed`: avoid a navigation if already on the target page.
 - `assert_then`: guard + execute a bounded follow-up step list.
 - `include_memory_steps`: pull a stored runbook into a larger `run(...)` call.
@@ -104,12 +107,30 @@ run(actions=[
 ])
 ```
 
+### scroll_to_end
+Purpose: bounded auto-scroll until the page reaches the end (uses internal `repeat` + [JS_COND]).
+
+Args:
+- `max_iters` (optional, default: 8)
+- `timeout_s` (optional, default: 0.4) — per-condition wait timeout (selector/text).
+- `scroll` (optional object) — scroll args (default: `{direction:"down", amount:700}`).
+- `until_js` (optional) — [JS_COND] override (default checks for page bottom).
+- `settle_ms` (optional) — convert to a small backoff between iterations.
+- Pass-through `repeat` tuning (optional): `max_time_s`, `backoff_s`, `backoff_factor`, `backoff_max_s`, `backoff_jitter`.
+
+Example:
+```
+run(actions=[
+  {"macro": {"name": "scroll_to_end", "args": {"max_iters": 12}}}
+])
+```
+
 ### retry_click
 Purpose: bounded retry loop that keeps clicking until an `until` condition is met.
 
 Args:
 - `click` (required object) — click args (e.g., `{text:"Continue"}` or `{selector:"#btn"}`).
-- `until` (required object) — condition (`{url/title/selector/text}`).
+- `until` (required object) — condition (`{url/title/selector/text/js}`).
 - `max_iters` (optional, default: 5)
 - `timeout_s` (optional, default: 0.8) — per-condition wait timeout for selector/text.
 - `dismiss_overlays` (optional bool, default: true)
@@ -119,6 +140,27 @@ Example:
 ```
 run(actions=[
   {"macro": {"name": "retry_click", "args": {"click": {"text": "Continue"}, "until": {"url": "/done"}}}}
+])
+```
+
+### paginate_next
+Purpose: bounded click-next loop that stops when the Next control is missing/disabled (uses [JS_COND]).
+
+Args:
+- `next_selector` (required) — CSS selector for the Next control.
+- `click` (optional object) — click args; defaults to `{selector: next_selector}`.
+- `until` (optional object) — condition (`{url/title/selector/text/js}`); defaults to Next missing/disabled.
+- `wait` (optional object) — wait args after each click (e.g., `{for:"networkidle"}`).
+- `max_iters` (optional, default: 10)
+- `timeout_s` (optional, default: 0.8) — per-condition wait timeout for selector/text.
+- `dismiss_overlays` (optional bool, default: true)
+- `settle_ms` (optional) — convert to a small backoff between iterations.
+- Pass-through `repeat` tuning (optional): `max_time_s`, `backoff_s`, `backoff_factor`, `backoff_max_s`, `backoff_jitter`.
+
+Example:
+```
+run(actions=[
+  {"macro": {"name": "paginate_next", "args": {"next_selector": "button.next", "max_iters": 8}}}
 ])
 ```
 

@@ -110,9 +110,10 @@ class FlowInternalActions:
         title = cond.get("title")
         selector = cond.get("selector")
         text = cond.get("text")
+        js_expr = cond.get("js")
 
-        if not any(k in cond for k in ("url", "title", "selector", "text")):
-            return False, None, "Empty condition", "Provide at least one of: url, title, selector, text"
+        if not any(k in cond for k in ("url", "title", "selector", "text", "js")):
+            return False, None, "Empty condition", "Provide at least one of: url, title, selector, text, js"
 
         details: dict[str, Any] = {}
 
@@ -165,6 +166,28 @@ class FlowInternalActions:
                 return False, details, "Blocking JS dialog is open", payload.get("suggestion")
             details["text"] = {"text": text.strip(), "success": bool(ok_text)}
             if ok_text is not True:
+                return False, details, None, None
+
+        if isinstance(js_expr, str) and js_expr.strip():
+            expr = js_expr.strip()
+            try:
+                tr = self._registry.dispatch(
+                    "js",
+                    self._config,
+                    self._launcher,
+                    {"code": expr},
+                )
+            except Exception as exc:  # noqa: BLE001
+                return False, details, "Condition JS failed", str(exc)
+
+            if tr.is_error:
+                return False, details, "Condition JS failed", "Check JS expression or page state"
+
+            payload = tr.data if isinstance(tr.data, dict) else {}
+            result = payload.get("result")
+            expr_note = expr if len(expr) <= 120 else f"{expr[:120]}…"
+            details["js"] = {"expr": expr_note, "result": bool(result)}
+            if not result:
                 return False, details, None, None
 
         return True, details, None, None
@@ -772,4 +795,3 @@ class FlowInternalActions:
                 return InternalActionResult(consumed=True, should_break=True, first_error=self._first_error)
 
         return InternalActionResult(consumed=True, should_break=False, first_error=self._first_error)
-

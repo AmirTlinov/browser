@@ -882,8 +882,27 @@ def handle_captcha(config: BrowserConfig, launcher: BrowserLauncher, args: dict[
 def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     """Page analysis - primary tool for understanding page."""
     store = bool(args.get("store", False))
+    auto_scroll_arg = args.get("auto_scroll")
+    auto_scroll_info: dict[str, Any] | None = None
+    auto_scroll_required = False
+    if auto_scroll_arg not in (None, False):
+        if auto_scroll_arg is True:
+            spec: dict[str, Any] = {}
+        elif isinstance(auto_scroll_arg, dict):
+            spec = dict(auto_scroll_arg)
+            auto_scroll_required = bool(spec.get("required"))
+        else:
+            return ToolResult.error("auto_scroll must be a boolean or object")
+        auto_scroll_info = tools.auto_scroll_page(config, spec)
+        if auto_scroll_required and isinstance(auto_scroll_info, dict) and not auto_scroll_info.get("ok"):
+            return ToolResult.error(auto_scroll_info.get("error") or "auto_scroll failed")
+
+    def _attach_auto_scroll(payload: dict[str, Any] | None) -> None:
+        if auto_scroll_info is not None and isinstance(payload, dict):
+            payload["autoScroll"] = auto_scroll_info
     if args.get("info"):
         result = tools.get_page_info(config)
+        _attach_auto_scroll(result)
     elif args.get("detail") == "triage":
         limit = args.get("limit") if "limit" in args else 30
         triage_kwargs: dict[str, Any] = {
@@ -893,6 +912,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
         if "since" in args:
             triage_kwargs["since"] = args.get("since")
         triage = tools.get_page_triage(config, **triage_kwargs)
+        _attach_auto_scroll(triage)
         if store:
             _attach_artifact_ref(config, triage, args, kind="page_triage")
         if args.get("with_screenshot"):
@@ -963,6 +983,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
 
             with _maybe_shared_session():
                 audit = tools.get_page_audit(config, **audit_kwargs)
+                _attach_auto_scroll(audit)
 
                 # Optional deep network trace capture (bounded + artifact-backed).
                 try:
@@ -1069,6 +1090,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                         audit_obj["netTraceError"] = str(e)
         else:
             audit = tools.get_page_audit(config, **audit_kwargs)
+            _attach_auto_scroll(audit)
 
         if store:
             _attach_artifact_ref(config, audit, args, kind="page_audit")
@@ -1094,6 +1116,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
         if "since" in args:
             diag_kwargs["since"] = args.get("since")
         result = tools.get_page_diagnostics(config, **diag_kwargs)
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_diagnostics")
     elif args.get("detail") == "ax":
@@ -1121,6 +1144,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                     offset=offset,
                     limit=limit,
                 )
+                _attach_auto_scroll(ax_payload)
 
                 boxes: list[dict[str, Any]] = []
                 try:
@@ -1286,6 +1310,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
             offset=offset,
             limit=limit,
         )
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_ax")
     elif args.get("detail") == "resources":
@@ -1297,10 +1322,12 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
         if "since" in args:
             res_kwargs["since"] = args.get("since")
         result = tools.get_page_resources(config, **res_kwargs)
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_resources")
     elif args.get("detail") == "performance":
         result = tools.get_page_performance(config)
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_performance")
     elif args.get("detail") == "frames":
@@ -1327,6 +1354,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                     include_bounds=overlay,
                     overlay_limit=overlay_limit,
                 )
+                _attach_auto_scroll(frames_payload)
 
                 boxes: list[dict[str, Any]] = []
                 try:
@@ -1406,6 +1434,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                             tools.eval_js(config, remove_js)
 
         result = tools.get_page_frames(config, offset=offset, limit=limit)
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_frames")
     elif args.get("detail") == "locators":
@@ -1435,6 +1464,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                     offset=offset,
                     limit=limit,
                 )
+                _attach_auto_scroll(loc_payload)
 
                 # Produce a numbered, compact list that matches the screenshot overlay.
                 boxes: list[dict[str, Any]] = []
@@ -1641,6 +1671,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
             offset=offset,
             limit=limit,
         )
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_locators")
     elif args.get("detail") == "map":
@@ -1654,11 +1685,13 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
             limit=limit,
             clear=clear,
         )
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_map")
     elif args.get("detail") == "graph":
         limit = args.get("limit") if "limit" in args else 30
         result = tools.get_page_graph(config, limit=limit)
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_graph")
     elif args.get("detail"):
@@ -1669,6 +1702,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
             limit=args.get("limit", 10),
             form_index=args.get("form_index"),
         )
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind=f"page_{args.get('detail')}")
     else:
@@ -1691,6 +1725,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                 result = tools.get_page_triage(config)
             except Exception:
                 result = tools.analyze_page(config)
+        _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_overview")
 

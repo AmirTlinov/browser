@@ -19,6 +19,7 @@ Use this when you want the fewest MCP calls per scenario. Start here, then drill
 - Single page, multi-step? Use [ONE_CALL_FLOW].
 - Complex UI with stable affordances? Use [TWO_CALL_FLOW].
 - Need retries or branching? Use internal `assert/when/repeat` inside `run(...)`.
+- Need lazy-loaded content? Use `page(detail="content", auto_scroll=true)` first.
 
 ## [ONE_CALL_FLOW] patterns
 Basic form:

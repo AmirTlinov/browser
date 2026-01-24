@@ -1028,6 +1028,164 @@ def test_flow_macro_scroll_until_visible_passes_backoff_jitter(monkeypatch: pyte
     assert sleeps[0] != pytest.approx(1.0, rel=0.0, abs=0.0)
 
 
+def test_flow_repeat_condition_js_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.server.registry import create_default_registry
+    from mcp_servers.browser.server.types import ToolResult
+
+    _install_hermetic_flow_mocks(monkeypatch)
+
+    import mcp_servers.browser.tools as tools
+
+    monkeypatch.setattr(
+        tools,
+        "get_page_info",
+        lambda _cfg: {"pageInfo": {"url": "https://example.com/", "title": "Example"}},
+    )
+
+    registry = create_default_registry()
+    calls: list[tuple[str, dict]] = []
+
+    def fake_dispatch(name: str, cfg: BrowserConfig, launcher, arguments):  # noqa: ANN001,ARG001
+        calls.append((name, arguments))
+        if name == "js":
+            return ToolResult.json({"result": True})
+        if name == "scroll":
+            return ToolResult.json({"ok": True})
+        return ToolResult.error(f"unexpected dispatch: {name}", tool=name)
+
+    monkeypatch.setattr(registry, "dispatch", fake_dispatch)
+
+    handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
+    cfg = BrowserConfig.from_env()
+    res = handler(
+        cfg,
+        launcher=None,
+        args={
+            "steps": [{"repeat": {"max_iters": 3, "until": {"js": "1"}, "steps": [{"scroll": {"direction": "down"}}]}}],
+            "final": "none",
+            "stop_on_error": True,
+            "auto_recover": False,
+            "step_proof": False,
+            "action_timeout": 2.0,
+        },
+    )
+
+    assert not res.is_error
+    assert isinstance(res.data, dict)
+    assert res.data.get("ok") is True
+    assert [c[0] for c in calls] == ["js"]
+
+
+def test_flow_macro_scroll_to_end_uses_js_condition(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.server.registry import create_default_registry
+    from mcp_servers.browser.server.types import ToolResult
+
+    _install_hermetic_flow_mocks(monkeypatch)
+
+    import mcp_servers.browser.tools as tools
+
+    monkeypatch.setattr(
+        tools,
+        "get_page_info",
+        lambda _cfg: {"pageInfo": {"url": "https://example.com/", "title": "Example"}},
+    )
+
+    registry = create_default_registry()
+    calls: list[tuple[str, dict]] = []
+    js_calls = {"count": 0}
+
+    def fake_dispatch(name: str, cfg: BrowserConfig, launcher, arguments):  # noqa: ANN001,ARG001
+        calls.append((name, arguments))
+        if name == "js":
+            js_calls["count"] += 1
+            return ToolResult.json({"result": js_calls["count"] >= 2})
+        if name == "scroll":
+            return ToolResult.json({"ok": True})
+        return ToolResult.error(f"unexpected dispatch: {name}", tool=name)
+
+    monkeypatch.setattr(registry, "dispatch", fake_dispatch)
+
+    handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
+    cfg = BrowserConfig.from_env()
+    res = handler(
+        cfg,
+        launcher=None,
+        args={
+            "steps": [{"macro": {"name": "scroll_to_end", "args": {"max_iters": 4}}}],
+            "final": "none",
+            "stop_on_error": True,
+            "auto_recover": False,
+            "step_proof": False,
+            "action_timeout": 3.0,
+        },
+    )
+
+    assert not res.is_error
+    assert isinstance(res.data, dict)
+    assert res.data.get("ok") is True
+    assert [c[0] for c in calls] == ["js", "scroll", "js"]
+
+
+def test_flow_macro_paginate_next_clicks_until_done(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.server.registry import create_default_registry
+    from mcp_servers.browser.server.types import ToolResult
+
+    _install_hermetic_flow_mocks(monkeypatch)
+
+    import mcp_servers.browser.tools as tools
+
+    monkeypatch.setattr(
+        tools,
+        "get_page_info",
+        lambda _cfg: {"pageInfo": {"url": "https://example.com/", "title": "Example"}},
+    )
+
+    registry = create_default_registry()
+    calls: list[tuple[str, dict]] = []
+    js_calls = {"count": 0}
+
+    def fake_dispatch(name: str, cfg: BrowserConfig, launcher, arguments):  # noqa: ANN001,ARG001
+        calls.append((name, arguments))
+        if name == "js":
+            js_calls["count"] += 1
+            return ToolResult.json({"result": js_calls["count"] >= 2})
+        if name == "click":
+            return ToolResult.json({"success": True})
+        return ToolResult.error(f"unexpected dispatch: {name}", tool=name)
+
+    monkeypatch.setattr(registry, "dispatch", fake_dispatch)
+
+    handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
+    cfg = BrowserConfig.from_env()
+    res = handler(
+        cfg,
+        launcher=None,
+        args={
+            "steps": [
+                {
+                    "macro": {
+                        "name": "paginate_next",
+                        "args": {"next_selector": "#next", "dismiss_overlays": False, "max_iters": 3},
+                    }
+                }
+            ],
+            "final": "none",
+            "stop_on_error": True,
+            "auto_recover": False,
+            "step_proof": False,
+            "action_timeout": 3.0,
+        },
+    )
+
+    assert not res.is_error
+    assert isinstance(res.data, dict)
+    assert res.data.get("ok") is True
+    assert [c[0] for c in calls] == ["js", "click", "js"]
+
+
 def test_flow_macro_retry_click_retries_until_url_matches(monkeypatch: pytest.MonkeyPatch) -> None:
     from mcp_servers.browser.config import BrowserConfig
     from mcp_servers.browser.server.registry import create_default_registry

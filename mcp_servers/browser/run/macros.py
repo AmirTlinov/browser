@@ -14,7 +14,7 @@ from typing import Any
 from ..session import session_manager
 from .macro_cookbook import expand_assert_then, expand_goto_if_needed
 from .macro_dismiss_overlays import DISMISS_OVERLAYS_JS
-from .macro_repeat_helpers import expand_retry_click, expand_scroll_until_visible
+from .macro_repeat_helpers import expand_paginate_next, expand_retry_click, expand_scroll_to_end, expand_scroll_until_visible
 from .params import ParamMissing, interpolate_params_pair, params_hint
 
 _DEFAULT_LOGIN_USER_KEYS = [
@@ -153,8 +153,32 @@ def expand_macro(
         steps = expanded.get("steps") or []
         plan["args"] = expanded.get("plan_args") or {}
 
+    elif name == "scroll_to_end":
+        expanded = expand_scroll_to_end(args=a, args_note=n)
+        if not bool(expanded.get("ok")):
+            return {
+                "ok": False,
+                "error": str(expanded.get("error") or "Macro expansion failed"),
+                "suggestion": expanded.get("suggestion"),
+                "details": {"name": name},
+            }
+        steps = expanded.get("steps") or []
+        plan["args"] = expanded.get("plan_args") or {}
+
     elif name == "retry_click":
         expanded = expand_retry_click(args=a, args_note=n)
+        if not bool(expanded.get("ok")):
+            return {
+                "ok": False,
+                "error": str(expanded.get("error") or "Macro expansion failed"),
+                "suggestion": expanded.get("suggestion"),
+                "details": {"name": name},
+            }
+        steps = expanded.get("steps") or []
+        plan["args"] = expanded.get("plan_args") or {}
+
+    elif name == "paginate_next":
+        expanded = expand_paginate_next(args=a, args_note=n)
         if not bool(expanded.get("ok")):
             return {
                 "ok": False,
@@ -274,7 +298,7 @@ def expand_macro(
         return {
             "ok": False,
             "error": "Unknown macro",
-            "suggestion": "Known macros: trace_then_screenshot, dismiss_overlays, login_basic, scroll_until_visible, retry_click, goto_if_needed, assert_then, include_memory_steps",
+            "suggestion": "Known macros: trace_then_screenshot, dismiss_overlays, login_basic, scroll_until_visible, scroll_to_end, retry_click, paginate_next, goto_if_needed, assert_then, include_memory_steps",
             "details": {"name": name},
         }
 

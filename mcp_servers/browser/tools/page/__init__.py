@@ -10,6 +10,7 @@ Provides:
 """
 
 from .analyze import analyze_page
+from .auto_scroll import auto_scroll_page
 from .audit import get_page_audit
 from .ax import get_page_ax
 from .diagnostics import get_page_diagnostics
@@ -26,6 +27,7 @@ from .wait import wait_for
 
 __all__ = [
     "analyze_page",
+    "auto_scroll_page",
     "get_page_audit",
     "get_page_ax",
     "get_page_diagnostics",

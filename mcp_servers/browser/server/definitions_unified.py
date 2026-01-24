@@ -696,6 +696,48 @@ RESPONSE FORMAT:
                 "default": 10,
                 "description": "Max items to return",
             },
+            "auto_scroll": {
+                "description": "Auto-scroll the page before analysis (best-effort; useful for lazy-loaded content).",
+                "oneOf": [
+                    {"type": "boolean"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "max_iters": {
+                                "type": "integer",
+                                "default": 8,
+                                "description": "Max scroll iterations (bounded server-side).",
+                            },
+                            "direction": {
+                                "type": "string",
+                                "enum": ["down", "up", "left", "right"],
+                                "default": "down",
+                                "description": "Scroll direction per iteration.",
+                            },
+                            "amount": {
+                                "type": "integer",
+                                "default": 700,
+                                "description": "Scroll delta per iteration (pixels).",
+                            },
+                            "settle_ms": {
+                                "type": "integer",
+                                "default": 150,
+                                "description": "Sleep after each scroll (ms) to allow lazy loads.",
+                            },
+                            "until_js": {
+                                "type": "string",
+                                "description": "JS expression that returns true when scrolling can stop.",
+                            },
+                            "required": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "If true, fail the tool call when auto-scroll errors.",
+                            },
+                        },
+                        "additionalProperties": False,
+                    },
+                ],
+            },
             "since": {
                 "type": "integer",
                 "description": "For detail='triage'/'diagnostics'/'resources': return only changes since this cursor (ms)",
@@ -1064,8 +1106,8 @@ These are not separate top-level tools in v2; they are actions inside `run`.
 
 INTERNAL ACTIONS (v3 additions; only inside `run(actions=[...])`, not top-level tools):
 Schemas (shape):
-- assert: {"assert": {"timeout_s": 5, "url": "...", "title": "...", "selector": "...", "text": "..."}}
-- when: {"when": {"if": {"url": "...", "selector": "...", "text": "..."}, "then": [...], "else": [...]}}
+- assert: {"assert": {"timeout_s": 5, "url": "...", "title": "...", "selector": "...", "text": "...", "js": "..." }}
+- when: {"when": {"if": {"url": "...", "selector": "...", "text": "...", "js": "..."}, "then": [...], "else": [...]}}
 - macro: {"macro": {"name": "...", "args": {...}, "dry_run": true}}
 
 Notes:
@@ -1076,7 +1118,7 @@ Notes:
 
 INTERNAL ACTIONS (v4 additions; only inside `run(actions=[...])`, not top-level tools):
 Schemas (shape):
-- repeat: {"repeat": {"max_iters": 5, "until": {"selector": "...", "text": "...", "url": "..."}, "steps": [...], "max_time_s": 20, "backoff_s": 0.2, "backoff_factor": 1.5, "backoff_max_s": 2.0}}
+- repeat: {"repeat": {"max_iters": 5, "until": {"selector": "...", "text": "...", "url": "...", "js": "..."}, "steps": [...], "max_time_s": 20, "backoff_s": 0.2, "backoff_factor": 1.5, "backoff_max_s": 2.0}}
 
 Notes:
 - repeat is bounded: max_iters is capped server-side (no unbounded loops).
@@ -1084,6 +1126,7 @@ Notes:
 - If `until` is provided and never matches, repeat fails closed after max_iters.
 - Optional `max_time_s` adds a wall-clock budget for the whole repeat loop (fail-closed when exhausted).
 - Optional backoff (`backoff_s`, `backoff_factor`, `backoff_max_s`) sleeps between iterations (deterministic, bounded).
+- `js` conditions are evaluated in-page and must return a truthy value.
 
 Examples:
 1) {"assert": {"url": "https://example.com", "title": "Example Domain", "timeout_s": 5}}
@@ -1091,6 +1134,7 @@ Examples:
 3) {"macro": {"name": "trace_then_screenshot", "args": {"trace": "harLite"}, "dry_run": true}}
 4) {"macro": {"name": "include_memory_steps", "args": {"memory_key": "workflow.login", "params": {"user": "alice"}}}}
 5) {"repeat": {"max_iters": 10, "until": {"selector": "#result"}, "steps": [{"scroll": {"direction": "down"}}]}}
+6) {"repeat": {"max_iters": 8, "until": {"js": "window.scrollY > 2000"}, "steps": [{"scroll": {"direction": "down"}}]}}
 
 HIGH-LEVERAGE INTERNAL ACTION:
 - act(ref="aff:...")  # resolve a stable affordance ref from page(detail="locators") / page(detail="map") / page(detail="triage")

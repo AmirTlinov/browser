@@ -6,7 +6,16 @@ module so `run/macros.py` stays within size limits.
 
 from __future__ import annotations
 
+import json
 from typing import Any
+
+DEFAULT_SCROLL_END_JS = (
+    "(() => {"
+    "  const el = document.scrollingElement || document.documentElement;"
+    "  const bottom = (el.scrollTop + window.innerHeight);"
+    "  return bottom >= (el.scrollHeight - 2);"
+    "})()"
+)
 
 
 def expand_scroll_until_visible(*, args: dict[str, Any], args_note: dict[str, Any]) -> dict[str, Any]:
@@ -115,4 +124,142 @@ def expand_retry_click(*, args: dict[str, Any], args_note: dict[str, Any]) -> di
         "click": list((args_note.get("click") if isinstance(args_note.get("click"), dict) else click_args).keys())[:8],
         "until": list((args_note.get("until") if isinstance(args_note.get("until"), dict) else until).keys())[:8],
     }
+    return {"ok": True, "steps": [{"repeat": repeat}], "plan_args": plan_args}
+
+
+def expand_scroll_to_end(*, args: dict[str, Any], args_note: dict[str, Any]) -> dict[str, Any]:
+    scroll_args = args.get("scroll") if isinstance(args.get("scroll"), dict) else {}
+    if not scroll_args:
+        scroll_args = {"direction": "down", "amount": 700}
+
+    try:
+        max_iters = int(args.get("max_iters", 8))
+    except Exception:
+        max_iters = 8
+    max_iters = max(1, min(max_iters, 50))
+
+    try:
+        timeout_s = float(args.get("timeout_s", 0.4))
+    except Exception:
+        timeout_s = 0.4
+    timeout_s = max(0.0, min(timeout_s, 10.0))
+
+    until_js = args.get("until_js") if isinstance(args.get("until_js"), str) and args.get("until_js").strip() else None
+    until_js = until_js or DEFAULT_SCROLL_END_JS
+
+    repeat: dict[str, Any] = {
+        "max_iters": int(max_iters),
+        "until": {"js": until_js},
+        "timeout_s": float(timeout_s),
+        "steps": [{"scroll": scroll_args}],
+    }
+
+    settle_ms = args.get("settle_ms")
+    if settle_ms is not None and "backoff_s" not in args:
+        try:
+            repeat["backoff_s"] = max(0.0, min(float(settle_ms) / 1000.0, 10.0))
+        except Exception:
+            repeat["backoff_s"] = 0.2
+    elif "backoff_s" not in args:
+        repeat["backoff_s"] = 0.2
+
+    for k in ("max_time_s", "backoff_s", "backoff_factor", "backoff_max_s", "backoff_jitter", "jitter_seed"):
+        v = args.get(k)
+        if v is not None and not isinstance(v, bool):
+            repeat[k] = v
+
+    plan_args: dict[str, Any] = {
+        "max_iters": int(max_iters),
+        "scroll": scroll_args,
+        "until_js": "<default>" if until_js == DEFAULT_SCROLL_END_JS else (until_js[:120] + "…" if len(until_js) > 120 else until_js),
+    }
+    return {"ok": True, "steps": [{"repeat": repeat}], "plan_args": plan_args}
+
+
+def _paginate_done_js(selector: str) -> str:
+    sel = json.dumps(selector)
+    return (
+        "(() => {"
+        f"  const el = document.querySelector({sel});"
+        "  if (!el) return true;"
+        "  const aria = (el.getAttribute && el.getAttribute('aria-disabled')) || '';"
+        "  const disabled = !!(el.disabled || el.hasAttribute('disabled') || aria === 'true' || el.classList.contains('disabled'));"
+        "  return disabled;"
+        "})()"
+    )
+
+
+def expand_paginate_next(*, args: dict[str, Any], args_note: dict[str, Any]) -> dict[str, Any]:
+    next_selector = args.get("next_selector")
+    if not (isinstance(next_selector, str) and next_selector.strip()):
+        return {
+            "ok": False,
+            "error": "Missing next_selector",
+            "suggestion": "Provide macro.args.next_selector (CSS selector for the Next button)",
+        }
+
+    click_args = args.get("click") if isinstance(args.get("click"), dict) else {}
+    if not click_args:
+        click_args = {"selector": next_selector.strip()}
+
+    until = args.get("until") if isinstance(args.get("until"), dict) else None
+    if not until:
+        until = {"js": _paginate_done_js(next_selector.strip())}
+
+    try:
+        max_iters = int(args.get("max_iters", 10))
+    except Exception:
+        max_iters = 10
+    max_iters = max(1, min(max_iters, 50))
+
+    try:
+        timeout_s = float(args.get("timeout_s", 0.8))
+    except Exception:
+        timeout_s = 0.8
+    timeout_s = max(0.0, min(timeout_s, 10.0))
+
+    dismiss = bool(args.get("dismiss_overlays", True))
+    body_steps: list[dict[str, Any]] = []
+    if dismiss:
+        body_steps.append({"macro": {"name": "dismiss_overlays"}})
+
+    body_steps.append({"click": click_args, "optional": True, "label": "paginate_next"})
+
+    wait_args = args.get("wait") if isinstance(args.get("wait"), dict) else None
+    if wait_args:
+        body_steps.append({"wait": wait_args})
+
+    repeat: dict[str, Any] = {
+        "max_iters": int(max_iters),
+        "until": until,
+        "timeout_s": float(timeout_s),
+        "steps": body_steps,
+    }
+
+    settle_ms = args.get("settle_ms")
+    if settle_ms is not None and "backoff_s" not in args:
+        try:
+            repeat["backoff_s"] = max(0.0, min(float(settle_ms) / 1000.0, 10.0))
+        except Exception:
+            repeat["backoff_s"] = 0.2
+    elif "backoff_s" not in args:
+        repeat["backoff_s"] = 0.2
+
+    for k in ("max_time_s", "backoff_s", "backoff_factor", "backoff_max_s", "backoff_jitter", "jitter_seed"):
+        v = args.get(k)
+        if v is not None and not isinstance(v, bool):
+            repeat[k] = v
+
+    plan_args: dict[str, Any] = {
+        "next_selector": next_selector.strip(),
+        "max_iters": int(max_iters),
+        "timeout_s": float(timeout_s),
+        "dismiss_overlays": bool(dismiss),
+        "click": list(
+            (args_note.get("click") if isinstance(args_note.get("click"), dict) else click_args).keys()
+        )[:8],
+        "until": list((args_note.get("until") if isinstance(args_note.get("until"), dict) else until).keys())[:8],
+    }
+    if wait_args:
+        plan_args["wait"] = list(wait_args.keys())[:6]
     return {"ok": True, "steps": [{"repeat": repeat}], "plan_args": plan_args}
