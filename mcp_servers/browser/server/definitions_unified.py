@@ -938,6 +938,66 @@ RESPONSE FORMAT:
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# EXTRACT CONTENT (structured, paginated)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+EXTRACT_TOOL: dict[str, Any] = {
+    "name": "extract_content",
+    "description": """SMART EXTRACT: Get structured content from page with pagination.
+
+Use instead of full DOM dumps when you need specific data.
+
+OVERVIEW MODE (default):
+Returns content structure summary with counts and hints.
+
+DETAIL MODES with pagination:
+- content_type="main" + offset/limit: Main text paragraphs
+- content_type="table": List of tables with metadata
+- content_type="table" + table_index=N + offset/limit: Rows of table N
+- content_type="links" + offset/limit: All links
+- content_type="headings": Document outline (h1-h6)
+- content_type="images" + offset/limit: Images with metadata
+""",
+    "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+            "content_type": {
+                "type": "string",
+                "enum": ["overview", "main", "table", "links", "headings", "images"],
+                "description": "What to extract (default: overview)",
+                "default": "overview",
+            },
+            "selector": {
+                "type": "string",
+                "description": "Optional CSS selector to limit scope",
+            },
+            "offset": {
+                "type": "integer",
+                "description": "Starting index for paginated results (default: 0)",
+                "default": 0,
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max items to return (default: 10, max: 50)",
+                "default": 10,
+            },
+            "table_index": {
+                "type": "integer",
+                "description": "Specific table index when content_type='table'",
+            },
+            "store": {
+                "type": "boolean",
+                "default": False,
+                "description": "Store the full result as an artifact (keeps output small).",
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # FLOW (SUPER-TOOL)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2013,6 +2073,7 @@ NOTE:
 UNIFIED_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     # Core navigation & interaction
     PAGE_TOOL,
+    EXTRACT_TOOL,
     RUN_TOOL,
     FLOW_TOOL,
     RUNBOOK_TOOL,
@@ -2034,4 +2095,4 @@ UNIFIED_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     *UTILITY_TOOLS,
 ]
 
-# Tool count: 26 (down from 54)
+# Tool count: 27 (down from 54)

@@ -29,6 +29,7 @@ For canvas-app automation, use `app(...)` (see `docs/APPS.md`).
 - `retry_click`: bounded retry clicking until a condition holds.
 - `paginate_next`: bounded click-next loop (stops when Next is missing/disabled).
 - `auto_expand`: bounded “Show more/Read more” expander before extraction.
+- `auto_expand_scroll_extract`: pipeline macro: auto-expand → auto-scroll → extract_content.
 - `goto_if_needed`: avoid a navigation if already on the target page.
 - `assert_then`: guard + execute a bounded follow-up step list.
 - `include_memory_steps`: pull a stored runbook into a larger `run(...)` call.
@@ -170,7 +171,7 @@ Purpose: bounded “show more/read more” expander pass before extraction (uses
 
 Args:
 - `phrases` (optional list) — phrases to match (default: show/read/see more, expand, show all, load more).
-- `selectors` (optional string or list) — CSS selectors to scan (default: `button, [role=button], summary, details`).
+- `selectors` (optional string or list) — CSS selectors to scan (default: `button, [role=button], summary, details, [aria-expanded], [aria-controls], [data-expand], [data-expanded], [data-showmore], [data-show-more], [data-toggle], [data-collapse], [data-collapsed], [data-more], [data-open]`).
 - `include_links` (optional bool, default: false) — allow anchor tags (only `#`/`javascript:` or role=button).
 - `click_limit` (optional, default: 6) — max clicks per iteration.
 - `max_iters` (optional, default: 6)
@@ -184,6 +185,26 @@ Example:
 run(actions=[
   {"macro": {"name": "auto_expand", "args": {"phrases": ["show more", "read more"]}}}
 ])
+```
+
+### auto_expand_scroll_extract
+Purpose: pipeline macro that expands collapsed content, scrolls to load lazy sections, and then runs
+`extract_content` (structured extraction).
+
+Args:
+- `expand` (optional boolean/object) — auto-expand config (`true`/`false` or args for `auto_expand`).
+- `scroll` (optional boolean/object) — auto-scroll config (`true`/`false` or args for `scroll_to_end`).
+- `extract` (optional object) — arguments for `extract_content` (e.g., `content_type`, `selector`, `limit`).
+
+Example:
+```
+run(actions=[
+  {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "expand": true,
+    "scroll": {"max_iters": 6},
+    "extract": {"content_type": "main", "limit": 12}
+  }}}
+], report="map")
 ```
 
 ### goto_if_needed

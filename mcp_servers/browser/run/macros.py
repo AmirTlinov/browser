@@ -207,6 +207,78 @@ def expand_macro(
         steps = expanded.get("steps") or []
         plan["args"] = expanded.get("plan_args") or {}
 
+    elif name == "auto_expand_scroll_extract":
+        expand_spec = a.get("expand", True)
+        scroll_spec = a.get("scroll", True)
+        extract_spec = a.get("extract", {})
+
+        plan_args: dict[str, Any] = {}
+        steps = []
+
+        if expand_spec not in (None, False):
+            if expand_spec is True:
+                exp_args: dict[str, Any] = {}
+            elif isinstance(expand_spec, dict):
+                exp_args = dict(expand_spec)
+            else:
+                return {
+                    "ok": False,
+                    "error": "expand must be a boolean or object",
+                    "suggestion": "Use expand=true or expand={...} or expand=false",
+                    "details": {"name": name},
+                }
+            exp_note = n.get("expand") if isinstance(n.get("expand"), dict) else {}
+            expanded = expand_auto_expand(args=exp_args, args_note=exp_note)
+            if not bool(expanded.get("ok")):
+                return {
+                    "ok": False,
+                    "error": str(expanded.get("error") or "Macro expansion failed"),
+                    "suggestion": expanded.get("suggestion"),
+                    "details": {"name": name},
+                }
+            steps.extend(expanded.get("steps") or [])
+            plan_args["expand"] = expanded.get("plan_args") or {}
+
+        if scroll_spec not in (None, False):
+            if scroll_spec is True:
+                scroll_args: dict[str, Any] = {}
+            elif isinstance(scroll_spec, dict):
+                scroll_args = dict(scroll_spec)
+            else:
+                return {
+                    "ok": False,
+                    "error": "scroll must be a boolean or object",
+                    "suggestion": "Use scroll=true or scroll={...} or scroll=false",
+                    "details": {"name": name},
+                }
+            scroll_note = n.get("scroll") if isinstance(n.get("scroll"), dict) else {}
+            expanded = expand_scroll_to_end(args=scroll_args, args_note=scroll_note)
+            if not bool(expanded.get("ok")):
+                return {
+                    "ok": False,
+                    "error": str(expanded.get("error") or "Macro expansion failed"),
+                    "suggestion": expanded.get("suggestion"),
+                    "details": {"name": name},
+                }
+            steps.extend(expanded.get("steps") or [])
+            plan_args["scroll"] = expanded.get("plan_args") or {}
+
+        if extract_spec is None:
+            extract_args: dict[str, Any] = {}
+        elif isinstance(extract_spec, dict):
+            extract_args = dict(extract_spec)
+        else:
+            return {
+                "ok": False,
+                "error": "extract must be an object",
+                "suggestion": "Use extract={...}",
+                "details": {"name": name},
+            }
+
+        steps.append({"extract_content": extract_args})
+        plan_args["extract"] = list(extract_args.keys())[:12]
+        plan["args"] = plan_args
+
     elif name == "goto_if_needed":
         expanded = expand_goto_if_needed(args=a, args_note=n)
         if not bool(expanded.get("ok")):
@@ -316,7 +388,7 @@ def expand_macro(
         return {
             "ok": False,
             "error": "Unknown macro",
-            "suggestion": "Known macros: trace_then_screenshot, dismiss_overlays, login_basic, scroll_until_visible, scroll_to_end, retry_click, paginate_next, auto_expand, goto_if_needed, assert_then, include_memory_steps",
+            "suggestion": "Known macros: trace_then_screenshot, dismiss_overlays, login_basic, scroll_until_visible, scroll_to_end, retry_click, paginate_next, auto_expand, auto_expand_scroll_extract, goto_if_needed, assert_then, include_memory_steps",
             "details": {"name": name},
         }
 

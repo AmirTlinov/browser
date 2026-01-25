@@ -21,6 +21,7 @@ Use this when you want the fewest MCP calls per scenario. Start here, then drill
 - Need retries or branching? Use internal `assert/when/repeat` inside `run(...)`.
 - Need lazy-loaded content? Use `page(detail="content", auto_scroll=true)` first.
 - Need collapsed content expanded? Use `page(detail="content", auto_expand=true)` or `run(actions=[{"macro":{"name":"auto_expand"}}])` before extraction.
+- Need a one-call extract pass? Use `auto_expand_scroll_extract` (macro) or the runbook template in `docs/RUNBOOKS.md`.
 
 ## [ONE_CALL_FLOW] patterns
 Basic form:
@@ -55,6 +56,18 @@ page(detail="map")
 run(actions=[
   {"act": {"ref": "aff:..."}},
   {"assert": {"url": "/settings"}}
+], report="map")
+```
+
+One-call extract pipeline:
+```
+run(actions=[
+  {"navigate": {"url": "https://example.com/article"}},
+  {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "expand": true,
+    "scroll": {"max_iters": 6},
+    "extract": {"content_type": "overview"}
+  }}}
 ], report="map")
 ```
 

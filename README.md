@@ -101,6 +101,7 @@ This server exports a small set of **unified** tools. The canonical source of tr
 | Tool | What it does |
 |------|--------------|
 | `page` | Analyze page structure/content; diagnostics/resources/perf/locators |
+| `extract_content` | Structured content extraction with pagination |
 | `flow` | Batch multiple steps into one call (single compact summary + optional screenshot) |
 | `run` | OAVR runner (Observe → Act → Verify → Report); uses `flow` under the hood |
 | `app` | High-level macros/adapters for complex apps (e.g. `app(op='diagram')`, `app(op='insert')`) |

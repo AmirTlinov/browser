@@ -25,7 +25,11 @@ DEFAULT_EXPAND_PHRASES = [
     "show all",
     "load more",
 ]
-DEFAULT_EXPAND_SELECTORS = "button, [role=button], summary, details"
+DEFAULT_EXPAND_SELECTORS = (
+    "button, [role=button], summary, details, [aria-expanded], [aria-controls], "
+    "[data-expand], [data-expanded], [data-showmore], [data-show-more], "
+    "[data-toggle], [data-collapse], [data-collapsed], [data-more], [data-open]"
+)
 
 
 def _as_str_list(value: Any) -> list[str]:
@@ -337,6 +341,32 @@ def _build_auto_expand_js(
         "    const role = (el.getAttribute('role') || '').toLowerCase();"
         "    return role === 'button';"
         "  };"
+        "  const hasExpandHints = (el) => {"
+        "    const ariaExpanded = el.getAttribute && el.getAttribute('aria-expanded');"
+        "    if (ariaExpanded === 'false') return true;"
+        "    if (ariaExpanded === 'true') return false;"
+        "    const role = norm(el.getAttribute && el.getAttribute('role'));"
+        "    if (role === 'button') {"
+        "      if (el.hasAttribute && (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-controls'))) return true;"
+        "    }"
+        "    const dataAttrs = ['data-expand', 'data-expanded', 'data-showmore', 'data-show-more', 'data-toggle',"
+        "      'data-collapse', 'data-collapsed', 'data-more', 'data-open'];"
+        "    for (const attr of dataAttrs) {"
+        "      if (el.hasAttribute && el.hasAttribute(attr)) return true;"
+        "    }"
+        "    const dataTokens = ['expand', 'collapse', 'collapsed', 'show', 'more', 'toggle', 'open'];"
+        "    const names = el.getAttributeNames ? el.getAttributeNames() : (el.attributes ? Array.from(el.attributes).map((a) => a.name) : []);"
+        "    for (const name of names) {"
+        "      if (!name || !name.startsWith('data-')) continue;"
+        "      const lower = name.toLowerCase();"
+        "      if (dataTokens.some((t) => lower.includes(t))) return true;"
+        "      const val = norm(el.getAttribute(name));"
+        "      if (val && dataTokens.some((t) => val.includes(t))) return true;"
+        "    }"
+        "    const controls = el.getAttribute && el.getAttribute('aria-controls');"
+        "    if (controls) return true;"
+        "    return false;"
+        "  };"
         "  const nodes = Array.from(document.querySelectorAll(selector));"
         "  let count = 0;"
         "  let clicked = 0;"
@@ -344,7 +374,7 @@ def _build_auto_expand_js(
         "    if (!isVisible(el) || isDisabled(el)) continue;"
         "    if (el.dataset && el.dataset.mcpExpanded === '1') continue;"
         "    if (!allowLink(el)) continue;"
-        "    if (!matches(el)) continue;"
+        "    if (!matches(el) && !hasExpandHints(el)) continue;"
         "    if (el.tagName === 'DETAILS') {"
         "      count += 1;"
         "      if (doClick && !el.open && clicked < maxClicks) {"

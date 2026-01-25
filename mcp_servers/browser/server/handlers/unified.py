@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ... import tools
+from ...tools.base import SmartToolError
 from ..artifacts import artifact_store
 from ..hints import artifact_export_hint, artifact_get_hint, artifact_list_hint
 from ..types import ToolResult
@@ -1764,6 +1765,36 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
         _attach_auto_scroll(result)
         if store:
             _attach_artifact_ref(config, result, args, kind="page_overview")
+
+    return ToolResult.json(result)
+
+
+def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
+    """Extract structured page content with pagination."""
+    try:
+        result = tools.extract_content(
+            config,
+            content_type=args.get("content_type", "overview"),
+            selector=args.get("selector"),
+            offset=args.get("offset", 0),
+            limit=args.get("limit", 10),
+            table_index=args.get("table_index"),
+        )
+    except SmartToolError as exc:
+        return ToolResult.error(
+            exc.reason or "extract_content failed",
+            tool=exc.tool or "extract_content",
+            suggestion=exc.suggestion,
+            details=exc.details if isinstance(exc.details, dict) else None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return ToolResult.error(str(exc) or "extract_content failed", tool="extract_content")
+
+    if not isinstance(result, dict):
+        return ToolResult.error("extract_content returned unexpected payload", tool="extract_content")
+
+    if bool(args.get("store", False)):
+        _attach_artifact_ref(config, result, args, kind="extract_content")
 
     return ToolResult.json(result)
 
@@ -3561,6 +3592,7 @@ def _best_effort_current_url(config: BrowserConfig) -> str | None:
 UNIFIED_HANDLERS: dict[str, tuple] = {
     # Core
     "page": (handle_page, True),
+    "extract_content": (handle_extract_content, True),
     "navigate": (handle_navigate, True),
     "app": (handle_app, True),
     "click": (handle_click, True),

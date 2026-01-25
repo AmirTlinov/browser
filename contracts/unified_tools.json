@@ -344,6 +344,54 @@
       }
     },
     {
+      "name": "extract_content",
+      "description": "SMART EXTRACT: Get structured content from page with pagination.\n\nUse instead of full DOM dumps when you need specific data.\n\nOVERVIEW MODE (default):\nReturns content structure summary with counts and hints.\n\nDETAIL MODES with pagination:\n- content_type=\"main\" + offset/limit: Main text paragraphs\n- content_type=\"table\": List of tables with metadata\n- content_type=\"table\" + table_index=N + offset/limit: Rows of table N\n- content_type=\"links\" + offset/limit: All links\n- content_type=\"headings\": Document outline (h1-h6)\n- content_type=\"images\" + offset/limit: Images with metadata\n",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "overview",
+              "main",
+              "table",
+              "links",
+              "headings",
+              "images"
+            ],
+            "description": "What to extract (default: overview)",
+            "default": "overview"
+          },
+          "selector": {
+            "type": "string",
+            "description": "Optional CSS selector to limit scope"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Starting index for paginated results (default: 0)",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max items to return (default: 10, max: 50)",
+            "default": 10
+          },
+          "table_index": {
+            "type": "integer",
+            "description": "Specific table index when content_type='table'"
+          },
+          "store": {
+            "type": "boolean",
+            "default": false,
+            "description": "Store the full result as an artifact (keeps output small)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "run",
       "description": "Run an AI-native scenario using OAVR: Observe → Act → Verify → Report.\n\nThis is the recommended entrypoint for multi-step work:\n- Holds one shared CDP session across all actions (less flake, fewer round-trips).\n- Returns a compact report + proof so agents avoid extra \"check\" calls.\n\nDefault report behavior:\n- MCP_TOOLSET=v1/default: report=\"observe\"\n- MCP_TOOLSET=v2: report=\"map\"\n\nINTERNAL ACTIONS (v2):\n`run()` can execute the same action steps as `flow`, including (common set):\n- navigate, click, type, scroll, form, wait\n- page (triage/diagnostics/ax/locators/resources/performance)\n- app (high-level app macros/adapters for complex web apps)\n- dialog (alert/confirm/prompt)\n- captcha (analyze/screenshot/click_blocks/submit)\n- fetch, storage, download\n- net(action=\"harLite\")  # Tier-0 network slice\n- net(action=\"trace\")    # Tier-0 deep trace (bounded, on-demand)\nThese are not separate top-level tools in v2; they are actions inside `run`.\n\nINTERNAL ACTIONS (v3 additions; only inside `run(actions=[...])`, not top-level tools):\nSchemas (shape):\n- assert: {\"assert\": {\"timeout_s\": 5, \"url\": \"...\", \"title\": \"...\", \"selector\": \"...\", \"text\": \"...\", \"js\": \"...\" }}\n- when: {\"when\": {\"if\": {\"url\": \"...\", \"selector\": \"...\", \"text\": \"...\", \"js\": \"...\"}, \"then\": [...], \"else\": [...]}}\n- macro: {\"macro\": {\"name\": \"...\", \"args\": {...}, \"dry_run\": true}}\n\nNotes:\n- Server-side only (no LLM execution); deterministic and bounded by run limits.\n- assert is fail-closed: timeout or mismatch fails the run.\n- when executes a single branch (no loops); else is optional.\n- macro is for compact, deterministic expansions (e.g., include saved step lists).\n\nINTERNAL ACTIONS (v4 additions; only inside `run(actions=[...])`, not top-level tools):\nSchemas (shape):\n- repeat: {\"repeat\": {\"max_iters\": 5, \"until\": {\"selector\": \"...\", \"text\": \"...\", \"url\": \"...\", \"js\": \"...\"}, \"steps\": [...], \"max_time_s\": 20, \"backoff_s\": 0.2, \"backoff_factor\": 1.5, \"backoff_max_s\": 2.0}}\n\nNotes:\n- repeat is bounded: max_iters is capped server-side (no unbounded loops).\n- If `until` is omitted, repeat runs exactly max_iters times and succeeds (like a for-loop).\n- If `until` is provided and never matches, repeat fails closed after max_iters.\n- Optional `max_time_s` adds a wall-clock budget for the whole repeat loop (fail-closed when exhausted).\n- Optional backoff (`backoff_s`, `backoff_factor`, `backoff_max_s`) sleeps between iterations (deterministic, bounded).\n- `js` conditions are evaluated in-page and must return a truthy value.\n\nExamples:\n1) {\"assert\": {\"url\": \"https://example.com\", \"title\": \"Example Domain\", \"timeout_s\": 5}}\n2) {\"when\": {\"if\": {\"selector\": \"#login\", \"text\": \"Sign in\"}, \"then\": [{\"click\": {\"selector\": \"#login\"}}], \"else\": [{\"navigate\": {\"url\": \"https://example.com/login\"}}]}}\n3) {\"macro\": {\"name\": \"trace_then_screenshot\", \"args\": {\"trace\": \"harLite\"}, \"dry_run\": true}}\n4) {\"macro\": {\"name\": \"include_memory_steps\", \"args\": {\"memory_key\": \"workflow.login\", \"params\": {\"user\": \"alice\"}}}}\n5) {\"repeat\": {\"max_iters\": 10, \"until\": {\"selector\": \"#result\"}, \"steps\": [{\"scroll\": {\"direction\": \"down\"}}]}}\n6) {\"macro\": {\"name\": \"auto_expand\", \"args\": {\"phrases\": [\"show more\", \"read more\"]}}}\n6) {\"repeat\": {\"max_iters\": 8, \"until\": {\"js\": \"window.scrollY > 2000\"}, \"steps\": [{\"scroll\": {\"direction\": \"down\"}}]}}\n\nHIGH-LEVERAGE INTERNAL ACTION:\n- act(ref=\"aff:...\")  # resolve a stable affordance ref from page(detail=\"locators\") / page(detail=\"map\") / page(detail=\"triage\")\n  This is the fastest way to click/focus without re-specifying selectors/text.\n- act(label=\"Save\", kind=\"button\")  # deterministic label resolver (exact match; uses stored affordances; may refresh once)\n\nACTION FORMATS (same as flow steps):\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nSTATEFUL RUNS (export → interpolate):\n- You can export scalars from one action and reuse them in later actions via `{{var}}` / `${var}`.\n  This enables single-call pipelines (e.g., capture trace → read artifact → act on results) without extra tool calls.\n\nSAFETY:\n- Mark an action as irreversible (requires confirm_irreversible=true):\n  {\"tool\":\"click\",\"args\":{\"text\":\"Delete\"},\"irreversible\":true}\n\nROBUSTNESS:\n- If a blocking JS dialog is open, non-dialog actions fail fast with a dialog suggestion.\n- Optional: auto-handle dialogs (dismiss/accept) based on policy mode (strict vs permissive).\n- Optional: auto-recover from known CDP brick states and continue (bounded attempts).\n- If any action produces an image (e.g., CAPTCHA screenshot), the image is stored off-context\n  as an artifact and surfaced via `next` drilldown hints.\n\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Defaults to a delta observe report since the run start.\n",
       "inputSchema": {

@@ -5,13 +5,14 @@
 
 - protocolVersion: `2025-06-18`
 - server: `browser` v`0.1.0`
-- tools: `27`
+- tools: `28`
 
 ## Tools
 
 | name | description |
 |---|---|
 | `page` | Analyze current page structure and content. |
+| `extract_content` | SMART EXTRACT: Get structured content from page with pagination. |
 | `run` | Run an AI-native scenario using OAVR: Observe → Act → Verify → Report. |
 | `flow` | DEPRECATED: use `run(...)` instead. |
 | `runbook` | Runbooks: save and execute reusable step lists stored in agent memory. |

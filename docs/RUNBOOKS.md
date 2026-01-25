@@ -7,6 +7,7 @@ RUNBOOK_RUN = The `runbook(action="run", ...)` call shape.
 MEM_PLACEHOLDER = A placeholder that resolves from agent memory: `{{mem:key}}`.
 PARAM_PLACEHOLDER = A placeholder that resolves from runbook params: `{{param:key}}`.
 BOUNDED_REPEAT = A `repeat` action with explicit limits (`max_iters` / `max_time_s`).
+EXTRACT_RUNBOOK = A one-call extraction runbook template using `auto_expand_scroll_extract`.
 
 [CONTENT]
 # Runbooks
@@ -39,6 +40,26 @@ runbook(action="save", key="runbook_login", steps=[
   {"navigate": {"url": "https://example.com/login"}},
   {"macro": {"name": "login_basic", "args": {"username": "{{param:username}}", "password": "{{mem:pwd}}"}}}
 ])
+```
+
+## [EXTRACT_RUNBOOK] (one-call template)
+Save a reusable extractor that navigates to a URL and runs the auto-expand → auto-scroll → extract pipeline.
+
+Template:
+```
+runbook(action="save", key="runbook_extract_one_call", steps=[
+  {"navigate": {"url": "{{param:url}}"}},
+  {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "expand": true,
+    "scroll": {"max_iters": 6},
+    "extract": {"content_type": "overview"}
+  }}}
+])
+```
+
+Run it:
+```
+runbook(action="run", key="runbook_extract_one_call", params={"url": "https://example.com/article"})
 ```
 
 ## Inspect or delete runbooks

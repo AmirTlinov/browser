@@ -8,6 +8,9 @@ FEAT_MACROS_PAGINATE = New run macros: scroll_to_end and paginate_next.
 FEAT_MACRO_EXPAND = New run macro: auto_expand for show-more/read-more expansion.
 FEAT_SMOKE_MACROS = Live-site smoke expanded for macro pagination/scroll (feature-flagged).
 FEAT_PAGE_AUTO_EXPAND = Page tool auto-expand prepass for collapsed content.
+FEAT_MACRO_PIPELINE = New run macro pipeline: auto_expand_scroll_extract.
+FEAT_EXPAND_SEMANTIC = Auto-expand heuristics extended with semantic aria/data hints.
+FEAT_EXTRACT_UNIFIED = Unified extract_content tool exposed for run/flow.
 
 [CONTENT]
 ## [REL_2026_01_24]
@@ -19,3 +22,6 @@ FEAT_PAGE_AUTO_EXPAND = Page tool auto-expand prepass for collapsed content.
 - [FEAT_MACRO_EXPAND]
 - [FEAT_SMOKE_MACROS]
 - [FEAT_PAGE_AUTO_EXPAND]
+- [FEAT_MACRO_PIPELINE]
+- [FEAT_EXPAND_SEMANTIC]
+- [FEAT_EXTRACT_UNIFIED]

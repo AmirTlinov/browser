@@ -297,10 +297,11 @@ def test_server_list_tools_output(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "navigate" in tool_names
     assert "click" in tool_names
     assert "scroll" in tool_names
+    assert "extract_content" in tool_names
     assert "download" in tool_names
     assert "storage" in tool_names
     # Keep the tool surface small, but allow deliberate additions.
-    assert len(tools) == 27
+    assert len(tools) == 28
 
 
 def test_server_list_tools_toolset_v2(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -698,6 +699,7 @@ def test_unified_handler_registry() -> None:
 
     expected_tools = {
         "page",
+        "extract_content",
         "navigate",
         "app",
         "click",
@@ -723,7 +725,7 @@ def test_unified_handler_registry() -> None:
         "artifact",
     }
     assert set(UNIFIED_HANDLERS.keys()) == expected_tools
-    assert len(UNIFIED_HANDLERS) == 24
+    assert len(UNIFIED_HANDLERS) == 25
 
 
 def test_tool_result_json() -> None:
