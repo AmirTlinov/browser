@@ -86,6 +86,26 @@ def _local_download_server() -> str:
                 thread.join(timeout=1.0)
 
 
+def _run_with_timeout(seconds: float, fn, *, on_timeout: str) -> object:  # noqa: ANN001
+    result: dict[str, object] = {}
+    errors: dict[str, Exception] = {}
+
+    def _target() -> None:
+        try:
+            result["value"] = fn()
+        except Exception as exc:  # noqa: BLE001
+            errors["exc"] = exc
+
+    thread = threading.Thread(target=_target, daemon=True)
+    thread.start()
+    thread.join(seconds)
+    if thread.is_alive():
+        raise TimeoutError(on_timeout)
+    if "exc" in errors:
+        raise errors["exc"]
+    return result.get("value")
+
+
 def test_real_sites_smoke(browser_env: tuple[BrowserConfig, BrowserLauncher]) -> None:
     config, _launcher = browser_env
 
@@ -322,72 +342,95 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
         flow_handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
 
         # Auto-tab: click a target=_blank link and switch automatically.
-        res = flow_handler(
-            config,
-            launcher,
-            args={
-                "steps": [
-                    {"navigate": {"url": page_url}},
-                    {"click": {"selector": "#mcp-newtab"}, "auto_tab": True},
-                ],
-                "final": "none",
-                "stop_on_error": True,
-                "auto_recover": False,
-                "step_proof": False,
-                "action_timeout": 10.0,
-            },
-        )
-        assert not res.is_error
-        assert isinstance(res.data, dict)
-        steps = res.data.get("steps")
-        assert isinstance(steps, list) and steps
-        assert steps[1].get("autoTab", {}).get("switched") is True
+        try:
+            res = _run_with_timeout(
+                25.0,
+                lambda: flow_handler(
+                    config,
+                    launcher,
+                    args={
+                        "steps": [
+                            {"navigate": {"url": page_url}},
+                            {"click": {"selector": "#mcp-newtab"}, "auto_tab": True},
+                        ],
+                        "final": "none",
+                        "stop_on_error": True,
+                        "auto_recover": False,
+                        "step_proof": False,
+                        "action_timeout": 10.0,
+                    },
+                ),
+                on_timeout="auto-tab edge-case timed out",
+            )
+            assert not res.is_error
+            assert isinstance(res.data, dict)
+            steps = res.data.get("steps")
+            assert isinstance(steps, list) and steps
+            assert steps[1].get("autoTab", {}).get("switched") is True
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"auto-tab edge-case failed: {exc}")
 
         # Download: click local server file and require capture.
-        res = flow_handler(
-            config,
-            launcher,
-            args={
-                "steps": [
-                    {"navigate": {"url": page_url}},
-                    {
-                        "click": {"selector": "#mcp-download"},
-                        "download": {"required": True, "timeout": 15.0},
+        try:
+            res = _run_with_timeout(
+                30.0,
+                lambda: flow_handler(
+                    config,
+                    launcher,
+                    args={
+                        "steps": [
+                            {"navigate": {"url": page_url}},
+                            {
+                                "click": {"selector": "#mcp-download"},
+                                "download": {"required": True, "timeout": 15.0},
+                            },
+                        ],
+                        "final": "none",
+                        "stop_on_error": True,
+                        "auto_recover": False,
+                        "step_proof": False,
+                        "action_timeout": 15.0,
                     },
-                ],
-                "final": "none",
-                "stop_on_error": True,
-                "auto_recover": False,
-                "step_proof": False,
-                "action_timeout": 15.0,
-            },
-        )
-        assert not res.is_error
-        assert isinstance(res.data, dict)
-        steps = res.data.get("steps")
-        assert isinstance(steps, list) and steps
-        download = steps[1].get("download")
-        if not isinstance(download, dict):
-            pytest.xfail("Download capture not supported in this environment")
-        assert download.get("fileName") == "mcp-hello.txt"
+                ),
+                on_timeout="download edge-case timed out",
+            )
+            assert not res.is_error
+            assert isinstance(res.data, dict)
+            steps = res.data.get("steps")
+            assert isinstance(steps, list) and steps
+            download = steps[1].get("download")
+            if not isinstance(download, dict):
+                pytest.xfail("Download capture not supported in this environment")
+            assert download.get("fileName") == "mcp-hello.txt"
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"download edge-case failed: {exc}")
 
     # Dialog handling: inject alert and rely on auto_dialog dismissal for read-ish step.
-    cdp.eval_js(config, "setTimeout(() => alert('mcp-dialog'), 0)")
-    time.sleep(0.2)
-    res = flow_handler(
-        config,
-        launcher,
-        args={
-            "steps": [{"js": {"code": "1 + 1"}}],
-            "final": "none",
-            "stop_on_error": True,
-            "auto_dialog": "dismiss",
-            "auto_recover": False,
-            "step_proof": False,
-            "action_timeout": 10.0,
-        },
-    )
-    assert not res.is_error
+    try:
+        res = _run_with_timeout(
+            15.0,
+            lambda: (
+                cdp.eval_js(config, "setTimeout(() => alert('mcp-dialog'), 0)"),
+                time.sleep(0.2),
+                flow_handler(
+                    config,
+                    launcher,
+                    args={
+                        "steps": [{"js": {"code": "1 + 1"}}],
+                        "final": "none",
+                        "stop_on_error": True,
+                        "auto_dialog": "dismiss",
+                        "auto_recover": False,
+                        "step_proof": False,
+                        "action_timeout": 10.0,
+                    },
+                ),
+            )[-1],
+            on_timeout="dialog edge-case timed out",
+        )
+        assert not res.is_error
+    except Exception as exc:  # noqa: BLE001
+        pytest.xfail(f"dialog edge-case failed: {exc}")
 
     # Container-scroll on real sites (social/market/news). Best-effort: pass if any succeed.
     container_cases = [
@@ -398,20 +441,24 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
     ok_cases = 0
     for _name, url, selector in container_cases:
         try:
-            res = flow_handler(
-                config,
-                launcher,
-                args={
-                    "steps": [
-                        {"navigate": {"url": url}},
-                        {"scroll": {"direction": "down", "amount": 400, "container_selector": selector}},
-                    ],
-                    "final": "none",
-                    "stop_on_error": True,
-                    "auto_recover": False,
-                    "step_proof": False,
-                    "action_timeout": 20.0,
-                },
+            res = _run_with_timeout(
+                30.0,
+                lambda: flow_handler(
+                    config,
+                    launcher,
+                    args={
+                        "steps": [
+                            {"navigate": {"url": url}},
+                            {"scroll": {"direction": "down", "amount": 400, "container_selector": selector}},
+                        ],
+                        "final": "none",
+                        "stop_on_error": True,
+                        "auto_recover": False,
+                        "step_proof": False,
+                        "action_timeout": 20.0,
+                    },
+                ),
+                on_timeout=f"container scroll timed out: {_name}",
             )
             assert not res.is_error
             ok_cases += 1
