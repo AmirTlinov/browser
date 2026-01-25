@@ -84,6 +84,33 @@ const buildSelectorHint = (el) => {
     return `${el.tagName.toLowerCase()}${id}${classes}`;
 };
 
+const collectDataAttrs = (el, limit = 6) => {
+    if (!el || !el.attributes) return [];
+    const out = [];
+    for (const attr of Array.from(el.attributes)) {
+        if (!attr || !attr.name || !attr.name.startsWith('data-')) continue;
+        out.push({ name: attr.name, value: _trim(attr.value, 80) });
+        if (out.length >= limit) break;
+    }
+    return out;
+};
+
+const buildDomPath = (el, maxDepth = 6) => {
+    const path = [];
+    let node = el;
+    let depth = 0;
+    while (node && node.tagName && depth < maxDepth) {
+        const id = node.id ? `#${node.id}` : '';
+        const classes = (node.className && typeof node.className === 'string')
+            ? node.className.split(/\\s+/).filter(Boolean).slice(0, 2).map(c => `.${c}`).join('')
+            : '';
+        path.push(`${node.tagName.toLowerCase()}${id}${classes}`);
+        node = node.parentElement;
+        depth += 1;
+    }
+    return path;
+};
+
 const buildNodeDebug = (el, score) => {
     if (!el) return null;
     const text = getCleanText(el);
@@ -95,6 +122,8 @@ const buildNodeDebug = (el, score) => {
         id: el.id || null,
         className: _trim(el.className, 120),
         selectorHint: buildSelectorHint(el),
+        dataAttrs: collectDataAttrs(el, 6),
+        domPath: buildDomPath(el, 6),
         score: Math.round(score * 100) / 100,
         textLen: textLen,
         linkLen: linkLen,
