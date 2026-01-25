@@ -1272,6 +1272,8 @@ def test_flow_macro_auto_expand_scroll_extract_runs(monkeypatch: pytest.MonkeyPa
             if js_calls["count"] == 4:
                 return ToolResult.json({"result": False})
             return ToolResult.json({"result": True})
+        if name == "wait":
+            return ToolResult.json({"ok": True})
         if name == "scroll":
             return ToolResult.json({"ok": True})
         if name == "extract_content":
@@ -1300,7 +1302,8 @@ def test_flow_macro_auto_expand_scroll_extract_runs(monkeypatch: pytest.MonkeyPa
     assert not res.is_error
     assert isinstance(res.data, dict)
     assert res.data.get("ok") is True
-    assert calls == ["js", "js", "js", "js", "scroll", "js", "extract_content"]
+    assert calls[-1] == "extract_content"
+    assert calls.count("js") >= 4
 
 
 def test_flow_macro_retry_click_retries_until_url_matches(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -87,6 +87,11 @@
                     "type": "string",
                     "description": "JS expression that returns true when scrolling can stop."
                   },
+                  "stop_on_url_change": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Stop auto-scroll if the page URL changes (guards against SPA state jumps)."
+                  },
                   "required": {
                     "type": "boolean",
                     "default": false,
@@ -345,11 +350,27 @@
     },
     {
       "name": "extract_content",
-      "description": "SMART EXTRACT: Get structured content from page with pagination.\n\nUse instead of full DOM dumps when you need specific data.\n\nOVERVIEW MODE (default):\nReturns content structure summary with counts and hints.\n\nDETAIL MODES with pagination:\n- content_type=\"main\" + offset/limit: Main text paragraphs\n- content_type=\"table\": List of tables with metadata\n- content_type=\"table\" + table_index=N + offset/limit: Rows of table N\n- content_type=\"links\" + offset/limit: All links\n- content_type=\"headings\": Document outline (h1-h6)\n- content_type=\"images\" + offset/limit: Images with metadata\n",
+      "description": "SMART EXTRACT: Get structured content from page with pagination.\nUse instead of full DOM dumps when you need specific data.\nOVERVIEW MODE (default):\nReturns content structure summary with counts and hints.\n\nDETAIL MODES with pagination:\n- content_type=\"main\" + offset/limit: Main text paragraphs\n- content_type=\"table\": List of tables with metadata\n- content_type=\"table\" + table_index=N + offset/limit: Rows of table N\n- content_type=\"links\" + offset/limit: All links\n- content_type=\"headings\": Document outline (h1-h6)\n- content_type=\"images\" + offset/limit: Images with metadata\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
         "properties": {
+          "url": {
+            "type": "string",
+            "description": "Optional URL to navigate before extraction (one-call navigate+extract)."
+          },
+          "wait": {
+            "type": "string",
+            "enum": [
+              "navigation",
+              "load",
+              "domcontentloaded",
+              "networkidle",
+              "none"
+            ],
+            "default": "load",
+            "description": "What to wait for after navigation (default: load)."
+          },
           "content_type": {
             "type": "string",
             "enum": [
@@ -380,6 +401,122 @@
           "table_index": {
             "type": "integer",
             "description": "Specific table index when content_type='table'"
+          },
+          "auto_expand": {
+            "description": "Auto-expand collapsed content before extraction (best-effort).",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "phrases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Phrases to match (show more/read more/etc.)"
+                  },
+                  "selectors": {
+                    "type": [
+                      "string",
+                      "array"
+                    ],
+                    "description": "Selectors to scan for expandable controls."
+                  },
+                  "include_links": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Allow anchor tags when they act like buttons."
+                  },
+                  "click_limit": {
+                    "type": "integer",
+                    "default": 6,
+                    "description": "Max clicks per iteration."
+                  },
+                  "max_iters": {
+                    "type": "integer",
+                    "default": 6,
+                    "description": "Max iterations (bounded)."
+                  },
+                  "timeout_s": {
+                    "type": "number",
+                    "default": 0.4,
+                    "description": "Per-condition wait timeout."
+                  },
+                  "wait": {
+                    "type": "object",
+                    "description": "Optional wait args after each click batch."
+                  },
+                  "settle_ms": {
+                    "type": "integer",
+                    "default": 150,
+                    "description": "Backoff between iterations (ms)."
+                  },
+                  "required": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If true, fail the tool call when auto-expand errors."
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "auto_scroll": {
+            "description": "Auto-scroll before extraction (best-effort; useful for lazy-loaded content).",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "max_iters": {
+                    "type": "integer",
+                    "default": 8,
+                    "description": "Max scroll iterations (bounded server-side)."
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "down",
+                      "up",
+                      "left",
+                      "right"
+                    ],
+                    "default": "down",
+                    "description": "Scroll direction per iteration."
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "default": 700,
+                    "description": "Scroll delta per iteration (pixels)."
+                  },
+                  "settle_ms": {
+                    "type": "integer",
+                    "default": 150,
+                    "description": "Sleep after each scroll (ms) to allow lazy loads."
+                  },
+                  "until_js": {
+                    "type": "string",
+                    "description": "JS expression that returns true when scrolling can stop."
+                  },
+                  "stop_on_url_change": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Stop auto-scroll if the page URL changes."
+                  },
+                  "required": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If true, fail the tool call when auto-scroll errors."
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
           },
           "store": {
             "type": "boolean",
@@ -1517,6 +1654,11 @@
           "headers": {
             "type": "object",
             "description": "Request headers"
+          },
+          "fallback_http": {
+            "type": "boolean",
+            "default": false,
+            "description": "Fallback to http() on CORS/opaque errors (GET only; allowlist enforced)."
           }
         },
         "required": [

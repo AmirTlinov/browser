@@ -8,6 +8,14 @@ TRACE_KIND = `harLite` or `trace`.
 MEM_PLACEHOLDER = Macro-time placeholder syntax: `{{mem:key}}` or `${mem:key}`.
 PARAM_PLACEHOLDER = Macro-time placeholder syntax: `{{param:key}}` or `${param:key}`.
 JS_COND = A JS expression evaluated in-page that must return a truthy value.
+AUTO_EXPAND_SCROLL_EXTRACT = One-call expand → scroll → extract pipeline macro.
+NAVIGATE_SPEC = Optional navigation args (`navigate:{...}` or `url:\"...\"`) before expansion.
+EXPAND_SPEC = Expand args (`expand:true|false|{...}`) for the auto-expand pass.
+SCROLL_SPEC = Scroll args (`scroll:true|false|{...}`) for the auto-scroll pass.
+EXTRACT_SPEC = Extract args (`extract:{...}`) forwarded to `extract_content`.
+RETRY_ON_ERROR = A bounded retry pass when error text is detected.
+ERROR_TEXTS = A list of strings that signal partial failure (lazy load errors).
+RETRY_STEPS = Steps to execute between retry checks (defaults: wait → scroll → wait).
 
  [CONTENT]
 # Run macros
@@ -29,6 +37,34 @@ For canvas-app automation, use `app(...)` (see `docs/APPS.md`).
 - `retry_click`: bounded retry clicking until a condition holds.
 - `paginate_next`: bounded click-next loop (stops when Next is missing/disabled).
 - `auto_expand`: bounded “Show more/Read more” expander before extraction.
+- `auto_expand_scroll_extract`: one-call expand → scroll → extract pipeline (see below).
+
+## [AUTO_EXPAND_SCROLL_EXTRACT]
+Use this when you want a single `run(...)` call to expand collapsed content, scroll for lazy loads,
+and then extract structured data.
+
+### Arguments (high level)
+- [NAVIGATE_SPEC]: `navigate:{...}` or `url:"..."` (optional).
+- [EXPAND_SPEC]: `expand:true|false|{...}` (optional; defaults to `true`).
+- [SCROLL_SPEC]: `scroll:true|false|{...}` (optional; defaults to `true`, with `stop_on_url_change=true`).
+- [EXTRACT_SPEC]: `extract:{...}` (required object; defaults to `{}` if omitted).
+- [RETRY_ON_ERROR]: `retry_on_error:true|false` (optional, default `true`).
+- [ERROR_TEXTS]: `error_texts:["There was an error", "Try again"]` (optional).
+- [RETRY_STEPS]: `retry_steps:[{wait:{...}}, {scroll:{...}}, ...]` (optional).
+
+### Example (one call)
+```
+run(actions=[
+  {macro:{name:"auto_expand_scroll_extract", args:{
+    url:"https://example.com/articles",
+    expand:true,
+    scroll:{max_iters:6, stop_on_url_change:true},
+    extract:{content_type:"main", limit:40},
+    retry_on_error:true,
+    error_texts:["There was an error", "Try again"]
+  }}}
+], report="map")
+```
 - `auto_expand_scroll_extract`: pipeline macro: auto-expand → auto-scroll → extract_content.
 - `goto_if_needed`: avoid a navigation if already on the target page.
 - `assert_then`: guard + execute a bounded follow-up step list.

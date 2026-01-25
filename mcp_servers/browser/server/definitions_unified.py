@@ -11,7 +11,6 @@ Design principles:
 from __future__ import annotations
 
 from typing import Any
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # NAVIGATION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -54,7 +53,6 @@ RESPONSE EXAMPLE:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # SCROLL
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -110,7 +108,6 @@ RESPONSE EXAMPLE:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLICK
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -201,7 +198,6 @@ RESPONSE EXAMPLE:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # TYPE
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -264,7 +260,6 @@ RESPONSE EXAMPLE:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # MOUSE
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -340,7 +335,6 @@ RESPONSE EXAMPLE:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # RESIZE
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -377,7 +371,6 @@ RESPONSE EXAMPLE:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # FORM
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -454,7 +447,6 @@ RESPONSE EXAMPLE:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -505,7 +497,6 @@ RESPONSE EXAMPLE (list):
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # COOKIES
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -560,7 +551,6 @@ RESPONSE EXAMPLE (get):
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # CAPTCHA
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -616,7 +606,6 @@ RESPONSE EXAMPLE (analyze):
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE ANALYSIS (keep existing, just improve docs)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -727,6 +716,11 @@ RESPONSE FORMAT:
                             "until_js": {
                                 "type": "string",
                                 "description": "JS expression that returns true when scrolling can stop.",
+                            },
+                            "stop_on_url_change": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "Stop auto-scroll if the page URL changes (guards against SPA state jumps).",
                             },
                             "required": {
                                 "type": "boolean",
@@ -936,7 +930,6 @@ RESPONSE FORMAT:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # EXTRACT CONTENT (structured, paginated)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -944,9 +937,7 @@ RESPONSE FORMAT:
 EXTRACT_TOOL: dict[str, Any] = {
     "name": "extract_content",
     "description": """SMART EXTRACT: Get structured content from page with pagination.
-
 Use instead of full DOM dumps when you need specific data.
-
 OVERVIEW MODE (default):
 Returns content structure summary with counts and hints.
 
@@ -962,6 +953,16 @@ DETAIL MODES with pagination:
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
         "properties": {
+            "url": {
+                "type": "string",
+                "description": "Optional URL to navigate before extraction (one-call navigate+extract).",
+            },
+            "wait": {
+                "type": "string",
+                "enum": ["navigation", "load", "domcontentloaded", "networkidle", "none"],
+                "default": "load",
+                "description": "What to wait for after navigation (default: load).",
+            },
             "content_type": {
                 "type": "string",
                 "enum": ["overview", "main", "table", "links", "headings", "images"],
@@ -986,6 +987,108 @@ DETAIL MODES with pagination:
                 "type": "integer",
                 "description": "Specific table index when content_type='table'",
             },
+            "auto_expand": {
+                "description": "Auto-expand collapsed content before extraction (best-effort).",
+                "oneOf": [
+                    {"type": "boolean"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "phrases": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Phrases to match (show more/read more/etc.)",
+                            },
+                            "selectors": {
+                                "type": ["string", "array"],
+                                "description": "Selectors to scan for expandable controls.",
+                            },
+                            "include_links": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "Allow anchor tags when they act like buttons.",
+                            },
+                            "click_limit": {
+                                "type": "integer",
+                                "default": 6,
+                                "description": "Max clicks per iteration.",
+                            },
+                            "max_iters": {
+                                "type": "integer",
+                                "default": 6,
+                                "description": "Max iterations (bounded).",
+                            },
+                            "timeout_s": {
+                                "type": "number",
+                                "default": 0.4,
+                                "description": "Per-condition wait timeout.",
+                            },
+                            "wait": {
+                                "type": "object",
+                                "description": "Optional wait args after each click batch.",
+                            },
+                            "settle_ms": {
+                                "type": "integer",
+                                "default": 150,
+                                "description": "Backoff between iterations (ms).",
+                            },
+                            "required": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "If true, fail the tool call when auto-expand errors.",
+                            },
+                        },
+                        "additionalProperties": False,
+                    },
+                ],
+            },
+            "auto_scroll": {
+                "description": "Auto-scroll before extraction (best-effort; useful for lazy-loaded content).",
+                "oneOf": [
+                    {"type": "boolean"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "max_iters": {
+                                "type": "integer",
+                                "default": 8,
+                                "description": "Max scroll iterations (bounded server-side).",
+                            },
+                            "direction": {
+                                "type": "string",
+                                "enum": ["down", "up", "left", "right"],
+                                "default": "down",
+                                "description": "Scroll direction per iteration.",
+                            },
+                            "amount": {
+                                "type": "integer",
+                                "default": 700,
+                                "description": "Scroll delta per iteration (pixels).",
+                            },
+                            "settle_ms": {
+                                "type": "integer",
+                                "default": 150,
+                                "description": "Sleep after each scroll (ms) to allow lazy loads.",
+                            },
+                            "until_js": {
+                                "type": "string",
+                                "description": "JS expression that returns true when scrolling can stop.",
+                            },
+                            "stop_on_url_change": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "Stop auto-scroll if the page URL changes.",
+                            },
+                            "required": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "If true, fail the tool call when auto-scroll errors.",
+                            },
+                        },
+                        "additionalProperties": False,
+                    },
+                ],
+            },
             "store": {
                 "type": "boolean",
                 "default": False,
@@ -996,7 +1099,6 @@ DETAIL MODES with pagination:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # FLOW (SUPER-TOOL)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1184,7 +1286,6 @@ OUTPUT:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # RUN (North Star v3)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1435,7 +1536,6 @@ OUTPUT:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # RUNBOOK
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1492,7 +1592,6 @@ USAGE:
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # APP (High-level macros/adapters)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1553,7 +1652,6 @@ DRY RUN (planning / debugging):
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # SCREENSHOT
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1593,7 +1691,6 @@ RESPONSE: Base64 PNG image""",
         "additionalProperties": False,
     },
 }
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # UTILITY TOOLS (keep as-is)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1655,6 +1752,11 @@ Useful for authenticated API calls.""",
                 },
                 "body": {"type": "string", "description": "Request body"},
                 "headers": {"type": "object", "description": "Request headers"},
+                "fallback_http": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Fallback to http() on CORS/opaque errors (GET only; allowlist enforced).",
+                },
             },
             "required": ["url"],
             "additionalProperties": False,
@@ -2065,7 +2167,6 @@ NOTE:
         },
     },
 ]
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # COMBINED EXPORT
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -46,6 +46,20 @@ def _as_str_list(value: Any) -> list[str]:
     return []
 
 
+def _coerce_boolish(value: Any) -> tuple[bool | None, bool]:
+    if isinstance(value, bool):
+        return value, True
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value), True
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in {"true", "1", "yes", "y", "on"}:
+            return True, True
+        if v in {"false", "0", "no", "n", "off"}:
+            return False, True
+    return None, False
+
+
 def expand_scroll_until_visible(*, args: dict[str, Any], args_note: dict[str, Any]) -> dict[str, Any]:
     selector = args.get("selector")
     text = args.get("text")
@@ -175,6 +189,24 @@ def expand_scroll_to_end(*, args: dict[str, Any], args_note: dict[str, Any]) -> 
     until_js = args.get("until_js") if isinstance(args.get("until_js"), str) and args.get("until_js").strip() else None
     until_js = until_js or DEFAULT_SCROLL_END_JS
 
+    stop_on_url_change = False
+    raw_stop = args.get("stop_on_url_change", False)
+    coerced, ok = _coerce_boolish(raw_stop)
+    if ok and coerced is not None:
+        stop_on_url_change = bool(coerced)
+    elif isinstance(raw_stop, bool):
+        stop_on_url_change = raw_stop
+
+    if stop_on_url_change:
+        until_js = (
+            "(() => {"
+            f"  const done = ({until_js});"
+            "  const startUrl = window.__mcpScrollStartUrl;"
+            "  const changed = startUrl && window.location.href !== startUrl;"
+            "  return !!(done || changed);"
+            "})()"
+        )
+
     repeat: dict[str, Any] = {
         "max_iters": int(max_iters),
         "until": {"js": until_js},
@@ -200,8 +232,13 @@ def expand_scroll_to_end(*, args: dict[str, Any], args_note: dict[str, Any]) -> 
         "max_iters": int(max_iters),
         "scroll": scroll_args,
         "until_js": "<default>" if until_js == DEFAULT_SCROLL_END_JS else (until_js[:120] + "…" if len(until_js) > 120 else until_js),
+        "stop_on_url_change": bool(stop_on_url_change),
     }
-    return {"ok": True, "steps": [{"repeat": repeat}], "plan_args": plan_args}
+    steps: list[dict[str, Any]] = []
+    if stop_on_url_change:
+        steps.append({"js": {"code": "window.__mcpScrollStartUrl = window.location.href;"}, "label": "scroll_start_url"})
+    steps.append({"repeat": repeat})
+    return {"ok": True, "steps": steps, "plan_args": plan_args}
 
 
 def _paginate_done_js(selector: str) -> str:

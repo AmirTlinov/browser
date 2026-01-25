@@ -62,12 +62,25 @@ def auto_scroll_page(config: BrowserConfig, spec: dict[str, Any]) -> dict[str, A
     if not until_js:
         until_js = DEFAULT_SCROLL_END_JS
 
+    stop_on_url_change = bool(spec.get("stop_on_url_change", False))
+
     def _check_done(session) -> tuple[bool, str | None]:
         try:
             res = session.eval_js(until_js)
         except Exception as exc:  # noqa: BLE001
             return False, str(exc)
         return bool(res), None
+
+    def _url_changed(session, start_url: str | None) -> tuple[bool, str | None]:
+        if not stop_on_url_change or not start_url:
+            return False, None
+        try:
+            current = session.eval_js("window.location.href")
+        except Exception as exc:  # noqa: BLE001
+            return False, str(exc)
+        if isinstance(current, str) and current and current != start_url:
+            return True, current
+        return False, None
 
     dx, dy = 0, 0
     if direction == "down":
@@ -80,10 +93,31 @@ def auto_scroll_page(config: BrowserConfig, spec: dict[str, Any]) -> dict[str, A
         dx = -amount
 
     with get_session(config) as (session, _target):
+        start_url: str | None = None
+        if stop_on_url_change:
+            try:
+                start_url = session.eval_js("window.location.href")
+            except Exception:
+                start_url = None
         done = False
         iters = 0
         for i in range(max_iters):
             iters = i
+            url_changed, new_url = _url_changed(session, start_url)
+            if url_changed:
+                return {
+                    "ok": True,
+                    "done": True,
+                    "iters": int(iters),
+                    "max_iters": int(max_iters),
+                    "direction": direction,
+                    "amount": int(amount),
+                    "settle_ms": int(settle_ms),
+                    "stop_on_url_change": True,
+                    "urlChanged": True,
+                    "startUrl": start_url,
+                    "finalUrl": new_url,
+                }
             done, err = _check_done(session)
             if err:
                 return {
@@ -126,4 +160,5 @@ def auto_scroll_page(config: BrowserConfig, spec: dict[str, Any]) -> dict[str, A
         "direction": direction,
         "amount": int(amount),
         "settle_ms": int(settle_ms),
+        "stop_on_url_change": bool(stop_on_url_change),
     }

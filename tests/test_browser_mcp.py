@@ -398,6 +398,106 @@ def test_server_call_tool_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "ok-fetch" in sent[0]["result"]["content"][0]["text"]
 
 
+def test_server_call_tool_fetch_fallback_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test fetch fallback to http on CORS/opaque errors."""
+    from mcp_servers.browser.server.handlers import unified
+    from mcp_servers.browser.tools.base import SmartToolError
+    from mcp_servers.browser import http_client
+
+    sent: list[dict] = []
+    monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
+
+    def fake_fetch(*_a, **_k):  # noqa: ANN001,ANN002,ANN003
+        raise SmartToolError(
+            tool="fetch",
+            action="fetch",
+            reason="CORS blocked",
+            suggestion="Use http",
+            details={},
+        )
+
+    monkeypatch.setattr(unified.tools, "browser_fetch", fake_fetch)
+    monkeypatch.setattr(
+        http_client, "http_get", lambda url, config: {"status": 200, "headers": {}, "body": "ok-http", "truncated": False}
+    )
+    monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
+    srv = mcp_server.McpServer()
+    srv.handle_call_tool(
+        request_id="1ff",
+        name="fetch",
+        arguments={"url": "http://example.com", "fallback_http": True},
+    )
+    assert "ok-http" in sent[0]["result"]["content"][0]["text"]
+
+
+def test_extract_content_accepts_boolish_auto_expand_scroll(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Boolish auto_expand/auto_scroll should be accepted and attached to output."""
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.server.handlers import unified
+
+    calls = {"navigate": 0, "wait": 0, "expand": 0, "scroll": 0, "extract": 0}
+
+    monkeypatch.setattr(unified.tools, "navigate_to", lambda *_a, **_k: calls.__setitem__("navigate", calls["navigate"] + 1))
+    monkeypatch.setattr(unified.tools, "wait_for", lambda *_a, **_k: calls.__setitem__("wait", calls["wait"] + 1))
+    def _expand(*_a, **_k):  # noqa: ANN001,ANN002,ANN003
+        calls["expand"] += 1
+        return {"ok": True, "clicked": 1}
+
+    def _scroll(*_a, **_k):  # noqa: ANN001,ANN002,ANN003
+        calls["scroll"] += 1
+        return {"ok": True, "done": True}
+
+    monkeypatch.setattr(unified.tools, "auto_expand_page", _expand)
+    monkeypatch.setattr(unified.tools, "auto_scroll_page", _scroll)
+    monkeypatch.setattr(unified.tools, "extract_content", lambda *_a, **_k: {"contentType": "overview"})
+
+    cfg = BrowserConfig.from_env()
+    res = unified.handle_extract_content(
+        cfg,
+        launcher=None,
+        args={
+            "url": "https://example.com",
+            "wait": "load",
+            "auto_expand": "true",
+            "auto_scroll": "1",
+        },
+    )
+
+    assert not res.is_error
+    assert isinstance(res.data, dict)
+    assert res.data.get("contentType") == "overview"
+    assert res.data.get("autoExpand", {}).get("ok") is True
+    assert res.data.get("autoScroll", {}).get("ok") is True
+    assert calls["navigate"] == 1
+    assert calls["wait"] == 1
+    assert calls["expand"] == 1
+    assert calls["scroll"] == 1
+
+
+def test_extract_content_ignores_invalid_auto_expand(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Invalid auto_expand input should be ignored with a hint instead of failing."""
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.server.handlers import unified
+
+    monkeypatch.setattr(unified.tools, "extract_content", lambda *_a, **_k: {"contentType": "overview"})
+
+    cfg = BrowserConfig.from_env()
+    res = unified.handle_extract_content(
+        cfg,
+        launcher=None,
+        args={
+            "auto_expand": "nope",
+        },
+    )
+
+    assert not res.is_error
+    assert isinstance(res.data, dict)
+    assert res.data.get("contentType") == "overview"
+    auto_expand = res.data.get("autoExpand") or {}
+    assert auto_expand.get("ok") is False
+    assert auto_expand.get("ignored") is True
+
+
 def test_server_call_tool_cookies_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test unified cookies tool - set action."""
     from mcp_servers.browser.server.handlers import unified

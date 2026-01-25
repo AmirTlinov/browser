@@ -34,19 +34,21 @@ Use this when the goal is **content extraction** with minimal calls.
 Base pattern:
 ```
 run(actions=[
-  {"navigate": {"url": "https://example.com/article"}},
   {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "url": "https://example.com/article",
     "expand": true,
-    "scroll": {"max_iters": 6},
-    "extract": {"content_type": "overview"}
+    "scroll": {"max_iters": 6, "stop_on_url_change": true},
+    "extract": {"content_type": "overview"},
+    "retry_on_error": true
   }}}
 ], report="map")
 ```
 
 ## [EXTRACT_VARIANTS]
-- Article: set `extract.content_type="main"` (optionally `limit=12`).
+- Article: set `extract.content_type="main"` (raise `limit` for long reads).
 - Tables: set `extract.content_type="table"`; follow up with `table_index=N` using the hint.
 - Listings: set `extract.content_type="links"`; raise `limit` or `scroll.max_iters` for infinite feeds.
+- Prefer the one-call runbook pack in `docs/RUNBOOKS.md` when you need reuse.
 - Interact: `page(detail="locators")` → `click(...)` / `type(...)` / `form(...)`
 - Iframes/SSO/CAPTCHA layout: `page(detail="frames")` (CDP frame tree) → `page(detail="frames", with_screenshot=true)` (visual boxes)
 

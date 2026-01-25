@@ -40,6 +40,21 @@ def _parse_dom_ref(value: Any) -> int | None:
     return None
 
 
+def _coerce_boolish(value: Any) -> tuple[bool | None, bool]:
+    """Best-effort bool parser for lenient user input."""
+    if isinstance(value, bool):
+        return value, True
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value), True
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in {"true", "1", "yes", "y", "on"}:
+            return True, True
+        if v in {"false", "0", "no", "n", "off"}:
+            return False, True
+    return None, False
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # NAVIGATE
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -887,31 +902,57 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
     auto_expand_info: dict[str, Any] | None = None
     auto_expand_required = False
     if auto_expand_arg not in (None, False):
+        exp_spec: dict[str, Any] | None = None
         if auto_expand_arg is True:
-            exp_spec: dict[str, Any] = {}
+            exp_spec = {}
         elif isinstance(auto_expand_arg, dict):
             exp_spec = dict(auto_expand_arg)
             auto_expand_required = bool(exp_spec.get("required"))
         else:
-            return ToolResult.error("auto_expand must be a boolean or object")
-        auto_expand_info = tools.auto_expand_page(config, exp_spec)
-        if auto_expand_required and isinstance(auto_expand_info, dict) and not auto_expand_info.get("ok"):
-            return ToolResult.error(auto_expand_info.get("error") or "auto_expand failed")
+            coerced, ok = _coerce_boolish(auto_expand_arg)
+            if ok and coerced is True:
+                exp_spec = {}
+            elif ok and coerced is False:
+                exp_spec = None
+            else:
+                auto_expand_info = {
+                    "ok": False,
+                    "error": "auto_expand must be a boolean or object",
+                    "suggestion": "Use auto_expand=true|false or auto_expand={...}",
+                    "ignored": True,
+                }
+        if exp_spec is not None:
+            auto_expand_info = tools.auto_expand_page(config, exp_spec)
+            if auto_expand_required and isinstance(auto_expand_info, dict) and not auto_expand_info.get("ok"):
+                return ToolResult.error(auto_expand_info.get("error") or "auto_expand failed")
 
     auto_scroll_arg = args.get("auto_scroll")
     auto_scroll_info: dict[str, Any] | None = None
     auto_scroll_required = False
     if auto_scroll_arg not in (None, False):
+        spec: dict[str, Any] | None = None
         if auto_scroll_arg is True:
-            spec: dict[str, Any] = {}
+            spec = {}
         elif isinstance(auto_scroll_arg, dict):
             spec = dict(auto_scroll_arg)
             auto_scroll_required = bool(spec.get("required"))
         else:
-            return ToolResult.error("auto_scroll must be a boolean or object")
-        auto_scroll_info = tools.auto_scroll_page(config, spec)
-        if auto_scroll_required and isinstance(auto_scroll_info, dict) and not auto_scroll_info.get("ok"):
-            return ToolResult.error(auto_scroll_info.get("error") or "auto_scroll failed")
+            coerced, ok = _coerce_boolish(auto_scroll_arg)
+            if ok and coerced is True:
+                spec = {}
+            elif ok and coerced is False:
+                spec = None
+            else:
+                auto_scroll_info = {
+                    "ok": False,
+                    "error": "auto_scroll must be a boolean or object",
+                    "suggestion": "Use auto_scroll=true|false or auto_scroll={...}",
+                    "ignored": True,
+                }
+        if spec is not None:
+            auto_scroll_info = tools.auto_scroll_page(config, spec)
+            if auto_scroll_required and isinstance(auto_scroll_info, dict) and not auto_scroll_info.get("ok"):
+                return ToolResult.error(auto_scroll_info.get("error") or "auto_scroll failed")
 
     def _attach_auto_expand(payload: dict[str, Any] | None) -> None:
         if auto_expand_info is not None and isinstance(payload, dict):
@@ -1771,6 +1812,92 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
 
 def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     """Extract structured page content with pagination."""
+    nav_url = args.get("url")
+    if isinstance(nav_url, str) and nav_url.strip():
+        try:
+            tools.navigate_to(config, nav_url, wait_load=False)
+        except SmartToolError as exc:
+            return ToolResult.error(
+                exc.reason or "navigate failed",
+                tool=exc.tool or "navigate",
+                suggestion=exc.suggestion,
+                details=exc.details if isinstance(exc.details, dict) else None,
+            )
+        wait_type = str(args.get("wait", "load") or "load").strip().lower()
+        if wait_type not in {"navigation", "load", "domcontentloaded", "networkidle", "none"}:
+            return ToolResult.error(
+                "Invalid wait mode",
+                tool="extract_content",
+                suggestion="Use wait in {navigation, load, domcontentloaded, networkidle, none}",
+                details={"wait": wait_type},
+            )
+        if wait_type != "none":
+            try:
+                tools.wait_for(config, wait_type, timeout=10.0)
+            except SmartToolError as exc:
+                return ToolResult.error(
+                    exc.reason or "wait failed",
+                    tool=exc.tool or "wait",
+                    suggestion=exc.suggestion,
+                    details=exc.details if isinstance(exc.details, dict) else None,
+                )
+
+    auto_expand_info: dict[str, Any] | None = None
+    auto_expand_required = False
+    auto_expand_arg = args.get("auto_expand")
+    if auto_expand_arg not in (None, False):
+        exp_spec: dict[str, Any] | None = None
+        if auto_expand_arg is True:
+            exp_spec = {}
+        elif isinstance(auto_expand_arg, dict):
+            exp_spec = dict(auto_expand_arg)
+            auto_expand_required = bool(exp_spec.get("required"))
+        else:
+            coerced, ok = _coerce_boolish(auto_expand_arg)
+            if ok and coerced is True:
+                exp_spec = {}
+            elif ok and coerced is False:
+                exp_spec = None
+            else:
+                auto_expand_info = {
+                    "ok": False,
+                    "error": "auto_expand must be a boolean or object",
+                    "suggestion": "Use auto_expand=true|false or auto_expand={...}",
+                    "ignored": True,
+                }
+        if exp_spec is not None:
+            auto_expand_info = tools.auto_expand_page(config, exp_spec)
+            if auto_expand_required and isinstance(auto_expand_info, dict) and not auto_expand_info.get("ok"):
+                return ToolResult.error(auto_expand_info.get("error") or "auto_expand failed")
+
+    auto_scroll_info: dict[str, Any] | None = None
+    auto_scroll_required = False
+    auto_scroll_arg = args.get("auto_scroll")
+    if auto_scroll_arg not in (None, False):
+        spec: dict[str, Any] | None = None
+        if auto_scroll_arg is True:
+            spec = {}
+        elif isinstance(auto_scroll_arg, dict):
+            spec = dict(auto_scroll_arg)
+            auto_scroll_required = bool(spec.get("required"))
+        else:
+            coerced, ok = _coerce_boolish(auto_scroll_arg)
+            if ok and coerced is True:
+                spec = {}
+            elif ok and coerced is False:
+                spec = None
+            else:
+                auto_scroll_info = {
+                    "ok": False,
+                    "error": "auto_scroll must be a boolean or object",
+                    "suggestion": "Use auto_scroll=true|false or auto_scroll={...}",
+                    "ignored": True,
+                }
+        if spec is not None:
+            auto_scroll_info = tools.auto_scroll_page(config, spec)
+            if auto_scroll_required and isinstance(auto_scroll_info, dict) and not auto_scroll_info.get("ok"):
+                return ToolResult.error(auto_scroll_info.get("error") or "auto_scroll failed")
+
     try:
         result = tools.extract_content(
             config,
@@ -1792,6 +1919,11 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
 
     if not isinstance(result, dict):
         return ToolResult.error("extract_content returned unexpected payload", tool="extract_content")
+
+    if auto_expand_info is not None and isinstance(result, dict):
+        result["autoExpand"] = auto_expand_info
+    if auto_scroll_info is not None and isinstance(result, dict):
+        result["autoScroll"] = auto_scroll_info
 
     if bool(args.get("store", False)):
         _attach_artifact_ref(config, result, args, kind="extract_content")
@@ -1860,13 +1992,37 @@ def handle_http(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
 
 def handle_fetch(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     """Fetch from browser context."""
-    result = tools.browser_fetch(
-        config,
-        url=args["url"],
-        method=args.get("method", "GET"),
-        body=args.get("body"),
-        headers=args.get("headers"),
-    )
+    try:
+        result = tools.browser_fetch(
+            config,
+            url=args["url"],
+            method=args.get("method", "GET"),
+            body=args.get("body"),
+            headers=args.get("headers"),
+        )
+    except SmartToolError as exc:
+        fallback = bool(args.get("fallback_http", False))
+        method = str(args.get("method", "GET") or "GET").upper()
+        if fallback and method == "GET":
+            try:
+                from ...http_client import http_get
+
+                http_result = http_get(args["url"], config)
+                http_result["fallback"] = "http"
+                http_result["fallbackReason"] = exc.reason
+                return ToolResult.json(http_result)
+            except Exception as http_exc:  # noqa: BLE001
+                return ToolResult.error(
+                    str(http_exc) or "http fallback failed",
+                    tool="http",
+                    suggestion="Ensure MCP_ALLOW_HOSTS includes the target host",
+                )
+        return ToolResult.error(
+            exc.reason or "fetch failed",
+            tool=exc.tool or "fetch",
+            suggestion=exc.suggestion,
+            details=exc.details if isinstance(exc.details, dict) else None,
+        )
     # Keep context window small: if body is large, store it as an artifact and
     # return only a preview + drilldown hint.
     try:

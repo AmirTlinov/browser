@@ -9,6 +9,7 @@ Macros do NOT execute LLMs server-side.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from ..session import session_manager
@@ -61,6 +62,43 @@ def _dedupe_keep_order(items: list[str]) -> list[str]:
         seen.add(it)
         out.append(it)
     return out
+
+
+def _coerce_boolish(value: Any) -> tuple[bool | None, bool]:
+    if isinstance(value, bool):
+        return value, True
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value), True
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in {"true", "1", "yes", "y", "on"}:
+            return True, True
+        if v in {"false", "0", "no", "n", "off"}:
+            return False, True
+    return None, False
+
+
+_DEFAULT_ERROR_TEXTS = [
+    "error while loading",
+    "something went wrong",
+    "please try again",
+    "unable to load",
+]
+
+
+def _build_error_texts_js(texts: list[str]) -> str:
+    safe = [t.strip().lower() for t in texts if isinstance(t, str) and t.strip()]
+    if not safe:
+        return "true"
+    items = json.dumps(safe)
+    return (
+        "(() => {"
+        f"  const errors = {items};"
+        "  const hay = (document.body && document.body.innerText ? document.body.innerText : '').toLowerCase();"
+        "  if (!hay) return true;"
+        "  return !errors.some((t) => hay.includes(t));"
+        "})()"
+    )
 
 
 def expand_macro(
@@ -211,57 +249,76 @@ def expand_macro(
         expand_spec = a.get("expand", True)
         scroll_spec = a.get("scroll", True)
         extract_spec = a.get("extract", {})
+        navigate_spec = a.get("navigate")
+        url_spec = a.get("url")
 
         plan_args: dict[str, Any] = {}
         steps = []
+        warnings: list[str] = []
+
+        if isinstance(navigate_spec, dict):
+            steps.append({"navigate": dict(navigate_spec)})
+            plan_args["navigate"] = list(navigate_spec.keys())[:8]
+        elif isinstance(url_spec, str) and url_spec.strip():
+            steps.append({"navigate": {"url": url_spec.strip()}})
+            plan_args["navigate"] = ["url"]
 
         if expand_spec not in (None, False):
+            exp_args: dict[str, Any] | None = None
             if expand_spec is True:
-                exp_args: dict[str, Any] = {}
+                exp_args = {}
             elif isinstance(expand_spec, dict):
                 exp_args = dict(expand_spec)
             else:
-                return {
-                    "ok": False,
-                    "error": "expand must be a boolean or object",
-                    "suggestion": "Use expand=true or expand={...} or expand=false",
-                    "details": {"name": name},
-                }
-            exp_note = n.get("expand") if isinstance(n.get("expand"), dict) else {}
-            expanded = expand_auto_expand(args=exp_args, args_note=exp_note)
-            if not bool(expanded.get("ok")):
-                return {
-                    "ok": False,
-                    "error": str(expanded.get("error") or "Macro expansion failed"),
-                    "suggestion": expanded.get("suggestion"),
-                    "details": {"name": name},
-                }
-            steps.extend(expanded.get("steps") or [])
-            plan_args["expand"] = expanded.get("plan_args") or {}
+                coerced, ok = _coerce_boolish(expand_spec)
+                if ok and coerced is True:
+                    exp_args = {}
+                elif ok and coerced is False:
+                    exp_args = None
+                else:
+                    warnings.append("expand: expected bool or object; defaulted to true")
+                    exp_args = {}
+            if exp_args is not None:
+                exp_note = n.get("expand") if isinstance(n.get("expand"), dict) else {}
+                expanded = expand_auto_expand(args=exp_args, args_note=exp_note)
+                if not bool(expanded.get("ok")):
+                    return {
+                        "ok": False,
+                        "error": str(expanded.get("error") or "Macro expansion failed"),
+                        "suggestion": expanded.get("suggestion"),
+                        "details": {"name": name},
+                    }
+                steps.extend(expanded.get("steps") or [])
+                plan_args["expand"] = expanded.get("plan_args") or {}
 
         if scroll_spec not in (None, False):
+            scroll_args: dict[str, Any] | None = None
             if scroll_spec is True:
-                scroll_args: dict[str, Any] = {}
+                scroll_args = {}
             elif isinstance(scroll_spec, dict):
                 scroll_args = dict(scroll_spec)
             else:
-                return {
-                    "ok": False,
-                    "error": "scroll must be a boolean or object",
-                    "suggestion": "Use scroll=true or scroll={...} or scroll=false",
-                    "details": {"name": name},
-                }
-            scroll_note = n.get("scroll") if isinstance(n.get("scroll"), dict) else {}
-            expanded = expand_scroll_to_end(args=scroll_args, args_note=scroll_note)
-            if not bool(expanded.get("ok")):
-                return {
-                    "ok": False,
-                    "error": str(expanded.get("error") or "Macro expansion failed"),
-                    "suggestion": expanded.get("suggestion"),
-                    "details": {"name": name},
-                }
-            steps.extend(expanded.get("steps") or [])
-            plan_args["scroll"] = expanded.get("plan_args") or {}
+                coerced, ok = _coerce_boolish(scroll_spec)
+                if ok and coerced is True:
+                    scroll_args = {}
+                elif ok and coerced is False:
+                    scroll_args = None
+                else:
+                    warnings.append("scroll: expected bool or object; defaulted to true")
+                    scroll_args = {}
+            if scroll_args is not None:
+                scroll_args.setdefault("stop_on_url_change", True)
+                scroll_note = n.get("scroll") if isinstance(n.get("scroll"), dict) else {}
+                expanded = expand_scroll_to_end(args=scroll_args, args_note=scroll_note)
+                if not bool(expanded.get("ok")):
+                    return {
+                        "ok": False,
+                        "error": str(expanded.get("error") or "Macro expansion failed"),
+                        "suggestion": expanded.get("suggestion"),
+                        "details": {"name": name},
+                    }
+                steps.extend(expanded.get("steps") or [])
+                plan_args["scroll"] = expanded.get("plan_args") or {}
 
         if extract_spec is None:
             extract_args: dict[str, Any] = {}
@@ -275,8 +332,50 @@ def expand_macro(
                 "details": {"name": name},
             }
 
+        retry_on_error = a.get("retry_on_error", True)
+        retry_enabled = False
+        coerced, ok = _coerce_boolish(retry_on_error)
+        if ok and coerced is not None:
+            retry_enabled = bool(coerced)
+        elif isinstance(retry_on_error, bool):
+            retry_enabled = retry_on_error
+
+        error_texts = _as_str_list(a.get("error_texts")) or _DEFAULT_ERROR_TEXTS
+        try:
+            max_error_retries = int(a.get("max_error_retries", 2))
+        except Exception:
+            max_error_retries = 2
+        max_error_retries = max(1, min(max_error_retries, 5))
+
+        retry_steps_raw = a.get("retry_steps")
+        retry_steps: list[dict[str, Any]] = []
+        if isinstance(retry_steps_raw, list):
+            retry_steps = [s for s in retry_steps_raw if isinstance(s, dict)]
+        if not retry_steps:
+            retry_steps = [
+                {"wait": {"for": "networkidle", "timeout": 6}},
+                {"scroll": {"direction": "down", "amount": 400}},
+                {"wait": {"for": "networkidle", "timeout": 6}},
+            ]
+
+        if retry_enabled and error_texts:
+            steps.append(
+                {
+                    "repeat": {
+                        "max_iters": int(max_error_retries),
+                        "until": {"js": _build_error_texts_js(error_texts)},
+                        "timeout_s": 0.4,
+                        "steps": retry_steps,
+                    }
+                }
+            )
+            plan_args["retry_on_error"] = True
+            plan_args["max_error_retries"] = int(max_error_retries)
+
         steps.append({"extract_content": extract_args})
         plan_args["extract"] = list(extract_args.keys())[:12]
+        if warnings:
+            plan_args["warnings"] = warnings[:4]
         plan["args"] = plan_args
 
     elif name == "goto_if_needed":
