@@ -69,29 +69,86 @@ const scoreNode = (el) => {
     return textLen * (1 - penalty);
 };
 
-const pickContentRoot = (scope) => {
+const _trim = (value, maxLen) => {
+    if (!value) return '';
+    const s = String(value);
+    return s.length > maxLen ? s.slice(0, maxLen) : s;
+};
+
+const buildSelectorHint = (el) => {
+    if (!el || !el.tagName) return null;
+    const id = el.id ? `#${el.id}` : '';
+    const classes = (el.className && typeof el.className === 'string')
+        ? el.className.split(/\s+/).filter(Boolean).slice(0, 2).map(c => `.${c}`).join('')
+        : '';
+    return `${el.tagName.toLowerCase()}${id}${classes}`;
+};
+
+const buildNodeDebug = (el, score) => {
+    if (!el) return null;
+    const text = getCleanText(el);
+    const textLen = text.length;
+    const linkLen = linkTextLength(el);
+    const density = textLen > 0 ? (linkLen / textLen) : 1;
+    return {
+        tag: el.tagName,
+        id: el.id || null,
+        className: _trim(el.className, 120),
+        selectorHint: buildSelectorHint(el),
+        score: Math.round(score * 100) / 100,
+        textLen: textLen,
+        linkLen: linkLen,
+        linkDensity: Math.round(density * 1000) / 1000,
+        preview: _trim(text, 160)
+    };
+};
+
+const pickContentRoot = (scope, wantDebug) => {
     if (!scope) return document.body || scope;
     const preferred = ['article', 'main', '[role="main"]'];
     for (const sel of preferred) {
         const candidate = scope.querySelector(sel);
-        if (candidate && isVisible(candidate)) return candidate;
+        if (candidate && isVisible(candidate)) {
+            return wantDebug ? { node: candidate, debug: { best: buildNodeDebug(candidate, scoreNode(candidate)) } } : { node: candidate, debug: null };
+        }
     }
     const nodes = Array.from(scope.querySelectorAll('article, main, section, div')).slice(0, 600);
     let best = null;
     let bestScore = 0;
+    const candidates = [];
     for (const node of nodes) {
         const score = scoreNode(node);
         if (score > bestScore) {
             bestScore = score;
             best = node;
         }
+        if (wantDebug && score > 0 && candidates.length < 6) {
+            const debug = buildNodeDebug(node, score);
+            if (debug) candidates.push(debug);
+        }
     }
-    return best || scope;
+    if (wantDebug) {
+        return {
+            node: best || scope,
+            debug: {
+                best: buildNodeDebug(best || scope, bestScore),
+                candidates: candidates
+            }
+        };
+    }
+    return { node: best || scope, debug: null };
 };
 """
 
 
-def build_extract_js(content_type: str, selector: str | None, offset: int, limit: int, table_index: int | None) -> str:
+def build_extract_js(
+    content_type: str,
+    selector: str | None,
+    offset: int,
+    limit: int,
+    table_index: int | None,
+    content_root_debug: bool = False,
+) -> str:
     """Build JavaScript for content extraction."""
     scope_js = f"""
     {DEEP_QUERY_JS}
@@ -107,31 +164,34 @@ def build_extract_js(content_type: str, selector: str | None, offset: int, limit
     """
 
     if content_type == "overview":
-        return _build_overview_js(scope_js)
+        return _build_overview_js(scope_js, content_root_debug)
     elif content_type == "main":
-        return _build_main_js(scope_js, offset, limit)
+        return _build_main_js(scope_js, offset, limit, content_root_debug)
     elif content_type == "table":
-        return _build_table_js(scope_js, offset, limit, table_index)
+        return _build_table_js(scope_js, offset, limit, table_index, content_root_debug)
     elif content_type == "links":
-        return _build_links_js(scope_js, offset, limit)
+        return _build_links_js(scope_js, offset, limit, content_root_debug)
     elif content_type == "headings":
-        return _build_headings_js(scope_js)
+        return _build_headings_js(scope_js, content_root_debug)
     elif content_type == "images":
-        return _build_images_js(scope_js, offset, limit)
+        return _build_images_js(scope_js, offset, limit, content_root_debug)
 
     return '(() => ({ error: true, reason: "Unknown content type" }))()'
 
 
-def _build_overview_js(scope_js: str) -> str:
+def _build_overview_js(scope_js: str, content_root_debug: bool) -> str:
     """Build JavaScript for content overview."""
+    debug_js = "true" if content_root_debug else "false"
     return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
+        const __mcpWantDebug = {debug_js};
 
         const result = {{ contentType: 'overview' }};
 
-        const contentRoot = pickContentRoot(scope);
+        const contentPick = pickContentRoot(scope, __mcpWantDebug);
+        const contentRoot = contentPick.node;
 
         const paragraphs = contentRoot.querySelectorAll('p');
         const tables = contentRoot.querySelectorAll('table');
@@ -146,6 +206,9 @@ def _build_overview_js(scope_js: str) -> str:
             headings: headings.length,
             images: images.length
         }};
+        if (__mcpWantDebug && contentPick.debug) {{
+            result.contentRootDebug = contentPick.debug;
+        }}
 
         result.preview = {{
             title: document.title,
@@ -188,16 +251,19 @@ def _build_overview_js(scope_js: str) -> str:
     """
 
 
-def _build_main_js(scope_js: str, offset: int, limit: int) -> str:
+def _build_main_js(scope_js: str, offset: int, limit: int, content_root_debug: bool) -> str:
     """Build JavaScript for main content extraction."""
+    debug_js = "true" if content_root_debug else "false"
     return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
+        const __mcpWantDebug = {debug_js};
         const offset = {offset};
         const limit = {limit};
 
-        const contentRoot = pickContentRoot(scope);
+        const contentPick = pickContentRoot(scope, __mcpWantDebug);
+        const contentRoot = contentPick.node;
 
         const paragraphs = [];
         contentRoot.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li').forEach(el => {{
@@ -222,6 +288,9 @@ def _build_main_js(scope_js: str, offset: int, limit: int) -> str:
             hasMore: offset + limit < total,
             items: items
         }};
+        if (__mcpWantDebug && contentPick.debug) {{
+            result.contentRootDebug = contentPick.debug;
+        }}
 
         if (offset > 0 || offset + limit < total) {{
             result.navigation = {{}};
@@ -238,18 +307,27 @@ def _build_main_js(scope_js: str, offset: int, limit: int) -> str:
     """
 
 
-def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | None) -> str:
+def _build_table_js(
+    scope_js: str,
+    offset: int,
+    limit: int,
+    table_index: int | None,
+    content_root_debug: bool,
+) -> str:
     """Build JavaScript for table extraction."""
+    debug_js = "true" if content_root_debug else "false"
     if table_index is not None:
         return f"""
         (() => {{
             {scope_js}
             {JS_HELPERS}
+            const __mcpWantDebug = {debug_js};
             const tableIndex = {table_index};
             const offset = {offset};
             const limit = {limit};
 
-            const contentRoot = pickContentRoot(scope);
+            const contentPick = pickContentRoot(scope, __mcpWantDebug);
+            const contentRoot = contentPick.node;
             const tables = contentRoot.querySelectorAll('table');
             if (tableIndex >= tables.length) {{
                 return {{ error: true, reason: 'Table index ' + tableIndex + ' not found. Available: 0-' + (tables.length - 1) }};
@@ -284,6 +362,9 @@ def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | N
                 hasMore: offset + limit < total,
                 rows: rows
             }};
+            if (__mcpWantDebug && contentPick.debug) {{
+                result.contentRootDebug = contentPick.debug;
+            }}
 
             if (offset > 0 || offset + limit < total) {{
                 result.navigation = {{}};
@@ -303,8 +384,10 @@ def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | N
         (() => {{
             {scope_js}
             {JS_HELPERS}
+            const __mcpWantDebug = {debug_js};
 
-            const contentRoot = pickContentRoot(scope);
+            const contentPick = pickContentRoot(scope, __mcpWantDebug);
+            const contentRoot = contentPick.node;
             const tables = contentRoot.querySelectorAll('table');
             const items = [];
 
@@ -325,27 +408,34 @@ def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | N
                 }});
             }});
 
-            return {{
+            const result = {{
                 contentType: 'table',
                 total: items.length,
                 items: items,
                 hint: items.length > 0 ? "Use table_index=N offset=0 limit=20 to get table rows" : null
             }};
+            if (__mcpWantDebug && contentPick.debug) {{
+                result.contentRootDebug = contentPick.debug;
+            }}
+            return result;
         }})()
         """
 
 
-def _build_links_js(scope_js: str, offset: int, limit: int) -> str:
+def _build_links_js(scope_js: str, offset: int, limit: int, content_root_debug: bool) -> str:
     """Build JavaScript for links extraction."""
+    debug_js = "true" if content_root_debug else "false"
     return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
+        const __mcpWantDebug = {debug_js};
         const offset = {offset};
         const limit = {limit};
 
         const allLinks = [];
-        const contentRoot = pickContentRoot(scope);
+        const contentPick = pickContentRoot(scope, __mcpWantDebug);
+        const contentRoot = contentPick.node;
         contentRoot.querySelectorAll('a[href]').forEach(a => {{
             if (!isVisible(a)) return;
             const text = getCleanText(a);
@@ -370,6 +460,9 @@ def _build_links_js(scope_js: str, offset: int, limit: int) -> str:
             hasMore: offset + limit < total,
             items: items
         }};
+        if (__mcpWantDebug && contentPick.debug) {{
+            result.contentRootDebug = contentPick.debug;
+        }}
 
         if (offset > 0 || offset + limit < total) {{
             result.navigation = {{}};
@@ -386,15 +479,18 @@ def _build_links_js(scope_js: str, offset: int, limit: int) -> str:
     """
 
 
-def _build_headings_js(scope_js: str) -> str:
+def _build_headings_js(scope_js: str, content_root_debug: bool) -> str:
     """Build JavaScript for headings extraction."""
+    debug_js = "true" if content_root_debug else "false"
     return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
+        const __mcpWantDebug = {debug_js};
 
         const headings = [];
-        const contentRoot = pickContentRoot(scope);
+        const contentPick = pickContentRoot(scope, __mcpWantDebug);
+        const contentRoot = contentPick.node;
         contentRoot.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {{
             if (!isVisible(h)) return;
             const text = getCleanText(h);
@@ -406,26 +502,33 @@ def _build_headings_js(scope_js: str) -> str:
             }}
         }});
 
-        return {{
+        const result = {{
             contentType: 'headings',
             total: headings.length,
             items: headings
         }};
+        if (__mcpWantDebug && contentPick.debug) {{
+            result.contentRootDebug = contentPick.debug;
+        }}
+        return result;
     }})()
     """
 
 
-def _build_images_js(scope_js: str, offset: int, limit: int) -> str:
+def _build_images_js(scope_js: str, offset: int, limit: int, content_root_debug: bool) -> str:
     """Build JavaScript for images extraction."""
+    debug_js = "true" if content_root_debug else "false"
     return f"""
     (() => {{
         {scope_js}
         {JS_HELPERS}
+        const __mcpWantDebug = {debug_js};
         const offset = {offset};
         const limit = {limit};
 
         const allImages = [];
-        const contentRoot = pickContentRoot(scope);
+        const contentPick = pickContentRoot(scope, __mcpWantDebug);
+        const contentRoot = contentPick.node;
         contentRoot.querySelectorAll('img[src]').forEach(img => {{
             if (!isVisible(img)) return;
             const src = img.src;
@@ -450,6 +553,9 @@ def _build_images_js(scope_js: str, offset: int, limit: int) -> str:
             hasMore: offset + limit < total,
             items: items
         }};
+        if (__mcpWantDebug && contentPick.debug) {{
+            result.contentRootDebug = contentPick.debug;
+        }}
 
         if (offset > 0 || offset + limit < total) {{
             result.navigation = {{}};

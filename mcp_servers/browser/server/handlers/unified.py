@@ -1912,6 +1912,7 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
             offset=args.get("offset", 0),
             limit=args.get("limit", 10),
             table_index=args.get("table_index"),
+            content_root_debug=bool(args.get("content_root_debug", False)),
         )
     except SmartToolError as exc:
         return ToolResult.error(

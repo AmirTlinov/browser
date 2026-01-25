@@ -977,6 +977,11 @@ DETAIL MODES with pagination:
                 "type": "integer",
                 "description": "Specific table index when content_type='table'",
             },
+            "content_root_debug": {
+                "type": "boolean",
+                "default": False,
+                "description": "Attach content-root heuristics debug data (best-effort).",
+            },
             "auto_expand": {
                 "description": "Auto-expand collapsed content before extraction (best-effort).",
                 "oneOf": [

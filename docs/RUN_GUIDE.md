@@ -25,6 +25,7 @@ Use this when you want the fewest MCP calls per scenario. Start here, then drill
 - Need navigate+extract in one tool call? Use `extract_content(url="...", auto_expand=true, auto_scroll=true)`.
 - Feed inside a scrollable container? Use `auto_scroll={container_selector:"...", ...}` or `scroll(container_selector="...")`.
 - If `main/links` feel noisy, pass `selector="..."` to `extract_content` to scope the extraction.
+- Debug the content-root heuristic: `extract_content(..., content_root_debug=true)` (returns `contentRootDebug`).
 
 ## [ONE_CALL_FLOW] patterns
 Basic form:

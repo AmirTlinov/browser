@@ -498,6 +498,29 @@ def test_extract_content_ignores_invalid_auto_expand(monkeypatch: pytest.MonkeyP
     assert auto_expand.get("ignored") is True
 
 
+def test_extract_content_passes_content_root_debug(monkeypatch: pytest.MonkeyPatch) -> None:
+    """content_root_debug should be forwarded to extract_content."""
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.server.handlers import unified
+
+    captured: dict[str, bool] = {}
+
+    def _extract(*_a, **_k):  # noqa: ANN001,ANN002,ANN003
+        captured["debug"] = bool(_k.get("content_root_debug"))
+        return {"contentType": "overview"}
+
+    monkeypatch.setattr(unified.tools, "extract_content", _extract)
+    cfg = BrowserConfig.from_env()
+    res = unified.handle_extract_content(
+        cfg,
+        launcher=None,
+        args={"content_root_debug": True},
+    )
+
+    assert not res.is_error
+    assert captured.get("debug") is True
+
+
 def test_server_call_tool_cookies_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test unified cookies tool - set action."""
     from mcp_servers.browser.server.handlers import unified

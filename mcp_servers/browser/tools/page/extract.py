@@ -24,6 +24,7 @@ def extract_content(
     offset: int = 0,
     limit: int = DEFAULT_LIMIT,
     table_index: int | None = None,
+    content_root_debug: bool = False,
 ) -> dict[str, Any]:
     """
     Extract structured content from the page with pagination.
@@ -75,7 +76,7 @@ def extract_content(
     limit = min(limit, MAX_LIMIT)
 
     with get_session(config) as (session, target):
-        js = build_extract_js(content_type, selector, offset, limit, table_index)
+        js = build_extract_js(content_type, selector, offset, limit, table_index, content_root_debug)
         result = session.eval_js(js)
 
         if not result:

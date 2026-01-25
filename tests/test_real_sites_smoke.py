@@ -388,3 +388,35 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
         },
     )
     assert not res.is_error
+
+    # Container-scroll on real sites (social/market/news). Best-effort: pass if any succeed.
+    container_cases = [
+        ("news", "https://news.ycombinator.com/", "#hnmain"),
+        ("market", "https://www.ebay.com/sch/i.html?_nkw=headphones", "body"),
+        ("social", "https://github.com/trending", "main"),
+    ]
+    ok_cases = 0
+    for _name, url, selector in container_cases:
+        try:
+            res = flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"navigate": {"url": url}},
+                        {"scroll": {"direction": "down", "amount": 400, "container_selector": selector}},
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 20.0,
+                },
+            )
+            assert not res.is_error
+            ok_cases += 1
+        except Exception:
+            continue
+
+    if ok_cases == 0:
+        pytest.xfail("container scroll live smoke failed on all sites")
