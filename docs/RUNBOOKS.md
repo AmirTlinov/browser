@@ -8,6 +8,7 @@ MEM_PLACEHOLDER = A placeholder that resolves from agent memory: `{{mem:key}}`.
 PARAM_PLACEHOLDER = A placeholder that resolves from runbook params: `{{param:key}}`.
 BOUNDED_REPEAT = A `repeat` action with explicit limits (`max_iters` / `max_time_s`).
 EXTRACT_RUNBOOK = A one-call extraction runbook template using `auto_expand_scroll_extract`.
+EXTRACT_PACK = A small pack of ready one-call extract runbooks (articles/tables/listings).
 
 [CONTENT]
 # Runbooks
@@ -60,6 +61,45 @@ runbook(action="save", key="runbook_extract_one_call", steps=[
 Run it:
 ```
 runbook(action="run", key="runbook_extract_one_call", params={"url": "https://example.com/article"})
+```
+
+## [EXTRACT_PACK] (articles, tables, listings)
+These are ready-to-save runbooks that you can copy verbatim.
+
+Article (main text):
+```
+runbook(action="save", key="runbook_extract_article", steps=[
+  {"navigate": {"url": "{{param:url}}"}},
+  {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "expand": true,
+    "scroll": {"max_iters": 6},
+    "extract": {"content_type": "main", "limit": 12}
+  }}}
+])
+```
+
+Tables (table list):
+```
+runbook(action="save", key="runbook_extract_tables", steps=[
+  {"navigate": {"url": "{{param:url}}"}},
+  {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "expand": true,
+    "scroll": {"max_iters": 4},
+    "extract": {"content_type": "table", "limit": 8}
+  }}}
+])
+```
+
+Listings (links):
+```
+runbook(action="save", key="runbook_extract_listings", steps=[
+  {"navigate": {"url": "{{param:url}}"}},
+  {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "expand": true,
+    "scroll": {"max_iters": 6},
+    "extract": {"content_type": "links", "limit": 20}
+  }}}
+])
 ```
 
 ## Inspect or delete runbooks

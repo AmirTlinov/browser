@@ -11,6 +11,8 @@ FEAT_PAGE_AUTO_EXPAND = Page tool auto-expand prepass for collapsed content.
 FEAT_MACRO_PIPELINE = New run macro pipeline: auto_expand_scroll_extract.
 FEAT_EXPAND_SEMANTIC = Auto-expand heuristics extended with semantic aria/data hints.
 FEAT_EXTRACT_UNIFIED = Unified extract_content tool exposed for run/flow.
+FEAT_SMOKE_EXTRACT = Live-site smoke for auto_expand_scroll_extract (feature-flagged).
+DOC_EXTRACT_PACK = Agent playbook + runbook pack expanded with one-call extract variants.
 
 [CONTENT]
 ## [REL_2026_01_24]
@@ -25,3 +27,5 @@ FEAT_EXTRACT_UNIFIED = Unified extract_content tool exposed for run/flow.
 - [FEAT_MACRO_PIPELINE]
 - [FEAT_EXPAND_SEMANTIC]
 - [FEAT_EXTRACT_UNIFIED]
+- [FEAT_SMOKE_EXTRACT]
+- [DOC_EXTRACT_PACK]

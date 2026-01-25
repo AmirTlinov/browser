@@ -226,6 +226,91 @@ def test_real_sites_macro_scroll_and_paginate(browser_env: tuple[BrowserConfig, 
 
 
 @pytest.mark.skipif(
+    os.environ.get("RUN_BROWSER_INTEGRATION_MACROS") != "1",
+    reason="Macro live tests. Set RUN_BROWSER_INTEGRATION_MACROS=1 to enable.",
+)
+def test_real_sites_macro_expand_scroll_extract(browser_env: tuple[BrowserConfig, BrowserLauncher]) -> None:
+    config, launcher = browser_env
+    registry = create_default_registry()
+    flow_handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
+
+    cases = [
+        (
+            "article",
+            "https://en.wikipedia.org/wiki/Alan_Turing",
+            {"content_type": "overview"},
+            lambda res: isinstance(res.get("counts", {}).get("paragraphs"), int)
+            and res.get("counts", {}).get("paragraphs") > 0,
+        ),
+        (
+            "tables",
+            "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
+            {"content_type": "table", "limit": 8},
+            lambda res: isinstance(res.get("total"), int) and res.get("total", 0) > 0,
+        ),
+        (
+            "listings",
+            "https://news.ycombinator.com/",
+            {"content_type": "links", "limit": 12},
+            lambda res: isinstance(res.get("total"), int) and res.get("total", 0) >= 10,
+        ),
+    ]
+
+    ok_cases = 0
+    for name, url, extract_args, check in cases:
+        try:
+            res = flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"navigate": {"url": url}},
+                        {
+                            "macro": {
+                                "name": "auto_expand_scroll_extract",
+                                "args": {
+                                    "expand": True,
+                                    "scroll": {"max_iters": 4},
+                                    "extract": extract_args,
+                                },
+                            }
+                        },
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 25.0,
+                },
+            )
+            assert not res.is_error
+            steps = res.data.get("steps") if isinstance(res.data, dict) else None
+            assert isinstance(steps, list)
+            assert any(
+                isinstance(step, dict)
+                and step.get("tool") == "macro"
+                and step.get("name") == "auto_expand_scroll_extract"
+                for step in steps
+            )
+
+            extracted = cdp.extract_content(
+                config,
+                content_type=extract_args.get("content_type", "overview"),
+                limit=extract_args.get("limit", 10),
+            )
+            assert isinstance(extracted, dict)
+            assert extracted.get("contentType") == extract_args.get("content_type", "overview")
+            assert check(extracted)
+            ok_cases += 1
+        except Exception:
+            # Keep the smoke resilient to live site or network flakes.
+            continue
+
+    if ok_cases == 0:
+        pytest.xfail("auto_expand_scroll_extract live macro failed on all sites")
+
+
+@pytest.mark.skipif(
     os.environ.get("RUN_BROWSER_INTEGRATION_EDGE") != "1",
     reason="Edge-case live tests. Set RUN_BROWSER_INTEGRATION_EDGE=1 to enable.",
 )

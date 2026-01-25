@@ -13,6 +13,8 @@ TOOL_COUNTS = A per-tool histogram returned by `flow.flow.toolCounts` / `run.run
 RUN_GUIDE = A minimal-call run/macro/runbook quickref (`docs/RUN_GUIDE.md`).
 AUTO_TAB = Auto-switch to a newly opened tab after click-like actions.
 AUTO_AFFORDANCES = Auto-refresh affordances when `act(ref/label)` looks stale.
+ONE_CALL_EXTRACT = A single `run(...)` pipeline that expands → scrolls → extracts in one call.
+EXTRACT_VARIANTS = Pre-tuned one-call extract variants for articles, tables, and listings.
 
  [CONTENT]
 This is the [PLAYBOOK] for using the MCP browser server with minimal [NOISE|LEGEND.md].
@@ -25,6 +27,26 @@ This is the [PLAYBOOK] for using the MCP browser server with minimal [NOISE|LEGE
 Then choose exactly one drilldown ([DRILLDOWN|LEGEND.md]) based on the task:
 - Interact (fastest, actions-first): `page(detail="map")` → `run(actions=[{act:{ref:"aff:..."}}])`
 - Cross-page memory: `page(detail="graph")` (visited nodes + discovered links)
+
+## [ONE_CALL_EXTRACT]
+Use this when the goal is **content extraction** with minimal calls.
+
+Base pattern:
+```
+run(actions=[
+  {"navigate": {"url": "https://example.com/article"}},
+  {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "expand": true,
+    "scroll": {"max_iters": 6},
+    "extract": {"content_type": "overview"}
+  }}}
+], report="map")
+```
+
+## [EXTRACT_VARIANTS]
+- Article: set `extract.content_type="main"` (optionally `limit=12`).
+- Tables: set `extract.content_type="table"`; follow up with `table_index=N` using the hint.
+- Listings: set `extract.content_type="links"`; raise `limit` or `scroll.max_iters` for infinite feeds.
 - Interact: `page(detail="locators")` → `click(...)` / `type(...)` / `form(...)`
 - Iframes/SSO/CAPTCHA layout: `page(detail="frames")` (CDP frame tree) → `page(detail="frames", with_screenshot=true)` (visual boxes)
 
