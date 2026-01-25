@@ -7,7 +7,7 @@
   "tools": [
     {
       "name": "page",
-      "description": "Analyze current page structure and content.\n\nUSAGE:\n- Default (AI-native): page()  # triage + affordances + next actions\n- In MCP_TOOLSET=v2: page() defaults to detail=\"map\" (actions-first)\n- Fast frontend triage (delta capable): page(detail=\"triage\", since=<cursor>)\n- Form details: page(detail=\"forms\", form_index=0)\n- Links list: page(detail=\"links\", limit=20)\n- Main content: page(detail=\"content\")\n- Frontend issues: page(detail=\"diagnostics\")\n- Delta frontend issues: page(detail=\"diagnostics\", since=<cursor>)\n- Accessibility query: page(detail=\"ax\", role=\"button\", name=\"Save\")\n- Visual AX overlay: page(detail=\"ax\", role=\"button\", name=\"Save\", with_screenshot=true)\n- Resource waterfall: page(detail=\"resources\", sort=\"duration\")\n- Performance vitals: page(detail=\"performance\")\n- Frames/iframes map: page(detail=\"frames\")\n- Visual frames overlay: page(detail=\"frames\", with_screenshot=true)\n- Stable selectors: page(detail=\"locators\", kind=\"button\")\n- Visual locator overlay: page(detail=\"locators\", with_screenshot=true)\n- Capability map (actions-first): page(detail=\"map\")\n- Navigation graph (visited pages): page(detail=\"graph\")\n- Super-report (one call): page(detail=\"audit\")\n- Super-report + net trace: page(detail=\"audit\", trace=true)\n- Page info: page(info=true)\n- Store full payload off-context: page(detail=\"diagnostics\", store=true)\n\nTHIS IS YOUR PRIMARY TOOL - call it first to understand the page.\n\nRESPONSE FORMAT:\n- Text results are returned as compact context-format Markdown ([LEGEND] + [CONTENT]), not JSON.\n",
+      "description": "Analyze current page structure and content.\nUSAGE:\n- Default (AI-native): page()  # triage + affordances + next actions\n- In MCP_TOOLSET=v2: page() defaults to detail=\"map\" (actions-first)\n- Fast frontend triage (delta capable): page(detail=\"triage\", since=<cursor>)\n- Form details: page(detail=\"forms\", form_index=0)\n- Links list: page(detail=\"links\", limit=20)\n- Main content: page(detail=\"content\")\n- Frontend issues: page(detail=\"diagnostics\")\n- Delta frontend issues: page(detail=\"diagnostics\", since=<cursor>)\n- Accessibility query: page(detail=\"ax\", role=\"button\", name=\"Save\")\n- Visual AX overlay: page(detail=\"ax\", role=\"button\", name=\"Save\", with_screenshot=true)\n- Resource waterfall: page(detail=\"resources\", sort=\"duration\")\n- Performance vitals: page(detail=\"performance\")\n- Frames/iframes map: page(detail=\"frames\")\n- Visual frames overlay: page(detail=\"frames\", with_screenshot=true)\n- Stable selectors: page(detail=\"locators\", kind=\"button\")\n- Visual locator overlay: page(detail=\"locators\", with_screenshot=true)\n- Capability map (actions-first): page(detail=\"map\")\n- Navigation graph (visited pages): page(detail=\"graph\")\n- Super-report (one call): page(detail=\"audit\")\n- Super-report + net trace: page(detail=\"audit\", trace=true)\n- Page info: page(info=true)\n- Store full payload off-context: page(detail=\"diagnostics\", store=true)\n\nTHIS IS YOUR PRIMARY TOOL - call it first to understand the page.\n\nRESPONSE FORMAT:\n- Text results are returned as compact context-format Markdown ([LEGEND] + [CONTENT]), not JSON.\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -86,6 +86,10 @@
                   "until_js": {
                     "type": "string",
                     "description": "JS expression that returns true when scrolling can stop."
+                  },
+                  "container_selector": {
+                    "type": "string",
+                    "description": "Optional CSS selector for a scrollable container (feeds/lists)."
                   },
                   "stop_on_url_change": {
                     "type": "boolean",
@@ -503,6 +507,10 @@
                     "type": "string",
                     "description": "JS expression that returns true when scrolling can stop."
                   },
+                  "container_selector": {
+                    "type": "string",
+                    "description": "Optional CSS selector for a scrollable container (feeds/lists)."
+                  },
                   "stop_on_url_change": {
                     "type": "boolean",
                     "default": false,
@@ -530,7 +538,7 @@
     },
     {
       "name": "run",
-      "description": "Run an AI-native scenario using OAVR: Observe → Act → Verify → Report.\n\nThis is the recommended entrypoint for multi-step work:\n- Holds one shared CDP session across all actions (less flake, fewer round-trips).\n- Returns a compact report + proof so agents avoid extra \"check\" calls.\n\nDefault report behavior:\n- MCP_TOOLSET=v1/default: report=\"observe\"\n- MCP_TOOLSET=v2: report=\"map\"\n\nINTERNAL ACTIONS (v2):\n`run()` can execute the same action steps as `flow`, including (common set):\n- navigate, click, type, scroll, form, wait\n- page (triage/diagnostics/ax/locators/resources/performance)\n- app (high-level app macros/adapters for complex web apps)\n- dialog (alert/confirm/prompt)\n- captcha (analyze/screenshot/click_blocks/submit)\n- fetch, storage, download\n- net(action=\"harLite\")  # Tier-0 network slice\n- net(action=\"trace\")    # Tier-0 deep trace (bounded, on-demand)\nThese are not separate top-level tools in v2; they are actions inside `run`.\n\nINTERNAL ACTIONS (v3 additions; only inside `run(actions=[...])`, not top-level tools):\nSchemas (shape):\n- assert: {\"assert\": {\"timeout_s\": 5, \"url\": \"...\", \"title\": \"...\", \"selector\": \"...\", \"text\": \"...\", \"js\": \"...\" }}\n- when: {\"when\": {\"if\": {\"url\": \"...\", \"selector\": \"...\", \"text\": \"...\", \"js\": \"...\"}, \"then\": [...], \"else\": [...]}}\n- macro: {\"macro\": {\"name\": \"...\", \"args\": {...}, \"dry_run\": true}}\n\nNotes:\n- Server-side only (no LLM execution); deterministic and bounded by run limits.\n- assert is fail-closed: timeout or mismatch fails the run.\n- when executes a single branch (no loops); else is optional.\n- macro is for compact, deterministic expansions (e.g., include saved step lists).\n\nINTERNAL ACTIONS (v4 additions; only inside `run(actions=[...])`, not top-level tools):\nSchemas (shape):\n- repeat: {\"repeat\": {\"max_iters\": 5, \"until\": {\"selector\": \"...\", \"text\": \"...\", \"url\": \"...\", \"js\": \"...\"}, \"steps\": [...], \"max_time_s\": 20, \"backoff_s\": 0.2, \"backoff_factor\": 1.5, \"backoff_max_s\": 2.0}}\n\nNotes:\n- repeat is bounded: max_iters is capped server-side (no unbounded loops).\n- If `until` is omitted, repeat runs exactly max_iters times and succeeds (like a for-loop).\n- If `until` is provided and never matches, repeat fails closed after max_iters.\n- Optional `max_time_s` adds a wall-clock budget for the whole repeat loop (fail-closed when exhausted).\n- Optional backoff (`backoff_s`, `backoff_factor`, `backoff_max_s`) sleeps between iterations (deterministic, bounded).\n- `js` conditions are evaluated in-page and must return a truthy value.\n\nExamples:\n1) {\"assert\": {\"url\": \"https://example.com\", \"title\": \"Example Domain\", \"timeout_s\": 5}}\n2) {\"when\": {\"if\": {\"selector\": \"#login\", \"text\": \"Sign in\"}, \"then\": [{\"click\": {\"selector\": \"#login\"}}], \"else\": [{\"navigate\": {\"url\": \"https://example.com/login\"}}]}}\n3) {\"macro\": {\"name\": \"trace_then_screenshot\", \"args\": {\"trace\": \"harLite\"}, \"dry_run\": true}}\n4) {\"macro\": {\"name\": \"include_memory_steps\", \"args\": {\"memory_key\": \"workflow.login\", \"params\": {\"user\": \"alice\"}}}}\n5) {\"repeat\": {\"max_iters\": 10, \"until\": {\"selector\": \"#result\"}, \"steps\": [{\"scroll\": {\"direction\": \"down\"}}]}}\n6) {\"macro\": {\"name\": \"auto_expand\", \"args\": {\"phrases\": [\"show more\", \"read more\"]}}}\n6) {\"repeat\": {\"max_iters\": 8, \"until\": {\"js\": \"window.scrollY > 2000\"}, \"steps\": [{\"scroll\": {\"direction\": \"down\"}}]}}\n\nHIGH-LEVERAGE INTERNAL ACTION:\n- act(ref=\"aff:...\")  # resolve a stable affordance ref from page(detail=\"locators\") / page(detail=\"map\") / page(detail=\"triage\")\n  This is the fastest way to click/focus without re-specifying selectors/text.\n- act(label=\"Save\", kind=\"button\")  # deterministic label resolver (exact match; uses stored affordances; may refresh once)\n\nACTION FORMATS (same as flow steps):\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nSTATEFUL RUNS (export → interpolate):\n- You can export scalars from one action and reuse them in later actions via `{{var}}` / `${var}`.\n  This enables single-call pipelines (e.g., capture trace → read artifact → act on results) without extra tool calls.\n\nSAFETY:\n- Mark an action as irreversible (requires confirm_irreversible=true):\n  {\"tool\":\"click\",\"args\":{\"text\":\"Delete\"},\"irreversible\":true}\n\nROBUSTNESS:\n- If a blocking JS dialog is open, non-dialog actions fail fast with a dialog suggestion.\n- Optional: auto-handle dialogs (dismiss/accept) based on policy mode (strict vs permissive).\n- Optional: auto-recover from known CDP brick states and continue (bounded attempts).\n- If any action produces an image (e.g., CAPTCHA screenshot), the image is stored off-context\n  as an artifact and surfaced via `next` drilldown hints.\n\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Defaults to a delta observe report since the run start.\n",
+      "description": "Run an AI-native scenario using OAVR: Observe → Act → Verify → Report.\n\nThis is the recommended entrypoint for multi-step work:\n- Holds one shared CDP session across all actions (less flake, fewer round-trips).\n- Returns a compact report + proof so agents avoid extra \"check\" calls.\n\nDefault report behavior:\n- MCP_TOOLSET=v1/default: report=\"observe\"\n- MCP_TOOLSET=v2: report=\"map\"\n\nINTERNAL ACTIONS (v2):\n`run()` can execute the same action steps as `flow`, including (common set):\n- navigate, click, type, scroll, form, wait\n- page (triage/diagnostics/ax/locators/resources/performance)\n- app (high-level app macros/adapters for complex web apps)\n- dialog (alert/confirm/prompt)\n- captcha (analyze/screenshot/click_blocks/submit)\n- fetch, storage, download\n- net(action=\"harLite\")  # Tier-0 network slice\n- net(action=\"trace\")    # Tier-0 deep trace (bounded, on-demand)\nThese are not separate top-level tools in v2; they are actions inside `run`.\n\nINTERNAL ACTIONS (v3 additions; only inside `run(actions=[...])`, not top-level tools):\nSchemas (shape):\n- assert: {\"assert\": {\"timeout_s\": 5, \"url\": \"...\", \"title\": \"...\", \"selector\": \"...\", \"text\": \"...\", \"js\": \"...\" }}\n- when: {\"when\": {\"if\": {\"url\": \"...\", \"selector\": \"...\", \"text\": \"...\", \"js\": \"...\"}, \"then\": [...], \"else\": [...]}}\n- macro: {\"macro\": {\"name\": \"...\", \"args\": {...}, \"dry_run\": true}}\n\nNotes:\n- Server-side only (no LLM execution); deterministic and bounded by run limits.\n- assert is fail-closed: timeout or mismatch fails the run.\n- when executes a single branch (no loops); else is optional.\n- macro is for compact, deterministic expansions (e.g., include saved step lists).\n\nINTERNAL ACTIONS (v4 additions; only inside `run(actions=[...])`, not top-level tools):\nSchemas (shape):\n- repeat: {\"repeat\": {\"max_iters\": 5, \"until\": {\"selector\": \"...\", \"text\": \"...\", \"url\": \"...\", \"js\": \"...\"}, \"steps\": [...], \"max_time_s\": 20, \"backoff_s\": 0.2, \"backoff_factor\": 1.5, \"backoff_max_s\": 2.0}}\n\nNotes:\n- repeat is bounded: max_iters is capped server-side (no unbounded loops).\n- If `until` is omitted, repeat runs exactly max_iters times and succeeds (like a for-loop).\n- If `until` is provided and never matches, repeat fails closed after max_iters.\n- Optional `max_time_s` adds a wall-clock budget for the whole repeat loop (fail-closed when exhausted).\n- Optional backoff (`backoff_s`, `backoff_factor`, `backoff_max_s`) sleeps between iterations (deterministic, bounded).\n- `js` conditions are evaluated in-page and must return a truthy value.\n\nExamples:\n1) {\"assert\": {\"url\": \"https://example.com\", \"title\": \"Example Domain\", \"timeout_s\": 5}}\n2) {\"when\": {\"if\": {\"selector\": \"#login\", \"text\": \"Sign in\"}, \"then\": [{\"click\": {\"selector\": \"#login\"}}], \"else\": [{\"navigate\": {\"url\": \"https://example.com/login\"}}]}}\n3) {\"macro\": {\"name\": \"trace_then_screenshot\", \"args\": {\"trace\": \"harLite\"}, \"dry_run\": true}}\n4) {\"macro\": {\"name\": \"include_memory_steps\", \"args\": {\"memory_key\": \"workflow.login\", \"params\": {\"user\": \"alice\"}}}}\n5) {\"repeat\": {\"max_iters\": 10, \"until\": {\"selector\": \"#result\"}, \"steps\": [{\"scroll\": {\"direction\": \"down\"}}]}}\n6) {\"macro\": {\"name\": \"auto_expand\", \"args\": {\"phrases\": [\"show more\", \"read more\"]}}}\n6) {\"repeat\": {\"max_iters\": 8, \"until\": {\"js\": \"window.scrollY > 2000\"}, \"steps\": [{\"scroll\": {\"direction\": \"down\"}}]}}\n\nHIGH-LEVERAGE INTERNAL ACTION:\n- act(ref=\"aff:...\")  # resolve a stable affordance ref from page(detail=\"locators\") / page(detail=\"map\") / page(detail=\"triage\")\n  This is the fastest way to click/focus without re-specifying selectors/text.\n- act(label=\"Save\", kind=\"button\")  # deterministic label resolver (exact match; uses stored affordances; may refresh once)\n\nACTION FORMATS (same as flow steps):\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nSTATEFUL RUNS (export → interpolate):\n- You can export scalars from one action and reuse them in later actions via `{{var}}` / `${var}`.\n  This enables single-call pipelines (e.g., capture trace → read artifact → act on results) without extra tool calls.\n\nSAFETY:\n- Mark an action as irreversible (requires confirm_irreversible=true):\n  {\"tool\":\"click\",\"args\":{\"text\":\"Delete\"},\"irreversible\":true}\n\nROBUSTNESS:\n- If a blocking JS dialog is open, non-dialog actions fail fast with a dialog suggestion.\n- Optional: auto-handle dialogs (dismiss/accept) based on policy mode (strict vs permissive).\n- Optional: auto-recover from known CDP brick states and continue (bounded attempts).\n- If any action produces an image (e.g., CAPTCHA screenshot), the image is stored off-context\n  as an artifact and surfaced via `next` drilldown hints.\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Defaults to a delta observe report since the run start.\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -723,7 +731,7 @@
     },
     {
       "name": "flow",
-      "description": "DEPRECATED: use `run(...)` instead.\n\nRun a compact multi-step browser workflow in a single tool call.\n\nGoal: reduce tool-call count + reduce output noise. One call = many steps + one compact summary.\n\nSTEP FORMATS:\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nOPTIONAL EXPORTS (explicit or shorthand steps):\n- Export scalar fields from a step's raw payload without dumping the full output:\n  {\"tool\":\"page\",\"args\":{\"detail\":\"triage\"},\"export\":{\"cursor\":\"cursor\",\"url\":\"triage.url\"}}\n\nSTATEFUL FLOWS (export → interpolate):\n- Exports persist across steps inside the same `flow(...)`/`run(...)` call.\n- Reference exported vars in later step args via `{{var}}` or `${var}`.\n  - Exact placeholder preserves scalar type: {\"timeout\":\"{{cursor}}\"} → int\n  - Inline replacement stringifies: {\"url\":\".../{{artifactId}}\"} → str\n\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Step list is summary-only by default (no massive dumps).\n",
+      "description": "DEPRECATED: use `run(...)` instead.\n\nRun a compact multi-step browser workflow in a single tool call.\n\nGoal: reduce tool-call count + reduce output noise. One call = many steps + one compact summary.\n\nSTEP FORMATS:\n1) Explicit:\n   {\"tool\": \"navigate\", \"args\": {\"url\": \"https://example.com\"}}\n2) Shorthand:\n   {\"navigate\": {\"url\": \"https://example.com\"}}\n\nOPTIONAL EXPORTS (explicit or shorthand steps):\n- Export scalar fields from a step's raw payload without dumping the full output:\n  {\"tool\":\"page\",\"args\":{\"detail\":\"triage\"},\"export\":{\"cursor\":\"cursor\",\"url\":\"triage.url\"}}\n\nSTATEFUL FLOWS (export → interpolate):\n- Exports persist across steps inside the same `flow(...)`/`run(...)` call.\n- Reference exported vars in later step args via `{{var}}` or `${var}`.\n  - Exact placeholder preserves scalar type: {\"timeout\":\"{{cursor}}\"} → int\n  - Inline replacement stringifies: {\"url\":\".../{{artifactId}}\"} → str\nOUTPUT:\n- Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.\n- Step list is summary-only by default (no massive dumps).\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -912,7 +920,7 @@
     },
     {
       "name": "runbook",
-      "description": "Runbooks: save and execute reusable step lists stored in agent memory.\n\nUSAGE:\n- Save: runbook(action=\"save\", key=\"runbook_login\", steps=[...])\n- Run: runbook(action=\"run\", key=\"runbook_login\", params={...}, run_args={...})\n- List: runbook(action=\"list\", limit=20)\n- Get: runbook(action=\"get\", key=\"runbook_login\")\n- Delete: runbook(action=\"delete\", key=\"runbook_login\")\n",
+      "description": "Runbooks: save and execute reusable step lists stored in agent memory.\nUSAGE:\n- Save: runbook(action=\"save\", key=\"runbook_login\", steps=[...])\n- Run: runbook(action=\"run\", key=\"runbook_login\", params={...}, run_args={...})\n- List: runbook(action=\"list\", limit=20)\n- Get: runbook(action=\"get\", key=\"runbook_login\")\n- Delete: runbook(action=\"delete\", key=\"runbook_login\")\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -973,7 +981,7 @@
     },
     {
       "name": "app",
-      "description": "High-level app macros/adapters for complex web apps (Miro/Figma/etc.).\n\nUse this when a site is *not* DOM-driven (canvas apps) and low-level click/drag would require\nhundreds of tiny actions. This tool moves the loop into the server for speed + stability.\n\nUSAGE:\n- Auto-detect app from current URL:\n  app(op=\"diagram\", params={...})\n\n- Force a specific adapter:\n  app(app=\"miro\", op=\"diagram\", params={...})\n\nCommon params (for diagram adapters):\n- strategy: \"auto\" (paste-first in extension mode, then import fallback), \"paste\" (paste only), \"import\" (file chooser only)\n\nCommon ops:\n- op=\"diagram\": generate and insert a simple architecture diagram (SVG) via paste→drop→import fallbacks\n- op=\"insert\": insert user-provided payload (svg/text/files) with the same fast fallbacks\n\nWITHIN run():\n  run(actions=[\n    {\"tool\":\"app\",\"args\":{\"app\":\"miro\",\"op\":\"diagram\",\"params\":{\"title\":\"...\", \"nodes\":[...], \"edges\":[...]}}}\n  ])\n\nDRY RUN (planning / debugging):\n  app(app=\"miro\", op=\"diagram\", params={...}, dry_run=true)\n",
+      "description": "High-level app macros/adapters for complex web apps (Miro/Figma/etc.).\n\nUse this when a site is *not* DOM-driven (canvas apps) and low-level click/drag would require\nhundreds of tiny actions. This tool moves the loop into the server for speed + stability.\nUSAGE:\n- Auto-detect app from current URL:\n  app(op=\"diagram\", params={...})\n\n- Force a specific adapter:\n  app(app=\"miro\", op=\"diagram\", params={...})\n\nCommon params (for diagram adapters):\n- strategy: \"auto\" (paste-first in extension mode, then import fallback), \"paste\" (paste only), \"import\" (file chooser only)\n\nCommon ops:\n- op=\"diagram\": generate and insert a simple architecture diagram (SVG) via paste→drop→import fallbacks\n- op=\"insert\": insert user-provided payload (svg/text/files) with the same fast fallbacks\n\nWITHIN run():\n  run(actions=[\n    {\"tool\":\"app\",\"args\":{\"app\":\"miro\",\"op\":\"diagram\",\"params\":{\"title\":\"...\", \"nodes\":[...], \"edges\":[...]}}}\n  ])\n\nDRY RUN (planning / debugging):\n  app(app=\"miro\", op=\"diagram\", params={...}, dry_run=true)\n",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1005,7 +1013,7 @@
     },
     {
       "name": "navigate",
-      "description": "Navigate to URL or perform navigation action.\n\nUSAGE:\n- Go to URL: navigate(url=\"https://example.com\")\n- Go back: navigate(action=\"back\")\n- Go forward: navigate(action=\"forward\")\n- Reload: navigate(action=\"reload\")\n\nAUTO-WAIT: Waits for page load by default. Use wait=\"none\" to skip.\n\nRESPONSE EXAMPLE:\n{\n  \"url\": \"https://example.com/\",\n  \"title\": \"Example Domain\",\n  \"waited\": \"load\"\n}",
+      "description": "Navigate to URL or perform navigation action.\nUSAGE:\n- Go to URL: navigate(url=\"https://example.com\")\n- Go back: navigate(action=\"back\")\n- Go forward: navigate(action=\"forward\")\n- Reload: navigate(action=\"reload\")\nAUTO-WAIT: Waits for page load by default. Use wait=\"none\" to skip.\nRESPONSE EXAMPLE:\n{\n  \"url\": \"https://example.com/\",\n  \"title\": \"Example Domain\",\n  \"waited\": \"load\"\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1041,7 +1049,7 @@
     },
     {
       "name": "click",
-      "description": "Universal click tool - by text, selector, or coordinates.\n\nUSAGE (in order of preference):\n- By visible text: click(text=\"Sign In\")\n- By text + role: click(text=\"Submit\", role=\"button\")\n- Prefer AX (role+name): click(text=\"Submit\", role=\"button\", strategy=\"ax\")\n- By backend DOM node id (stable handle): click(backendDOMNodeId=123)\n- By ref (stable handle): click(ref=\"dom:123\")\n- By selector: click(selector=\"#login-btn\")\n- By coordinates: click(x=100, y=200)\n- Double click: click(text=\"file.txt\", double=true)\n- Right click: click(selector=\".item\", button=\"right\")\n\nAUTO-WAIT: After clicking links, waits for navigation.\n\nRESPONSE EXAMPLE:\n{\n  \"success\": true,\n  \"clicked\": {\"tag\": \"BUTTON\", \"text\": \"Sign In\", \"x\": 150, \"y\": 300},\n  \"page_changed\": false\n}",
+      "description": "Universal click tool - by text, selector, or coordinates.\n\nUSAGE (in order of preference):\n- By visible text: click(text=\"Sign In\")\n- By text + role: click(text=\"Submit\", role=\"button\")\n- Prefer AX (role+name): click(text=\"Submit\", role=\"button\", strategy=\"ax\")\n- By backend DOM node id (stable handle): click(backendDOMNodeId=123)\n- By ref (stable handle): click(ref=\"dom:123\")\n- By selector: click(selector=\"#login-btn\")\n- By coordinates: click(x=100, y=200)\n- Double click: click(text=\"file.txt\", double=true)\n- Right click: click(selector=\".item\", button=\"right\")\nAUTO-WAIT: After clicking links, waits for navigation.\nRESPONSE EXAMPLE:\n{\n  \"success\": true,\n  \"clicked\": {\"tag\": \"BUTTON\", \"text\": \"Sign In\", \"x\": 150, \"y\": 300},\n  \"page_changed\": false\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1132,7 +1140,7 @@
     },
     {
       "name": "type",
-      "description": "Type text into element or press keys.\n\nUSAGE:\n- Type into element: type(selector=\"#email\", text=\"user@example.com\")\n- Type into element by backend handle: type(backendDOMNodeId=123, text=\"user@example.com\", clear=true)\n- Type into element by ref: type(ref=\"dom:123\", text=\"user@example.com\", clear=true)\n- Type into focused: type(text=\"hello world\")\n- Press key: type(key=\"Enter\")\n- Key with modifier: type(key=\"a\", ctrl=true)  # Ctrl+A\n- Clear and type: type(selector=\"#search\", text=\"query\", clear=true)\n\nRESPONSE EXAMPLE:\n{\n  \"success\": true,\n  \"typed\": \"user@example.com\",\n  \"element\": {\"tag\": \"INPUT\", \"type\": \"email\"}\n}",
+      "description": "Type text into element or press keys.\nUSAGE:\n- Type into element: type(selector=\"#email\", text=\"user@example.com\")\n- Type into element by backend handle: type(backendDOMNodeId=123, text=\"user@example.com\", clear=true)\n- Type into element by ref: type(ref=\"dom:123\", text=\"user@example.com\", clear=true)\n- Type into focused: type(text=\"hello world\")\n- Press key: type(key=\"Enter\")\n- Key with modifier: type(key=\"a\", ctrl=true)  # Ctrl+A\n- Clear and type: type(selector=\"#search\", text=\"query\", clear=true)\nRESPONSE EXAMPLE:\n{\n  \"success\": true,\n  \"typed\": \"user@example.com\",\n  \"element\": {\"tag\": \"INPUT\", \"type\": \"email\"}\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1189,7 +1197,7 @@
     },
     {
       "name": "scroll",
-      "description": "Scroll the page in any direction or to specific element.\n\nUSAGE:\n- Scroll down: scroll(direction=\"down\")\n- Scroll up 500px: scroll(direction=\"up\", amount=500)\n- Scroll to element: scroll(to=\"#footer\")\n- Scroll to stable handle: scroll(ref=\"dom:123\")\n- Scroll to bottom: scroll(to_bottom=true)\n- Scroll to top: scroll(to_top=true)\n\nRESPONSE EXAMPLE:\n{\n  \"scrollX\": 0,\n  \"scrollY\": 450,\n  \"atBottom\": false,\n  \"atTop\": false\n}",
+      "description": "Scroll the page in any direction or to specific element.\nUSAGE:\n- Scroll down: scroll(direction=\"down\")\n- Scroll up 500px: scroll(direction=\"up\", amount=500)\n- Scroll to element: scroll(to=\"#footer\")\n- Scroll to stable handle: scroll(ref=\"dom:123\")\n- Scroll to bottom: scroll(to_bottom=true)\n- Scroll to top: scroll(to_top=true)\n- Scroll inside container: scroll(direction=\"down\", amount=400, container_selector=\".feed\")\nRESPONSE EXAMPLE:\n{\n  \"scrollX\": 0,\n  \"scrollY\": 450,\n  \"atBottom\": false,\n  \"atTop\": false\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1228,6 +1236,10 @@
           "to_bottom": {
             "type": "boolean",
             "description": "Scroll to bottom of page"
+          },
+          "container_selector": {
+            "type": "string",
+            "description": "Optional CSS selector for a scrollable container (for feeds/lists)"
           }
         },
         "additionalProperties": false
@@ -1235,7 +1247,7 @@
     },
     {
       "name": "form",
-      "description": "Work with forms: fill fields, select options, submit.\n\nUSAGE:\n- Fill form: form(fill={\"email\": \"user@example.com\", \"password\": \"secret\"})\n- Fill and submit: form(fill={...}, submit=true)\n- Select dropdown: form(select={\"selector\": \"#country\", \"value\": \"US\"})\n- Focus element: form(focus=\"#email\")\n- Focus field by label/name (iframe-safe): form(focus_key=\"Email Address\", form_index=0)\n- Clear input: form(clear=\"#search\")\n- Wait for element: form(wait_for=\"#results\", timeout=10)\n\nRESPONSE EXAMPLE:\n{\n  \"action\": \"fill\",\n  \"fields_filled\": 3,\n  \"submitted\": true\n}",
+      "description": "Work with forms: fill fields, select options, submit.\nUSAGE:\n- Fill form: form(fill={\"email\": \"user@example.com\", \"password\": \"secret\"})\n- Fill and submit: form(fill={...}, submit=true)\n- Select dropdown: form(select={\"selector\": \"#country\", \"value\": \"US\"})\n- Focus element: form(focus=\"#email\")\n- Focus field by label/name (iframe-safe): form(focus_key=\"Email Address\", form_index=0)\n- Clear input: form(clear=\"#search\")\n- Wait for element: form(wait_for=\"#results\", timeout=10)\nRESPONSE EXAMPLE:\n{\n  \"action\": \"fill\",\n  \"fields_filled\": 3,\n  \"submitted\": true\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1302,7 +1314,7 @@
     },
     {
       "name": "screenshot",
-      "description": "Take a screenshot of the current page.\n\nUSAGE:\n- Full page: screenshot()\n- Specific element: screenshot(selector=\"#main-content\")\n- By stable handle: screenshot(ref=\"dom:123\")  # or backendDOMNodeId=123\n\nRESPONSE: Base64 PNG image",
+      "description": "Take a screenshot of the current page.\nUSAGE:\n- Full page: screenshot()\n- Specific element: screenshot(selector=\"#main-content\")\n- By stable handle: screenshot(ref=\"dom:123\")  # or backendDOMNodeId=123\n\nRESPONSE: Base64 PNG image",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1330,7 +1342,7 @@
     },
     {
       "name": "tabs",
-      "description": "Manage browser tabs: list, switch, open, close.\n\nUSAGE:\n- List tabs: tabs(action=\"list\")\n- Switch by ID: tabs(action=\"switch\", tab_id=\"ABC123\")\n- Switch by URL: tabs(action=\"switch\", url_contains=\"github\")\n- Open new tab: tabs(action=\"new\", url=\"https://example.com\")\n- Rescue (fresh tab, no restart): tabs(action=\"rescue\")\n- Close current: tabs(action=\"close\")\n- Close by ID: tabs(action=\"close\", tab_id=\"ABC123\")\n\nRESPONSE EXAMPLE (list):\n{\n  \"action\": \"list\",\n  \"tabs\": [\n    {\"id\": \"ABC123\", \"url\": \"https://example.com\", \"title\": \"Example\", \"active\": true}\n  ],\n  \"total\": 1\n}",
+      "description": "Manage browser tabs: list, switch, open, close.\nUSAGE:\n- List tabs: tabs(action=\"list\")\n- Switch by ID: tabs(action=\"switch\", tab_id=\"ABC123\")\n- Switch by URL: tabs(action=\"switch\", url_contains=\"github\")\n- Open new tab: tabs(action=\"new\", url=\"https://example.com\")\n- Rescue (fresh tab, no restart): tabs(action=\"rescue\")\n- Close current: tabs(action=\"close\")\n- Close by ID: tabs(action=\"close\", tab_id=\"ABC123\")\n\nRESPONSE EXAMPLE (list):\n{\n  \"action\": \"list\",\n  \"tabs\": [\n    {\"id\": \"ABC123\", \"url\": \"https://example.com\", \"title\": \"Example\", \"active\": true}\n  ],\n  \"total\": 1\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1370,7 +1382,7 @@
     },
     {
       "name": "cookies",
-      "description": "Manage browser cookies: get, set, delete.\n\nUSAGE:\n- Get all: cookies(action=\"get\")\n- Get filtered: cookies(action=\"get\", name_filter=\"session\")\n- Set one: cookies(action=\"set\", name=\"token\", value=\"abc\", domain=\".example.com\")\n- Set multiple: cookies(action=\"set\", cookies=[{name, value, domain}, ...])\n- Delete: cookies(action=\"delete\", name=\"token\")\n\nRESPONSE EXAMPLE (get):\n{\n  \"action\": \"get\",\n  \"cookies\": [\n    {\"name\": \"session\", \"value\": \"abc123\", \"domain\": \".example.com\"}\n  ],\n  \"total\": 1\n}",
+      "description": "Manage browser cookies: get, set, delete.\nUSAGE:\n- Get all: cookies(action=\"get\")\n- Get filtered: cookies(action=\"get\", name_filter=\"session\")\n- Set one: cookies(action=\"set\", name=\"token\", value=\"abc\", domain=\".example.com\")\n- Set multiple: cookies(action=\"set\", cookies=[{name, value, domain}, ...])\n- Delete: cookies(action=\"delete\", name=\"token\")\n\nRESPONSE EXAMPLE (get):\n{\n  \"action\": \"get\",\n  \"cookies\": [\n    {\"name\": \"session\", \"value\": \"abc123\", \"domain\": \".example.com\"}\n  ],\n  \"total\": 1\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1439,7 +1451,7 @@
     },
     {
       "name": "captcha",
-      "description": "Detect and interact with CAPTCHAs.\n\nUSAGE:\n- Analyze CAPTCHA: captcha(action=\"analyze\")\n- Get screenshot with grid: captcha(action=\"screenshot\")\n- Click checkbox: captcha(action=\"click_checkbox\")\n- Click grid blocks: captcha(action=\"click_blocks\", blocks=[1, 4, 7])\n- Submit: captcha(action=\"submit\")\n\nWORKFLOW:\n1. captcha(action=\"analyze\") - detect type\n2. captcha(action=\"screenshot\") - see the challenge\n3. captcha(action=\"click_blocks\", blocks=[...]) - select images\n4. captcha(action=\"submit\") - verify\n\nRESPONSE EXAMPLE (analyze):\n{\n  \"detected\": true,\n  \"type\": \"recaptcha_v2_image\",\n  \"challenge\": \"Select all images with traffic lights\",\n  \"grid\": {\"rows\": 3, \"cols\": 3}\n}",
+      "description": "Detect and interact with CAPTCHAs.\nUSAGE:\n- Analyze CAPTCHA: captcha(action=\"analyze\")\n- Get screenshot with grid: captcha(action=\"screenshot\")\n- Click checkbox: captcha(action=\"click_checkbox\")\n- Click grid blocks: captcha(action=\"click_blocks\", blocks=[1, 4, 7])\n- Submit: captcha(action=\"submit\")\n\nWORKFLOW:\n1. captcha(action=\"analyze\") - detect type\n2. captcha(action=\"screenshot\") - see the challenge\n3. captcha(action=\"click_blocks\", blocks=[...]) - select images\n4. captcha(action=\"submit\") - verify\n\nRESPONSE EXAMPLE (analyze):\n{\n  \"detected\": true,\n  \"type\": \"recaptcha_v2_image\",\n  \"challenge\": \"Select all images with traffic lights\",\n  \"grid\": {\"rows\": 3, \"cols\": 3}\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1478,7 +1490,7 @@
     },
     {
       "name": "mouse",
-      "description": "Low-level mouse operations: move, hover, drag.\n\nUSAGE:\n- Move to coordinates: mouse(action=\"move\", x=100, y=200)\n- Hover element: mouse(action=\"hover\", selector=\"#menu\")\n- Hover element by ref: mouse(action=\"hover\", ref=\"dom:123\")\n- Drag and drop: mouse(action=\"drag\", from_x=100, from_y=100, to_x=300, to_y=300)\n- Drag by refs: mouse(action=\"drag\", from_ref=\"dom:123\", to_ref=\"dom:456\")\n- Drag from ref to coords: mouse(action=\"drag\", from_ref=\"dom:123\", to_x=300, to_y=300)\n- Drag from coords to ref: mouse(action=\"drag\", from_x=100, from_y=100, to_ref=\"dom:456\")\n\nRESPONSE EXAMPLE:\n{\n  \"action\": \"hover\",\n  \"position\": {\"x\": 150, \"y\": 200}\n}",
+      "description": "Low-level mouse operations: move, hover, drag.\nUSAGE:\n- Move to coordinates: mouse(action=\"move\", x=100, y=200)\n- Hover element: mouse(action=\"hover\", selector=\"#menu\")\n- Hover element by ref: mouse(action=\"hover\", ref=\"dom:123\")\n- Drag and drop: mouse(action=\"drag\", from_x=100, from_y=100, to_x=300, to_y=300)\n- Drag by refs: mouse(action=\"drag\", from_ref=\"dom:123\", to_ref=\"dom:456\")\n- Drag from ref to coords: mouse(action=\"drag\", from_ref=\"dom:123\", to_x=300, to_y=300)\n- Drag from coords to ref: mouse(action=\"drag\", from_x=100, from_y=100, to_ref=\"dom:456\")\nRESPONSE EXAMPLE:\n{\n  \"action\": \"hover\",\n  \"position\": {\"x\": 150, \"y\": 200}\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1558,7 +1570,7 @@
     },
     {
       "name": "resize",
-      "description": "Resize browser viewport or window.\n\nUSAGE:\n- Resize viewport: resize(width=1280, height=720)\n- Resize window: resize(width=1280, height=720, target=\"window\")\n- Mobile viewport: resize(width=375, height=667)\n\nRESPONSE EXAMPLE:\n{\n  \"target\": \"viewport\",\n  \"width\": 1280,\n  \"height\": 720\n}",
+      "description": "Resize browser viewport or window.\nUSAGE:\n- Resize viewport: resize(width=1280, height=720)\n- Resize window: resize(width=1280, height=720, target=\"window\")\n- Mobile viewport: resize(width=375, height=667)\nRESPONSE EXAMPLE:\n{\n  \"target\": \"viewport\",\n  \"width\": 1280,\n  \"height\": 720\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1590,7 +1602,7 @@
     },
     {
       "name": "js",
-      "description": "Execute JavaScript in browser context.\n\nUSAGE: js(code=\"document.title\")\n\nRESPONSE EXAMPLE:\n{\"result\": \"Page Title\"}",
+      "description": "Execute JavaScript in browser context.\nUSAGE: js(code=\"document.title\")\nRESPONSE EXAMPLE:\n{\"result\": \"Page Title\"}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1609,7 +1621,7 @@
     },
     {
       "name": "http",
-      "description": "Make HTTP request (not through browser).\n\nUSAGE: http(url=\"https://api.example.com/data\")\n\nUse for API calls. For page fetching, use navigate() instead.",
+      "description": "Make HTTP request (not through browser).\nUSAGE: http(url=\"https://api.example.com/data\")\n\nUse for API calls. For page fetching, use navigate() instead.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1627,7 +1639,7 @@
     },
     {
       "name": "fetch",
-      "description": "Make fetch request from browser context (with cookies/session).\n\nUSAGE: fetch(url=\"/api/user\", method=\"POST\", body='{\"name\": \"test\"}')\n\nUseful for authenticated API calls.",
+      "description": "Make fetch request from browser context (with cookies/session).\nUSAGE: fetch(url=\"/api/user\", method=\"POST\", body='{\"name\": \"test\"}')\n\nUseful for authenticated API calls.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1669,7 +1681,7 @@
     },
     {
       "name": "storage",
-      "description": "Storage operations (localStorage / sessionStorage).\n\nUSAGE:\n- List keys: storage(action=\"list\", storage=\"local\", limit=20)\n- Get value (preview): storage(action=\"get\", key=\"theme\", reveal=true)\n- Set one: storage(action=\"set\", key=\"theme\", value=\"dark\")\n- Set many: storage(action=\"set_many\", items={\"k1\":\"v1\",\"k2\":\"v2\"})\n- Delete: storage(action=\"delete\", key=\"theme\")\n- Clear: storage(action=\"clear\")\n\nNOTES:\n- Safe-by-default: strict policy blocks mutation and sensitive value reveal.\n- To store a revealed value off-context: storage(action=\"get\", key=\"...\", reveal=true, store=true)",
+      "description": "Storage operations (localStorage / sessionStorage).\nUSAGE:\n- List keys: storage(action=\"list\", storage=\"local\", limit=20)\n- Get value (preview): storage(action=\"get\", key=\"theme\", reveal=true)\n- Set one: storage(action=\"set\", key=\"theme\", value=\"dark\")\n- Set many: storage(action=\"set_many\", items={\"k1\":\"v1\",\"k2\":\"v2\"})\n- Delete: storage(action=\"delete\", key=\"theme\")\n- Clear: storage(action=\"clear\")\n\nNOTES:\n- Safe-by-default: strict policy blocks mutation and sensitive value reveal.\n- To store a revealed value off-context: storage(action=\"get\", key=\"...\", reveal=true, store=true)",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1745,7 +1757,7 @@
     },
     {
       "name": "upload",
-      "description": "Upload file to file input.\n\nUSAGE: upload(file_paths=[\"/path/to/file.pdf\"])",
+      "description": "Upload file to file input.\nUSAGE: upload(file_paths=[\"/path/to/file.pdf\"])",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1770,7 +1782,7 @@
     },
     {
       "name": "download",
-      "description": "Wait for a download to complete and optionally store it as an artifact.\n\nUSAGE:\n- Store as artifact (default): download(timeout=30)\n- Metadata only: download(store=false)\n\nNOTES:\n- Designed to be used after triggering a download (click).\n- Keeps output cognitive-cheap: returns an artifact id + minimal metadata.",
+      "description": "Wait for a download to complete and optionally store it as an artifact.\nUSAGE:\n- Store as artifact (default): download(timeout=30)\n- Metadata only: download(store=false)\n\nNOTES:\n- Designed to be used after triggering a download (click).\n- Keeps output cognitive-cheap: returns an artifact id + minimal metadata.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1811,7 +1823,7 @@
     },
     {
       "name": "dialog",
-      "description": "Handle JavaScript alert/confirm/prompt dialogs.\n\nUSAGE:\n- Accept: dialog(accept=true)\n- Dismiss: dialog(accept=false)\n- With text: dialog(accept=true, text=\"my answer\")",
+      "description": "Handle JavaScript alert/confirm/prompt dialogs.\nUSAGE:\n- Accept: dialog(accept=true)\n- Dismiss: dialog(accept=false)\n- With text: dialog(accept=true, text=\"my answer\")",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1836,7 +1848,7 @@
     },
     {
       "name": "totp",
-      "description": "Generate TOTP code for 2FA.\n\nUSAGE: totp(secret=\"JBSWY3DPEHPK3PXP\")\n\nRESPONSE: {\"code\": \"123456\", \"remaining_seconds\": 15}",
+      "description": "Generate TOTP code for 2FA.\nUSAGE: totp(secret=\"JBSWY3DPEHPK3PXP\")\n\nRESPONSE: {\"code\": \"123456\", \"remaining_seconds\": 15}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1862,7 +1874,7 @@
     },
     {
       "name": "wait",
-      "description": "Wait for condition.\n\nUSAGE:\n- Wait for element: wait(for=\"element\", selector=\"#results\")\n- Wait for text: wait(for=\"text\", text=\"Success\")\n- Wait for DOMContentLoaded: wait(for=\"domcontentloaded\")\n- Wait for navigation: wait(for=\"navigation\")\n- Wait for network idle: wait(for=\"networkidle\")\n\nRESPONSE: {\"waited_for\": \"element\", \"found\": true, \"duration_ms\": 1500}",
+      "description": "Wait for condition.\nUSAGE:\n- Wait for element: wait(for=\"element\", selector=\"#results\")\n- Wait for text: wait(for=\"text\", text=\"Success\")\n- Wait for DOMContentLoaded: wait(for=\"domcontentloaded\")\n- Wait for navigation: wait(for=\"navigation\")\n- Wait for network idle: wait(for=\"networkidle\")\n\nRESPONSE: {\"waited_for\": \"element\", \"found\": true, \"duration_ms\": 1500}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1901,7 +1913,7 @@
     },
     {
       "name": "browser",
-      "description": "Browser control: lifecycle + policy + DOM.\n\nUSAGE:\n- Check status: browser(action=\"status\")\n- Launch: browser(action=\"launch\")\n- Emergency recovery (CDP hung / dialog-brick): browser(action=\"recover\")  # add hard=true to restart owned Chrome\n- Get/set safety policy: browser(action=\"policy\", mode=\"strict\")  # or mode=\"permissive\"\n- Get DOM: browser(action=\"dom\", selector=\"#content\")\n- Store DOM as artifact (no huge dump): browser(action=\"dom\", store=true)\n- Get element: browser(action=\"element\", selector=\"#btn\")\n- Agent memory (safe KV): browser(action=\"memory\", memory_action=\"set\", key=\"token\", value=\"...\")\n- Agent memory list: browser(action=\"memory\", memory_action=\"list\")\n- Agent memory get (redacted by default): browser(action=\"memory\", memory_action=\"get\", key=\"token\")\n- Persist memory (non-sensitive): browser(action=\"memory\", memory_action=\"save\")\n- Load memory (after restart): browser(action=\"memory\", memory_action=\"load\")\n- Use memory in run without revealing: run(actions=[{type:{selector:\"#pwd\", text:\"{{mem:token}}\"}}], report=\"map\")\n\nDRILLDOWN:\n- browser(action=\"artifact\", artifact_action=\"get\", id=\"...\", offset=0, max_chars=4000)\n\nRESPONSE (status):\n{\"running\": true, \"version\": \"Chrome/130.0\", \"port\": 9222}",
+      "description": "Browser control: lifecycle + policy + DOM.\nUSAGE:\n- Check status: browser(action=\"status\")\n- Launch: browser(action=\"launch\")\n- Emergency recovery (CDP hung / dialog-brick): browser(action=\"recover\")  # add hard=true to restart owned Chrome\n- Get/set safety policy: browser(action=\"policy\", mode=\"strict\")  # or mode=\"permissive\"\n- Get DOM: browser(action=\"dom\", selector=\"#content\")\n- Store DOM as artifact (no huge dump): browser(action=\"dom\", store=true)\n- Get element: browser(action=\"element\", selector=\"#btn\")\n- Agent memory (safe KV): browser(action=\"memory\", memory_action=\"set\", key=\"token\", value=\"...\")\n- Agent memory list: browser(action=\"memory\", memory_action=\"list\")\n- Agent memory get (redacted by default): browser(action=\"memory\", memory_action=\"get\", key=\"token\")\n- Persist memory (non-sensitive): browser(action=\"memory\", memory_action=\"save\")\n- Load memory (after restart): browser(action=\"memory\", memory_action=\"load\")\n- Use memory in run without revealing: run(actions=[{type:{selector:\"#pwd\", text:\"{{mem:token}}\"}}], report=\"map\")\n\nDRILLDOWN:\n- browser(action=\"artifact\", artifact_action=\"get\", id=\"...\", offset=0, max_chars=4000)\n\nRESPONSE (status):\n{\"running\": true, \"version\": \"Chrome/130.0\", \"port\": 9222}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -2066,7 +2078,7 @@
     },
     {
       "name": "artifact",
-      "description": "Artifact store for high-fidelity payloads (keeps context window small).\n\nUSAGE:\n- List: artifact(action=\"list\", limit=20)\n- Get text slice: artifact(action=\"get\", id=\"...\", offset=0, max_chars=4000)\n- Delete: artifact(action=\"delete\", id=\"...\")\n- Export to outbox: artifact(action=\"export\", id=\"...\", name=\"optional.ext\", overwrite=false)\n\nNOTE:\n- Large payloads are produced by other tools (e.g., browser(action=\"dom\", store=true)).",
+      "description": "Artifact store for high-fidelity payloads (keeps context window small).\nUSAGE:\n- List: artifact(action=\"list\", limit=20)\n- Get text slice: artifact(action=\"get\", id=\"...\", offset=0, max_chars=4000)\n- Delete: artifact(action=\"delete\", id=\"...\")\n- Export to outbox: artifact(action=\"export\", id=\"...\", name=\"optional.ext\", overwrite=false)\n\nNOTE:\n- Large payloads are produced by other tools (e.g., browser(action=\"dom\", store=true)).",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",

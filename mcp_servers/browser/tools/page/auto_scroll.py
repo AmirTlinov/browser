@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 
 from ...config import BrowserConfig
 from ..base import get_session
+from ..shadow_dom import DEEP_QUERY_JS
 
 DEFAULT_MAX_ITERS = 8
 MAX_MAX_ITERS = 50
@@ -59,8 +61,32 @@ def auto_scroll_page(config: BrowserConfig, spec: dict[str, Any]) -> dict[str, A
 
     until_js = spec.get("until_js") if isinstance(spec.get("until_js"), str) else None
     until_js = until_js.strip() if isinstance(until_js, str) else ""
+
+    container_selector = spec.get("container_selector")
+    if isinstance(container_selector, str):
+        container_selector = container_selector.strip()
+        if not container_selector:
+            container_selector = None
+    else:
+        container_selector = None
+
     if not until_js:
-        until_js = DEFAULT_SCROLL_END_JS
+        if container_selector:
+            sel = json.dumps(container_selector)
+            until_js = (
+                "(() => {"
+                f"  {DEEP_QUERY_JS}"
+                f"  const selector = {sel};"
+                "  const nodes = __mcpQueryAllDeep(selector, 200);"
+                "  const pickFrom = nodes.filter(__mcpIsVisible);"
+                "  const el = (pickFrom.length ? pickFrom : nodes)[0] || null;"
+                "  if (!el) return true;"
+                "  const bottom = el.scrollTop + el.clientHeight;"
+                "  return bottom >= (el.scrollHeight - 2);"
+                "})()"
+            )
+        else:
+            until_js = DEFAULT_SCROLL_END_JS
 
     stop_on_url_change = bool(spec.get("stop_on_url_change", False))
 
@@ -130,7 +156,30 @@ def auto_scroll_page(config: BrowserConfig, spec: dict[str, Any]) -> dict[str, A
                 break
 
             try:
-                session.scroll(dx, dy, 100, 100)
+                if container_selector:
+                    sel = json.dumps(container_selector)
+                    scroll_js = (
+                        "(() => {"
+                        f"  {DEEP_QUERY_JS}"
+                        f"  const selector = {sel};"
+                        "  const nodes = __mcpQueryAllDeep(selector, 200);"
+                        "  const pickFrom = nodes.filter(__mcpIsVisible);"
+                        "  const el = (pickFrom.length ? pickFrom : nodes)[0] || null;"
+                        "  if (!el) return null;"
+                        f"  el.scrollBy({{left: {dx}, top: {dy}}});"
+                        "  return {scrollTop: el.scrollTop, scrollLeft: el.scrollLeft, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight};"
+                        "})()"
+                    )
+                    scrolled = session.eval_js(scroll_js)
+                    if not scrolled:
+                        return {
+                            "ok": False,
+                            "error": "Auto-scroll failed",
+                            "details": {"error": "Container not found", "container_selector": container_selector},
+                            "suggestion": "Check container_selector or remove it to scroll the page",
+                        }
+                else:
+                    session.scroll(dx, dy, 100, 100)
             except Exception as exc:  # noqa: BLE001
                 return {
                     "ok": False,
@@ -161,4 +210,5 @@ def auto_scroll_page(config: BrowserConfig, spec: dict[str, Any]) -> dict[str, A
         "amount": int(amount),
         "settle_ms": int(settle_ms),
         "stop_on_url_change": bool(stop_on_url_change),
+        **({"container_selector": container_selector} if container_selector else {}),
     }

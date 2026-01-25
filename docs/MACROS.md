@@ -11,7 +11,7 @@ JS_COND = A JS expression evaluated in-page that must return a truthy value.
 AUTO_EXPAND_SCROLL_EXTRACT = One-call expand → scroll → extract pipeline macro.
 NAVIGATE_SPEC = Optional navigation args (`navigate:{...}` or `url:\"...\"`) before expansion.
 EXPAND_SPEC = Expand args (`expand:true|false|{...}`) for the auto-expand pass.
-SCROLL_SPEC = Scroll args (`scroll:true|false|{...}`) for the auto-scroll pass.
+SCROLL_SPEC = Scroll args (`scroll:true|false|{...}`) for the auto-scroll pass (supports `container_selector`).
 EXTRACT_SPEC = Extract args (`extract:{...}`) forwarded to `extract_content`.
 RETRY_ON_ERROR = A bounded retry pass when error text is detected.
 ERROR_TEXTS = A list of strings that signal partial failure (lazy load errors).
@@ -47,6 +47,7 @@ and then extract structured data.
 - [NAVIGATE_SPEC]: `navigate:{...}` or `url:"..."` (optional).
 - [EXPAND_SPEC]: `expand:true|false|{...}` (optional; defaults to `true`).
 - [SCROLL_SPEC]: `scroll:true|false|{...}` (optional; defaults to `true`, with `stop_on_url_change=true`).
+- For scrollable feeds, set `scroll:{container_selector:\".feed\", ...}` to avoid page-level URL jumps.
 - [EXTRACT_SPEC]: `extract:{...}` (required object; defaults to `{}` if omitted).
 - [RETRY_ON_ERROR]: `retry_on_error:true|false` (optional, default `true`).
 - [ERROR_TEXTS]: `error_texts:["There was an error", "Try again"]` (optional).

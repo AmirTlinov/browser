@@ -119,6 +119,12 @@ def handle_navigate(config: BrowserConfig, launcher: BrowserLauncher, args: dict
 def handle_scroll(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     """Unified scroll: direction, to element, or to top/bottom."""
     backend_dom_node_id: int | None = None
+    container_selector = args.get("container_selector")
+    if isinstance(container_selector, str):
+        container_selector = container_selector.strip() or None
+    else:
+        container_selector = None
+
     if "backendDOMNodeId" in args:
         try:
             backend_dom_node_id = int(args.get("backendDOMNodeId"))
@@ -134,10 +140,10 @@ def handle_scroll(config: BrowserConfig, launcher: BrowserLauncher, args: dict[s
     elif args.get("to"):
         result = tools.scroll_to_element(config, args["to"])
     elif args.get("to_top"):
-        result = tools.scroll_page(config, 0, -99999)
+        result = tools.scroll_page(config, 0, -99999, container_selector=container_selector)
         result["atTop"] = True
     elif args.get("to_bottom"):
-        result = tools.scroll_page(config, 0, 99999)
+        result = tools.scroll_page(config, 0, 99999, container_selector=container_selector)
         result["atBottom"] = True
     elif args.get("direction"):
         direction = args["direction"]
@@ -153,10 +159,10 @@ def handle_scroll(config: BrowserConfig, launcher: BrowserLauncher, args: dict[s
         elif direction == "left":
             delta_x = -amount
 
-        result = tools.scroll_page(config, delta_x, delta_y)
+        result = tools.scroll_page(config, delta_x, delta_y, container_selector=container_selector)
     else:
         # Default: scroll down
-        result = tools.scroll_page(config, 0, 300)
+        result = tools.scroll_page(config, 0, 300, container_selector=container_selector)
 
     # Add scroll position info
     page_info = tools.get_page_info(config)

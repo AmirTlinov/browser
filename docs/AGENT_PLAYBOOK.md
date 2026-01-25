@@ -55,6 +55,7 @@ run(actions=[
 Tips:
 - Use `auto_tab=true` when a click is expected to open a new tab ([AUTO_TAB]).
 - Keep `auto_affordances=true` (default) to make `act(ref/label)` resilient across navigation ([AUTO_AFFORDANCES]).
+- For SPA feeds, prefer `scroll: {container_selector: "...", stop_on_url_change: true}` to avoid URL/state jumps.
 
 ## Minimal-call decision (fast)
 - If a [CANVAS_APP|LEGEND.md]: prefer `app(...)` (or `run(actions=[{"tool":"app",...}])`) over chatty click/drag loops.

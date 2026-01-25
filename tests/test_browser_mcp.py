@@ -684,7 +684,11 @@ def test_server_call_tool_scroll(monkeypatch: pytest.MonkeyPatch) -> None:
     sent: list[dict] = []
     monkeypatch.setattr(mcp_server, "_write_message", lambda payload: sent.append(payload))
     monkeypatch.setattr(BrowserLauncher, "ensure_running", lambda self: None)
-    monkeypatch.setattr(unified.tools, "scroll_page", lambda config, dx, dy: {"deltaX": dx, "deltaY": dy})
+    monkeypatch.setattr(
+        unified.tools,
+        "scroll_page",
+        lambda config, dx, dy, **_k: {"deltaX": dx, "deltaY": dy},  # noqa: ANN001,ARG001
+    )
     monkeypatch.setattr(unified.tools, "get_page_info", lambda config: {"pageInfo": {"scrollX": 0, "scrollY": 300}})
     srv = mcp_server.McpServer()
     srv.handle_call_tool(request_id="8", name="scroll", arguments={"direction": "down", "amount": 300})

@@ -34,6 +34,60 @@ const dedupe = (arr, keyFn) => {
         return true;
     });
 };
+
+const _badTags = new Set(['NAV', 'HEADER', 'FOOTER', 'ASIDE', 'FORM']);
+const _badRoles = new Set(['navigation', 'banner', 'contentinfo', 'complementary']);
+const _badHints = ['nav', 'navbar', 'footer', 'header', 'sidebar', 'menu', 'breadcrumb', 'cookie', 'promo', 'ad'];
+
+const isBadNode = (el) => {
+    if (!el || !el.tagName) return true;
+    if (_badTags.has(el.tagName)) return true;
+    const role = (el.getAttribute && el.getAttribute('role')) || '';
+    if (role && _badRoles.has(role)) return true;
+    const hint = ((el.id || '') + ' ' + (el.className || '')).toLowerCase();
+    return _badHints.some(h => hint.includes(h));
+};
+
+const linkTextLength = (el) => {
+    if (!el) return 0;
+    let total = 0;
+    el.querySelectorAll('a[href]').forEach(a => {
+        if (!isVisible(a)) return;
+        const text = getCleanText(a);
+        if (text) total += text.length;
+    });
+    return total;
+};
+
+const scoreNode = (el) => {
+    if (!el || !isVisible(el) || isBadNode(el)) return 0;
+    const textLen = getCleanText(el).length;
+    if (textLen < 120) return 0;
+    const linkLen = linkTextLength(el);
+    const density = textLen > 0 ? (linkLen / textLen) : 1;
+    const penalty = Math.min(0.8, density * 0.85);
+    return textLen * (1 - penalty);
+};
+
+const pickContentRoot = (scope) => {
+    if (!scope) return document.body || scope;
+    const preferred = ['article', 'main', '[role="main"]'];
+    for (const sel of preferred) {
+        const candidate = scope.querySelector(sel);
+        if (candidate && isVisible(candidate)) return candidate;
+    }
+    const nodes = Array.from(scope.querySelectorAll('article, main, section, div')).slice(0, 600);
+    let best = null;
+    let bestScore = 0;
+    for (const node of nodes) {
+        const score = scoreNode(node);
+        if (score > bestScore) {
+            bestScore = score;
+            best = node;
+        }
+    }
+    return best || scope;
+};
 """
 
 
@@ -77,19 +131,13 @@ def _build_overview_js(scope_js: str) -> str:
 
         const result = {{ contentType: 'overview' }};
 
-        const mainSelectors = ['article', 'main', '[role="main"]', '.content'];
-        let mainEl = null;
-        for (const sel of mainSelectors) {{
-            mainEl = scope.querySelector(sel);
-            if (mainEl) break;
-        }}
-        if (!mainEl) mainEl = scope;
+        const contentRoot = pickContentRoot(scope);
 
-        const paragraphs = mainEl.querySelectorAll('p');
-        const tables = scope.querySelectorAll('table');
-        const links = scope.querySelectorAll('a[href]');
-        const headings = scope.querySelectorAll('h1, h2, h3, h4, h5, h6');
-        const images = scope.querySelectorAll('img[src]');
+        const paragraphs = contentRoot.querySelectorAll('p');
+        const tables = contentRoot.querySelectorAll('table');
+        const links = contentRoot.querySelectorAll('a[href]');
+        const headings = contentRoot.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        const images = contentRoot.querySelectorAll('img[src]');
 
         result.counts = {{
             paragraphs: paragraphs.length,
@@ -149,16 +197,10 @@ def _build_main_js(scope_js: str, offset: int, limit: int) -> str:
         const offset = {offset};
         const limit = {limit};
 
-        const mainSelectors = ['article', 'main', '[role="main"]', '.content', '.post'];
-        let mainEl = null;
-        for (const sel of mainSelectors) {{
-            mainEl = scope.querySelector(sel);
-            if (mainEl) break;
-        }}
-        if (!mainEl) mainEl = scope;
+        const contentRoot = pickContentRoot(scope);
 
         const paragraphs = [];
-        mainEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li').forEach(el => {{
+        contentRoot.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li').forEach(el => {{
             if (!isVisible(el)) return;
             const text = getCleanText(el);
             if (text.length > 15 && !text.match(/^[.#{{}}:;]|function|const |var /)) {{
@@ -207,7 +249,8 @@ def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | N
             const offset = {offset};
             const limit = {limit};
 
-            const tables = scope.querySelectorAll('table');
+            const contentRoot = pickContentRoot(scope);
+            const tables = contentRoot.querySelectorAll('table');
             if (tableIndex >= tables.length) {{
                 return {{ error: true, reason: 'Table index ' + tableIndex + ' not found. Available: 0-' + (tables.length - 1) }};
             }}
@@ -261,7 +304,8 @@ def _build_table_js(scope_js: str, offset: int, limit: int, table_index: int | N
             {scope_js}
             {JS_HELPERS}
 
-            const tables = scope.querySelectorAll('table');
+            const contentRoot = pickContentRoot(scope);
+            const tables = contentRoot.querySelectorAll('table');
             const items = [];
 
             tables.forEach((table, idx) => {{
@@ -301,7 +345,8 @@ def _build_links_js(scope_js: str, offset: int, limit: int) -> str:
         const limit = {limit};
 
         const allLinks = [];
-        scope.querySelectorAll('a[href]').forEach(a => {{
+        const contentRoot = pickContentRoot(scope);
+        contentRoot.querySelectorAll('a[href]').forEach(a => {{
             if (!isVisible(a)) return;
             const text = getCleanText(a);
             const href = a.href;
@@ -349,7 +394,8 @@ def _build_headings_js(scope_js: str) -> str:
         {JS_HELPERS}
 
         const headings = [];
-        scope.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {{
+        const contentRoot = pickContentRoot(scope);
+        contentRoot.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {{
             if (!isVisible(h)) return;
             const text = getCleanText(h);
             if (text && text.length > 1) {{
@@ -379,7 +425,8 @@ def _build_images_js(scope_js: str, offset: int, limit: int) -> str:
         const limit = {limit};
 
         const allImages = [];
-        scope.querySelectorAll('img[src]').forEach(img => {{
+        const contentRoot = pickContentRoot(scope);
+        contentRoot.querySelectorAll('img[src]').forEach(img => {{
             if (!isVisible(img)) return;
             const src = img.src;
             if (src.startsWith('data:') || src.includes('pixel') || src.includes('tracking')) return;

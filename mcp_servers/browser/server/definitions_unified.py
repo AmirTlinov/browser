@@ -18,15 +18,12 @@ from typing import Any
 NAVIGATE_TOOL: dict[str, Any] = {
     "name": "navigate",
     "description": """Navigate to URL or perform navigation action.
-
 USAGE:
 - Go to URL: navigate(url="https://example.com")
 - Go back: navigate(action="back")
 - Go forward: navigate(action="forward")
 - Reload: navigate(action="reload")
-
 AUTO-WAIT: Waits for page load by default. Use wait="none" to skip.
-
 RESPONSE EXAMPLE:
 {
   "url": "https://example.com/",
@@ -60,7 +57,6 @@ RESPONSE EXAMPLE:
 SCROLL_TOOL: dict[str, Any] = {
     "name": "scroll",
     "description": """Scroll the page in any direction or to specific element.
-
 USAGE:
 - Scroll down: scroll(direction="down")
 - Scroll up 500px: scroll(direction="up", amount=500)
@@ -68,7 +64,7 @@ USAGE:
 - Scroll to stable handle: scroll(ref="dom:123")
 - Scroll to bottom: scroll(to_bottom=true)
 - Scroll to top: scroll(to_top=true)
-
+- Scroll inside container: scroll(direction="down", amount=400, container_selector=".feed")
 RESPONSE EXAMPLE:
 {
   "scrollX": 0,
@@ -104,6 +100,10 @@ RESPONSE EXAMPLE:
             },
             "to_top": {"type": "boolean", "description": "Scroll to top of page"},
             "to_bottom": {"type": "boolean", "description": "Scroll to bottom of page"},
+            "container_selector": {
+                "type": "string",
+                "description": "Optional CSS selector for a scrollable container (for feeds/lists)",
+            },
         },
         "additionalProperties": False,
     },
@@ -126,9 +126,7 @@ USAGE (in order of preference):
 - By coordinates: click(x=100, y=200)
 - Double click: click(text="file.txt", double=true)
 - Right click: click(selector=".item", button="right")
-
 AUTO-WAIT: After clicking links, waits for navigation.
-
 RESPONSE EXAMPLE:
 {
   "success": true,
@@ -205,7 +203,6 @@ RESPONSE EXAMPLE:
 TYPE_TOOL: dict[str, Any] = {
     "name": "type",
     "description": """Type text into element or press keys.
-
 USAGE:
 - Type into element: type(selector="#email", text="user@example.com")
 - Type into element by backend handle: type(backendDOMNodeId=123, text="user@example.com", clear=true)
@@ -214,7 +211,6 @@ USAGE:
 - Press key: type(key="Enter")
 - Key with modifier: type(key="a", ctrl=true)  # Ctrl+A
 - Clear and type: type(selector="#search", text="query", clear=true)
-
 RESPONSE EXAMPLE:
 {
   "success": true,
@@ -267,7 +263,6 @@ RESPONSE EXAMPLE:
 MOUSE_TOOL: dict[str, Any] = {
     "name": "mouse",
     "description": """Low-level mouse operations: move, hover, drag.
-
 USAGE:
 - Move to coordinates: mouse(action="move", x=100, y=200)
 - Hover element: mouse(action="hover", selector="#menu")
@@ -276,7 +271,6 @@ USAGE:
 - Drag by refs: mouse(action="drag", from_ref="dom:123", to_ref="dom:456")
 - Drag from ref to coords: mouse(action="drag", from_ref="dom:123", to_x=300, to_y=300)
 - Drag from coords to ref: mouse(action="drag", from_x=100, from_y=100, to_ref="dom:456")
-
 RESPONSE EXAMPLE:
 {
   "action": "hover",
@@ -342,12 +336,10 @@ RESPONSE EXAMPLE:
 RESIZE_TOOL: dict[str, Any] = {
     "name": "resize",
     "description": """Resize browser viewport or window.
-
 USAGE:
 - Resize viewport: resize(width=1280, height=720)
 - Resize window: resize(width=1280, height=720, target="window")
 - Mobile viewport: resize(width=375, height=667)
-
 RESPONSE EXAMPLE:
 {
   "target": "viewport",
@@ -378,7 +370,6 @@ RESPONSE EXAMPLE:
 FORM_TOOL: dict[str, Any] = {
     "name": "form",
     "description": """Work with forms: fill fields, select options, submit.
-
 USAGE:
 - Fill form: form(fill={"email": "user@example.com", "password": "secret"})
 - Fill and submit: form(fill={...}, submit=true)
@@ -387,7 +378,6 @@ USAGE:
 - Focus field by label/name (iframe-safe): form(focus_key="Email Address", form_index=0)
 - Clear input: form(clear="#search")
 - Wait for element: form(wait_for="#results", timeout=10)
-
 RESPONSE EXAMPLE:
 {
   "action": "fill",
@@ -454,7 +444,6 @@ RESPONSE EXAMPLE:
 TABS_TOOL: dict[str, Any] = {
     "name": "tabs",
     "description": """Manage browser tabs: list, switch, open, close.
-
 USAGE:
 - List tabs: tabs(action="list")
 - Switch by ID: tabs(action="switch", tab_id="ABC123")
@@ -504,7 +493,6 @@ RESPONSE EXAMPLE (list):
 COOKIES_TOOL: dict[str, Any] = {
     "name": "cookies",
     "description": """Manage browser cookies: get, set, delete.
-
 USAGE:
 - Get all: cookies(action="get")
 - Get filtered: cookies(action="get", name_filter="session")
@@ -558,7 +546,6 @@ RESPONSE EXAMPLE (get):
 CAPTCHA_TOOL: dict[str, Any] = {
     "name": "captcha",
     "description": """Detect and interact with CAPTCHAs.
-
 USAGE:
 - Analyze CAPTCHA: captcha(action="analyze")
 - Get screenshot with grid: captcha(action="screenshot")
@@ -613,7 +600,6 @@ RESPONSE EXAMPLE (analyze):
 PAGE_TOOL: dict[str, Any] = {
     "name": "page",
     "description": """Analyze current page structure and content.
-
 USAGE:
 - Default (AI-native): page()  # triage + affordances + next actions
 - In MCP_TOOLSET=v2: page() defaults to detail="map" (actions-first)
@@ -716,6 +702,10 @@ RESPONSE FORMAT:
                             "until_js": {
                                 "type": "string",
                                 "description": "JS expression that returns true when scrolling can stop.",
+                            },
+                            "container_selector": {
+                                "type": "string",
+                                "description": "Optional CSS selector for a scrollable container (feeds/lists).",
                             },
                             "stop_on_url_change": {
                                 "type": "boolean",
@@ -1074,6 +1064,10 @@ DETAIL MODES with pagination:
                                 "type": "string",
                                 "description": "JS expression that returns true when scrolling can stop.",
                             },
+                            "container_selector": {
+                                "type": "string",
+                                "description": "Optional CSS selector for a scrollable container (feeds/lists).",
+                            },
                             "stop_on_url_change": {
                                 "type": "boolean",
                                 "default": False,
@@ -1126,7 +1120,6 @@ STATEFUL FLOWS (export → interpolate):
 - Reference exported vars in later step args via `{{var}}` or `${var}`.
   - Exact placeholder preserves scalar type: {"timeout":"{{cursor}}"} → int
   - Inline replacement stringifies: {"url":".../{{artifactId}}"} → str
-
 OUTPUT:
 - Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.
 - Step list is summary-only by default (no massive dumps).
@@ -1372,7 +1365,6 @@ ROBUSTNESS:
 - Optional: auto-recover from known CDP brick states and continue (bounded attempts).
 - If any action produces an image (e.g., CAPTCHA screenshot), the image is stored off-context
   as an artifact and surfaced via `next` drilldown hints.
-
 OUTPUT:
 - Always context-format Markdown (`[LEGEND]` + `[CONTENT]`), not JSON.
 - Defaults to a delta observe report since the run start.
@@ -1543,7 +1535,6 @@ OUTPUT:
 RUNBOOK_TOOL: dict[str, Any] = {
     "name": "runbook",
     "description": """Runbooks: save and execute reusable step lists stored in agent memory.
-
 USAGE:
 - Save: runbook(action="save", key="runbook_login", steps=[...])
 - Run: runbook(action="run", key="runbook_login", params={...}, run_args={...})
@@ -1602,7 +1593,6 @@ APP_TOOL: dict[str, Any] = {
 
 Use this when a site is *not* DOM-driven (canvas apps) and low-level click/drag would require
 hundreds of tiny actions. This tool moves the loop into the server for speed + stability.
-
 USAGE:
 - Auto-detect app from current URL:
   app(op="diagram", params={...})
@@ -1659,7 +1649,6 @@ DRY RUN (planning / debugging):
 SCREENSHOT_TOOL: dict[str, Any] = {
     "name": "screenshot",
     "description": """Take a screenshot of the current page.
-
 USAGE:
 - Full page: screenshot()
 - Specific element: screenshot(selector="#main-content")
@@ -1699,9 +1688,7 @@ UTILITY_TOOLS: list[dict[str, Any]] = [
     {
         "name": "js",
         "description": """Execute JavaScript in browser context.
-
 USAGE: js(code="document.title")
-
 RESPONSE EXAMPLE:
 {"result": "Page Title"}""",
         "inputSchema": {
@@ -1719,7 +1706,6 @@ RESPONSE EXAMPLE:
     {
         "name": "http",
         "description": """Make HTTP request (not through browser).
-
 USAGE: http(url="https://api.example.com/data")
 
 Use for API calls. For page fetching, use navigate() instead.""",
@@ -1736,7 +1722,6 @@ Use for API calls. For page fetching, use navigate() instead.""",
     {
         "name": "fetch",
         "description": """Make fetch request from browser context (with cookies/session).
-
 USAGE: fetch(url="/api/user", method="POST", body='{"name": "test"}')
 
 Useful for authenticated API calls.""",
@@ -1765,7 +1750,6 @@ Useful for authenticated API calls.""",
     {
         "name": "storage",
         "description": """Storage operations (localStorage / sessionStorage).
-
 USAGE:
 - List keys: storage(action="list", storage="local", limit=20)
 - Get value (preview): storage(action="get", key="theme", reveal=true)
@@ -1824,7 +1808,6 @@ NOTES:
     {
         "name": "upload",
         "description": """Upload file to file input.
-
 USAGE: upload(file_paths=["/path/to/file.pdf"])""",
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1847,7 +1830,6 @@ USAGE: upload(file_paths=["/path/to/file.pdf"])""",
     {
         "name": "download",
         "description": """Wait for a download to complete and optionally store it as an artifact.
-
 USAGE:
 - Store as artifact (default): download(timeout=30)
 - Metadata only: download(store=false)
@@ -1896,7 +1878,6 @@ NOTES:
     {
         "name": "dialog",
         "description": """Handle JavaScript alert/confirm/prompt dialogs.
-
 USAGE:
 - Accept: dialog(accept=true)
 - Dismiss: dialog(accept=false)
@@ -1923,7 +1904,6 @@ USAGE:
     {
         "name": "totp",
         "description": """Generate TOTP code for 2FA.
-
 USAGE: totp(secret="JBSWY3DPEHPK3PXP")
 
 RESPONSE: {"code": "123456", "remaining_seconds": 15}""",
@@ -1945,7 +1925,6 @@ RESPONSE: {"code": "123456", "remaining_seconds": 15}""",
     {
         "name": "wait",
         "description": """Wait for condition.
-
 USAGE:
 - Wait for element: wait(for="element", selector="#results")
 - Wait for text: wait(for="text", text="Success")
@@ -1978,7 +1957,6 @@ RESPONSE: {"waited_for": "element", "found": true, "duration_ms": 1500}""",
     {
         "name": "browser",
         "description": """Browser control: lifecycle + policy + DOM.
-
 USAGE:
 - Check status: browser(action="status")
 - Launch: browser(action="launch")
@@ -2120,7 +2098,6 @@ RESPONSE (status):
     {
         "name": "artifact",
         "description": """Artifact store for high-fidelity payloads (keeps context window small).
-
 USAGE:
 - List: artifact(action="list", limit=20)
 - Get text slice: artifact(action="get", id="...", offset=0, max_chars=4000)

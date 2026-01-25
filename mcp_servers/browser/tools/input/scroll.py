@@ -21,6 +21,7 @@ def scroll_page(
     delta_y: float,
     x: float = 100,
     y: float = 100,
+    container_selector: str | None = None,
 ) -> dict[str, Any]:
     """Scroll the page by delta amounts using mouse wheel.
 
@@ -36,6 +37,44 @@ def scroll_page(
     """
     with get_session(config) as (session, target):
         try:
+            if isinstance(container_selector, str) and container_selector.strip():
+                selector = container_selector.strip()
+                js = f"""
+                (() => {{
+                    {DEEP_QUERY_JS}
+                    const selector = {json.dumps(selector)};
+                    const nodes = __mcpQueryAllDeep(selector, 200);
+                    const pickFrom = nodes.filter(__mcpIsVisible);
+                    const el = (pickFrom.length ? pickFrom : nodes)[0] || null;
+                    if (!el) return null;
+                    el.scrollBy({{left: {float(delta_x)}, top: {float(delta_y)}}});
+                    return {{
+                        scrollTop: el.scrollTop,
+                        scrollLeft: el.scrollLeft,
+                        scrollHeight: el.scrollHeight,
+                        scrollWidth: el.scrollWidth,
+                        clientHeight: el.clientHeight,
+                        clientWidth: el.clientWidth
+                    }};
+                }})()
+                """
+                result = session.eval_js(js)
+                if not result:
+                    raise SmartToolError(
+                        tool="scroll_page",
+                        action="scroll",
+                        reason=f"Container not found: {selector}",
+                        suggestion="Check container_selector or use page(detail='locators') to find a stable selector",
+                    )
+                return {
+                    "deltaX": delta_x,
+                    "deltaY": delta_y,
+                    "container": selector,
+                    "containerScroll": result,
+                    "target": target["id"],
+                    "sessionTabId": session_manager.tab_id,
+                }
+
             session.scroll(delta_x, delta_y, x, y)
             return {
                 "deltaX": delta_x,
@@ -43,6 +82,8 @@ def scroll_page(
                 "target": target["id"],
                 "sessionTabId": session_manager.tab_id,
             }
+        except SmartToolError:
+            raise
         except (OSError, ValueError, KeyError) as e:
             raise SmartToolError(
                 tool="scroll_page",
