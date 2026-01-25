@@ -11,6 +11,8 @@ Design principles:
 from __future__ import annotations
 
 from typing import Any
+
+from .definitions_extract_retry import EXTRACT_RETRY_PROPERTIES
 # ═══════════════════════════════════════════════════════════════════════════════
 # NAVIGATION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1088,6 +1090,7 @@ DETAIL MODES with pagination:
                     },
                 ],
             },
+            **EXTRACT_RETRY_PROPERTIES,
             "store": {
                 "type": "boolean",
                 "default": False,

@@ -521,6 +521,51 @@ def test_extract_content_passes_content_root_debug(monkeypatch: pytest.MonkeyPat
     assert captured.get("debug") is True
 
 
+def test_extract_content_retry_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """retry_on_error should perform bounded recovery when error text is present."""
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.server.handlers import unified
+
+    calls = {"eval": 0, "wait": 0, "scroll": 0}
+
+    def _eval_js(*_a, **_k):  # noqa: ANN001,ANN002,ANN003
+        calls["eval"] += 1
+        # First two checks see error text; third clears.
+        return {"result": calls["eval"] < 3}
+
+    monkeypatch.setattr(unified.tools, "eval_js", _eval_js)
+    monkeypatch.setattr(unified.tools, "wait_for", lambda *_a, **_k: calls.__setitem__("wait", calls["wait"] + 1))
+    monkeypatch.setattr(
+        unified.tools,
+        "scroll_page",
+        lambda *_a, **_k: calls.__setitem__("scroll", calls["scroll"] + 1),
+    )
+    monkeypatch.setattr(unified.tools, "extract_content", lambda *_a, **_k: {"contentType": "overview"})
+
+    cfg = BrowserConfig.from_env()
+    res = unified.handle_extract_content(
+        cfg,
+        launcher=None,
+        args={
+            "retry_on_error": True,
+            "error_texts": ["error while loading"],
+            "max_error_retries": 2,
+            "retry_wait": {"for": "networkidle", "timeout": 0.1},
+            "retry_scroll": {"direction": "down", "amount": 100},
+        },
+    )
+
+    assert not res.is_error
+    assert isinstance(res.data, dict)
+    retry_info = res.data.get("errorRetry") or {}
+    assert retry_info.get("enabled") is True
+    assert retry_info.get("last_seen") is True
+    assert retry_info.get("cleared") is True
+    assert retry_info.get("attempts", 0) >= 1
+    assert calls["wait"] >= 1
+    assert calls["scroll"] >= 1
+
+
 def test_server_call_tool_cookies_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test unified cookies tool - set action."""
     from mcp_servers.browser.server.handlers import unified

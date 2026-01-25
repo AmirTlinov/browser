@@ -18,6 +18,13 @@ from ...tools.base import SmartToolError
 from ..artifacts import artifact_store
 from ..hints import artifact_export_hint, artifact_get_hint, artifact_list_hint
 from ..types import ToolResult
+from .extract_retry import (
+    DEFAULT_ERROR_TEXTS as _DEFAULT_ERROR_TEXTS,
+    as_str_list as _as_str_list,
+    error_texts_present as _error_texts_present,
+    normalize_retry_scroll as _normalize_retry_scroll,
+)
+from .locators_overlay import build_locators_overlay_js
 
 if TYPE_CHECKING:
     from ...config import BrowserConfig
@@ -53,6 +60,8 @@ def _coerce_boolish(value: Any) -> tuple[bool | None, bool]:
         if v in {"false", "0", "no", "n", "off"}:
             return False, True
     return None, False
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1309,58 +1318,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                     ax_payload["overlay"] = {"enabled": overlay, "count": len(boxes)}
 
                 overlay_id = "__mcp_overlay_ax"
-                remove_js = (
-                    "(() => {"
-                    f"  const el = document.getElementById({json.dumps(overlay_id)});"
-                    "  if (el) el.remove();"
-                    "  return true;"
-                    "})()"
-                )
-                inject_js = (
-                    "(() => {"
-                    f"  const id = {json.dumps(overlay_id)};"
-                    "  const old = document.getElementById(id);"
-                    "  if (old) old.remove();"
-                    "  const root = document.createElement('div');"
-                    "  root.id = id;"
-                    "  root.style.position = 'fixed';"
-                    "  root.style.left = '0';"
-                    "  root.style.top = '0';"
-                    "  root.style.width = '100%';"
-                    "  root.style.height = '100%';"
-                    "  root.style.pointerEvents = 'none';"
-                    "  root.style.zIndex = '2147483647';"
-                    "  root.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';"
-                    f"  const boxes = {json.dumps(boxes)};"
-                    "  for (const b of boxes) {"
-                    "    if (!b) continue;"
-                    "    const box = document.createElement('div');"
-                    "    box.style.position = 'fixed';"
-                    "    box.style.left = `${Math.max(0, b.x)}px`;"
-                    "    box.style.top = `${Math.max(0, b.y)}px`;"
-                    "    box.style.width = `${Math.max(0, b.width)}px`;"
-                    "    box.style.height = `${Math.max(0, b.height)}px`;"
-                    "    box.style.border = '2px solid rgba(0, 160, 255, 0.95)';"
-                    "    box.style.background = 'rgba(0, 160, 255, 0.08)';"
-                    "    box.style.boxSizing = 'border-box';"
-                    "    const badge = document.createElement('div');"
-                    "    badge.textContent = String(b.n);"
-                    "    badge.style.position = 'absolute';"
-                    "    badge.style.left = '-2px';"
-                    "    badge.style.top = '-18px';"
-                    "    badge.style.padding = '1px 6px';"
-                    "    badge.style.fontSize = '12px';"
-                    "    badge.style.lineHeight = '14px';"
-                    "    badge.style.borderRadius = '10px';"
-                    "    badge.style.color = 'white';"
-                    "    badge.style.background = 'rgba(0, 160, 255, 0.95)';"
-                    "    box.appendChild(badge);"
-                    "    root.appendChild(box);"
-                    "  }"
-                    "  document.documentElement.appendChild(root);"
-                    "  return { ok: true, count: boxes.length };"
-                    "})()"
-                )
+                remove_js, inject_js = build_locators_overlay_js(overlay_id, boxes)
 
                 try:
                     if overlay and boxes:
@@ -1443,57 +1401,11 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                     boxes = []
 
                 overlay_id = "__mcp_overlay_frames"
-                remove_js = (
-                    "(() => {"
-                    f"  const el = document.getElementById({json.dumps(overlay_id)});"
-                    "  if (el) el.remove();"
-                    "  return true;"
-                    "})()"
-                )
-                inject_js = (
-                    "(() => {"
-                    f"  const id = {json.dumps(overlay_id)};"
-                    "  const old = document.getElementById(id);"
-                    "  if (old) old.remove();"
-                    "  const root = document.createElement('div');"
-                    "  root.id = id;"
-                    "  root.style.position = 'fixed';"
-                    "  root.style.left = '0';"
-                    "  root.style.top = '0';"
-                    "  root.style.width = '100%';"
-                    "  root.style.height = '100%';"
-                    "  root.style.pointerEvents = 'none';"
-                    "  root.style.zIndex = '2147483647';"
-                    "  root.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';"
-                    f"  const boxes = {json.dumps(boxes)};"
-                    "  for (const b of boxes) {"
-                    "    if (!b) continue;"
-                    "    const box = document.createElement('div');"
-                    "    box.style.position = 'fixed';"
-                    "    box.style.left = `${Math.max(0, b.x)}px`;"
-                    "    box.style.top = `${Math.max(0, b.y)}px`;"
-                    "    box.style.width = `${Math.max(0, b.width)}px`;"
-                    "    box.style.height = `${Math.max(0, b.height)}px`;"
-                    "    box.style.border = '2px solid rgba(255, 0, 120, 0.95)';"
-                    "    box.style.background = 'rgba(255, 0, 120, 0.08)';"
-                    "    box.style.boxSizing = 'border-box';"
-                    "    const badge = document.createElement('div');"
-                    "    badge.textContent = String(b.n);"
-                    "    badge.style.position = 'absolute';"
-                    "    badge.style.left = '-2px';"
-                    "    badge.style.top = '-18px';"
-                    "    badge.style.padding = '1px 6px';"
-                    "    badge.style.fontSize = '12px';"
-                    "    badge.style.lineHeight = '14px';"
-                    "    badge.style.borderRadius = '10px';"
-                    "    badge.style.color = 'white';"
-                    "    badge.style.background = 'rgba(255, 0, 120, 0.95)';"
-                    "    box.appendChild(badge);"
-                    "    root.appendChild(box);"
-                    "  }"
-                    "  document.documentElement.appendChild(root);"
-                    "  return { ok: true, count: boxes.length };"
-                    "})()"
+                remove_js, inject_js = build_locators_overlay_js(
+                    overlay_id,
+                    boxes,
+                    border="rgba(255, 0, 120, 0.95)",
+                    fill="rgba(255, 0, 120, 0.08)",
                 )
 
                 try:
@@ -1677,58 +1589,7 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
                 loc_payload["overlay"] = {"enabled": overlay, "count": len(boxes)}
 
                 overlay_id = "__mcp_overlay_locators"
-                remove_js = (
-                    "(() => {"
-                    f"  const el = document.getElementById({json.dumps(overlay_id)});"
-                    "  if (el) el.remove();"
-                    "  return true;"
-                    "})()"
-                )
-                inject_js = (
-                    "(() => {"
-                    f"  const id = {json.dumps(overlay_id)};"
-                    "  const old = document.getElementById(id);"
-                    "  if (old) old.remove();"
-                    "  const root = document.createElement('div');"
-                    "  root.id = id;"
-                    "  root.style.position = 'fixed';"
-                    "  root.style.left = '0';"
-                    "  root.style.top = '0';"
-                    "  root.style.width = '100%';"
-                    "  root.style.height = '100%';"
-                    "  root.style.pointerEvents = 'none';"
-                    "  root.style.zIndex = '2147483647';"
-                    "  root.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';"
-                    f"  const boxes = {json.dumps(boxes)};"
-                    "  for (const b of boxes) {"
-                    "    if (!b) continue;"
-                    "    const box = document.createElement('div');"
-                    "    box.style.position = 'fixed';"
-                    "    box.style.left = `${Math.max(0, b.x)}px`;"
-                    "    box.style.top = `${Math.max(0, b.y)}px`;"
-                    "    box.style.width = `${Math.max(0, b.width)}px`;"
-                    "    box.style.height = `${Math.max(0, b.height)}px`;"
-                    "    box.style.border = '2px solid rgba(0, 160, 255, 0.95)';"
-                    "    box.style.background = 'rgba(0, 160, 255, 0.08)';"
-                    "    box.style.boxSizing = 'border-box';"
-                    "    const badge = document.createElement('div');"
-                    "    badge.textContent = String(b.n);"
-                    "    badge.style.position = 'absolute';"
-                    "    badge.style.left = '-2px';"
-                    "    badge.style.top = '-18px';"
-                    "    badge.style.padding = '1px 6px';"
-                    "    badge.style.fontSize = '12px';"
-                    "    badge.style.lineHeight = '14px';"
-                    "    badge.style.borderRadius = '10px';"
-                    "    badge.style.color = 'white';"
-                    "    badge.style.background = 'rgba(0, 160, 255, 0.95)';"
-                    "    box.appendChild(badge);"
-                    "    root.appendChild(box);"
-                    "  }"
-                    "  document.documentElement.appendChild(root);"
-                    "  return { ok: true, count: boxes.length };"
-                    "})()"
-                )
+                remove_js, inject_js = build_locators_overlay_js(overlay_id, boxes)
 
                 try:
                     if overlay and boxes:
@@ -1904,6 +1765,114 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
             if auto_scroll_required and isinstance(auto_scroll_info, dict) and not auto_scroll_info.get("ok"):
                 return ToolResult.error(auto_scroll_info.get("error") or "auto_scroll failed")
 
+    retry_info: dict[str, Any] | None = None
+    retry_enabled = False
+    error_texts = _as_str_list(args.get("error_texts"))
+    raw_retry = args.get("retry_on_error")
+    if raw_retry is None:
+        retry_enabled = bool(error_texts)
+    else:
+        coerced, ok = _coerce_boolish(raw_retry)
+        if ok and coerced is not None:
+            retry_enabled = bool(coerced)
+        elif isinstance(raw_retry, bool):
+            retry_enabled = raw_retry
+        else:
+            retry_info = {
+                "ok": False,
+                "error": "retry_on_error must be a boolean",
+                "suggestion": "Use retry_on_error=true|false",
+                "ignored": True,
+            }
+
+    if retry_enabled:
+        if not error_texts:
+            error_texts = list(_DEFAULT_ERROR_TEXTS)
+        try:
+            max_error_retries = int(args.get("max_error_retries", 2))
+        except Exception:
+            max_error_retries = 2
+        max_error_retries = max(1, min(max_error_retries, 5))
+
+        wait_args = args.get("retry_wait") if isinstance(args.get("retry_wait"), dict) else {}
+        wait_type = str(wait_args.get("for", "networkidle") or "networkidle").strip().lower()
+        if wait_type not in {"navigation", "load", "domcontentloaded", "networkidle"}:
+            wait_type = "networkidle"
+        try:
+            wait_timeout = float(wait_args.get("timeout", 6.0))
+        except Exception:
+            wait_timeout = 6.0
+        wait_timeout = max(0.5, min(wait_timeout, 30.0))
+
+        retry_scroll_raw = args.get("retry_scroll")
+        do_scroll = True
+        if retry_scroll_raw is not None:
+            coerced, ok = _coerce_boolish(retry_scroll_raw)
+            if ok and coerced is False:
+                do_scroll = False
+            elif isinstance(retry_scroll_raw, dict):
+                do_scroll = True
+            elif ok and coerced is True:
+                do_scroll = True
+        retry_scroll_args = retry_scroll_raw if isinstance(retry_scroll_raw, dict) else {}
+        scroll_dx, scroll_dy, scroll_container = _normalize_retry_scroll(retry_scroll_args)
+
+        raw_reload = args.get("retry_reload", False)
+        retry_reload = False
+        coerced, ok = _coerce_boolish(raw_reload)
+        if ok and coerced is not None:
+            retry_reload = bool(coerced)
+        elif isinstance(raw_reload, bool):
+            retry_reload = raw_reload
+
+        attempts = 0
+        cleared = False
+        last_seen = _error_texts_present(config, error_texts)
+        errors: list[str] = []
+
+        if last_seen:
+            for _ in range(max_error_retries):
+                attempts += 1
+                if retry_reload:
+                    try:
+                        tools.reload_page(config)
+                    except Exception as exc:  # noqa: BLE001
+                        errors.append(f"reload failed: {exc}")
+                try:
+                    tools.wait_for(config, wait_type, timeout=wait_timeout)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"wait failed: {exc}")
+                if do_scroll:
+                    try:
+                        tools.scroll_page(
+                            config,
+                            scroll_dx,
+                            scroll_dy,
+                            container_selector=scroll_container,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        errors.append(f"scroll failed: {exc}")
+                try:
+                    tools.wait_for(config, wait_type, timeout=wait_timeout)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"wait failed: {exc}")
+
+                if not _error_texts_present(config, error_texts):
+                    cleared = True
+                    break
+
+        retry_info = {
+            "ok": True,
+            "enabled": True,
+            "attempts": int(attempts),
+            "max_retries": int(max_error_retries),
+            "cleared": bool(cleared),
+            "last_seen": bool(last_seen),
+            "error_texts": error_texts[:6],
+        }
+        if errors:
+            retry_info["errors"] = errors[:4]
+
     try:
         result = tools.extract_content(
             config,
@@ -1931,6 +1900,8 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
         result["autoExpand"] = auto_expand_info
     if auto_scroll_info is not None and isinstance(result, dict):
         result["autoScroll"] = auto_scroll_info
+    if retry_info is not None and isinstance(result, dict):
+        result["errorRetry"] = retry_info
 
     if bool(args.get("store", False)):
         _attach_artifact_ref(config, result, args, kind="extract_content")

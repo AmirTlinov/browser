@@ -24,6 +24,7 @@ Use this when you want the fewest MCP calls per scenario. Start here, then drill
 - Need a one-call extract pass? Use `auto_expand_scroll_extract` (macro) or the runbook template in `docs/RUNBOOKS.md`.
 - Need navigate+extract in one tool call? Use `extract_content(url="...", auto_expand=true, auto_scroll=true)`.
 - Feed inside a scrollable container? Use `auto_scroll={container_selector:"...", ...}` or `scroll(container_selector="...")`.
+- Lazy-load error banners? Use `extract_content(..., retry_on_error=true, error_texts=[...])` to trigger a bounded recovery loop.
 - If `main/links` feel noisy, pass `selector="..."` to `extract_content` to scope the extraction.
 - Debug the content-root heuristic: `extract_content(..., content_root_debug=true)` (returns `contentRootDebug` with selector hints, data-attrs, and domPath).
 
