@@ -315,6 +315,8 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
             )
 
         dialogs_auto_handled = 0
+        overlays_auto_dismissed = 0
+        auto_dismiss_overlays = bool(args.get("auto_dismiss_overlays", False))
 
         import copy
         import contextlib
@@ -1864,6 +1866,18 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     attempt += 1
                     watchdog = _watchdog_start(_step_timeout_seconds(tool_name, tool_args))
                     try:
+                        if (
+                            auto_dismiss_overlays
+                            and not overlay_dismissed
+                            and tool_name in {"click", "type", "form"}
+                            and not (isinstance(meta, dict) and meta.get("irreversible") is True)
+                        ):
+                            try:
+                                overlay_dismissed = bool(
+                                    _dismiss_overlay_best_effort(timeout_s=min(0.9, action_timeout_s))
+                                )
+                            except Exception:
+                                overlay_dismissed = False
                         try:
                             if tool_name == "net":
                                 tool_result = _handle_net_internal(tool_args)
@@ -2106,8 +2120,9 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
 
                 if attempt > 1:
                     entry["attempts"] = attempt
-                    if overlay_dismissed:
-                        entry["overlayDismissed"] = True
+                if overlay_dismissed:
+                    entry["overlayDismissed"] = True
+                    overlays_auto_dismissed += 1
 
                 # Optional: export selected scalar fields from raw tool payload.
                 # This keeps flow cognitively-cheap while still allowing stateful workflows
@@ -2419,6 +2434,8 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
             if dialogs_auto_handled:
                 # Keep it tiny; only present when non-zero.
                 out["flow"]["dialogsAutoHandled"] = dialogs_auto_handled
+            if overlays_auto_dismissed:
+                out["flow"]["overlaysAutoDismissed"] = overlays_auto_dismissed
 
             if first_error:
                 out["error"] = first_error.get("error")

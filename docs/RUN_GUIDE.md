@@ -8,6 +8,7 @@ AUTO_TAB = Auto-switch to a newly opened tab after click-like actions.
 AUTO_AFFORDANCES = Auto-refresh affordances when `act(ref/label)` looks stale.
 HEURISTIC_LEVEL = Reliability tuning for `run(...)`: 0 strict/minimal, 1 balanced (default), 2 robust, 3 diagnostic.
 STRICT_PARAMS = When true, invalid `run(...)` params fail fast instead of being coerced.
+AUTO_DISMISS_OVERLAYS = Best-effort dismissal of blocking DOM overlays before click/type/form.
 
  [CONTENT]
 # run() minimal-call guide
@@ -105,6 +106,7 @@ run(actions=[
 - `auto_dialog="auto"` (default)
 - `auto_tab=true` when a click is expected to open a new tab ([AUTO_TAB])
 - `auto_affordances=true` (default) to keep `act(ref/label)` fresh ([AUTO_AFFORDANCES])
+- `auto_dismiss_overlays=true` to auto-close blocking modals before interaction ([AUTO_DISMISS_OVERLAYS])
 - `start_at=<index>` to resume after a partial run
 - `record_memory_key="runbook_login"` to capture a reusable runbook (see `docs/RUNBOOKS.md`)
 - `record_mode="sanitized"` (default) or `"raw"` when you explicitly need literals

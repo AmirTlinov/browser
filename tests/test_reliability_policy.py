@@ -10,6 +10,7 @@ def test_policy_lenient_coerce() -> None:
             "auto_tab": "true",
             "auto_dialog": "dismiss",
             "max_recoveries": "3",
+            "auto_dismiss_overlays": "true",
         }
     )
 
@@ -18,6 +19,7 @@ def test_policy_lenient_coerce() -> None:
     assert args["auto_tab"] is True
     assert args["auto_dialog"] == "dismiss"
     assert args["max_recoveries"] == 3
+    assert args["auto_dismiss_overlays"] is True
     assert warnings == []
 
 
@@ -41,4 +43,15 @@ def test_policy_applies_defaults() -> None:
     assert args["auto_dialog"] == "off"
     assert args["auto_recover"] is False
     assert args["max_recoveries"] == 0
+    assert warnings == []
+
+
+def test_policy_level2_defaults_include_overlay_dismiss() -> None:
+    from mcp_servers.browser.server.reliability import parse_policy_args
+
+    policy, args, warnings, errors = parse_policy_args({"heuristic_level": 2})
+
+    assert errors == []
+    assert policy.level == 2
+    assert args["auto_dismiss_overlays"] is True
     assert warnings == []

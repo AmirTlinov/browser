@@ -16,6 +16,11 @@ RELIABILITY_POLICY_PROPERTIES: dict[str, Any] = {
         "default": False,
         "description": "Fail fast on invalid params when true; otherwise coerce with warnings.",
     },
+    "auto_dismiss_overlays": {
+        "type": "boolean",
+        "default": False,
+        "description": "Best-effort dismiss blocking DOM overlays before click/type/form steps.",
+    },
 }
 
 __all__ = ["RELIABILITY_POLICY_PROPERTIES"]

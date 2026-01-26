@@ -17,6 +17,7 @@ ONE_CALL_EXTRACT = A single `run(...)` pipeline that expands → scrolls → ext
 EXTRACT_VARIANTS = Pre-tuned one-call extract variants for articles, tables, and listings.
 HEURISTIC_LEVEL = Reliability tuning for `run(...)`: 0 strict/minimal, 1 balanced (default), 2 robust, 3 diagnostic.
 STRICT_PARAMS = When true, invalid `run(...)` params fail fast instead of being coerced.
+AUTO_DISMISS_OVERLAYS = Best-effort auto-dismiss of blocking modals before click/type/form.
 
  [CONTENT]
 This is the [PLAYBOOK] for using the MCP browser server with minimal [NOISE|LEGEND.md].
@@ -54,6 +55,7 @@ run(actions=[
 - Prefer the one-call runbook pack in `docs/RUNBOOKS.md` when you need reuse.
 - Interact: `page(detail="locators")` → `click(...)` / `type(...)` / `form(...)`
 - Iframes/SSO/CAPTCHA layout: `page(detail="frames")` (CDP frame tree) → `page(detail="frames", with_screenshot=true)` (visual boxes)
+- Blocking modals: set `auto_dismiss_overlays=true` ([AUTO_DISMISS_OVERLAYS]) or use `macro: dismiss_overlays` before interaction.
 
 Tips:
 - Use `auto_tab=true` when a click is expected to open a new tab ([AUTO_TAB]).

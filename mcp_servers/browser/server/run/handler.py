@@ -114,6 +114,7 @@ def make_run_handler(flow_handler: "HandlerFunc") -> "HandlerFunc":
             "recover_hard": bool(args.get("recover_hard", False)),
             "auto_tab": bool(args.get("auto_tab", False)),
             "auto_affordances": bool(args.get("auto_affordances", True)),
+            "auto_dismiss_overlays": bool(args.get("auto_dismiss_overlays", False)),
             **({"timeout_profile": args.get("timeout_profile")} if args.get("timeout_profile") is not None else {}),
             **({"recover_timeout": args.get("recover_timeout")} if args.get("recover_timeout") is not None else {}),
             **({"action_timeout": args.get("action_timeout")} if args.get("action_timeout") is not None else {}),

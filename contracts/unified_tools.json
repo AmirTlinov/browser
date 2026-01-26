@@ -375,6 +375,11 @@
             "default": false,
             "description": "Fail fast on invalid params when true; otherwise coerce with warnings."
           },
+          "auto_dismiss_overlays": {
+            "type": "boolean",
+            "default": false,
+            "description": "Best-effort dismiss blocking DOM overlays before click/type/form steps."
+          },
           "url": {
             "type": "string",
             "description": "Optional URL to navigate before extraction (one-call navigate+extract)."
@@ -862,6 +867,11 @@
             "type": "boolean",
             "default": false,
             "description": "Fail fast on invalid params when true; otherwise coerce with warnings."
+          },
+          "auto_dismiss_overlays": {
+            "type": "boolean",
+            "default": false,
+            "description": "Best-effort dismiss blocking DOM overlays before click/type/form steps."
           },
           "steps": {
             "type": "array",

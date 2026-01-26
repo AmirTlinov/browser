@@ -1,10 +1,13 @@
 [LEGEND]
 CHANGELOG = A chronological list of user-facing changes.
 REL_2026_01_26 = Release 2026-01-26.
+REL_2026_01_26B = Release 2026-01-26 (update B).
 REL_2026_01_24 = Release 2026-01-24.
 DOC_RUNBOOK_PACK_V2 = Runbook pack extended with pagination and table-index variants.
 DOC_SKILL_PACK = Skill packaging doc for browser-mcp-effective.
 DOC_ANTI_FLAKE = Runbook anti-flakiness defaults (auto_dialog/auto_tab/auto_affordances).
+FEAT_AUTO_DISMISS_OVERLAYS = Auto-dismiss blocking overlays before click/type/form (run/flow).
+DOC_AUTO_DISMISS_OVERLAYS = Docs: auto_dismiss_overlays guidance.
 FEAT_DOWNLOADS = Download capture robustness: browser-level CDP fallback, fallback download dirs, safer download clicks.
 FEAT_SMOKE = Live-site smoke suite expanded with real sites and edge cases.
 FEAT_AUTO_SCROLL = Page tool auto-scroll prepass for lazy-loaded content.
@@ -26,6 +29,10 @@ DOC_EXTRACT_PACK = Agent playbook + runbook pack expanded with one-call extract 
 - [DOC_RUNBOOK_PACK_V2]
 - [DOC_SKILL_PACK]
 - [DOC_ANTI_FLAKE]
+
+## [REL_2026_01_26B]
+- [FEAT_AUTO_DISMISS_OVERLAYS]
+- [DOC_AUTO_DISMISS_OVERLAYS]
 
 ## [REL_2026_01_24]
 - [FEAT_DOWNLOADS]
