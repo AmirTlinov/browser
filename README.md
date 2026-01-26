@@ -90,6 +90,11 @@ Environment variables:
 - `MCP_ALLOW_HOSTS` — comma-separated allowlist (e.g., `example.com,github.com`). Empty or `*` disables host filtering.
 - `MCP_HTTP_TIMEOUT` — request timeout seconds (default 10).
 - `MCP_HTTP_MAX_BYTES` — maximum bytes to return from HTTP responses (default 1_000_000).
+- `MCP_PERMISSION_POLICY` — JSON policy for per-origin permissions (optional; see docs/RUN_GUIDE.md).
+- `MCP_PERMISSION_ALLOW` — semicolon rules: `origin=perm1,perm2;origin2=perm3` (optional).
+- `MCP_PERMISSION_DENY` — semicolon rules: `origin=perm1,perm2;origin2=perm3` (optional).
+- `MCP_PERMISSION_DEFAULT` — default setting `prompt|deny|allow` (default `prompt`).
+- `MCP_PERMISSION_DEFAULT_PERMS` — comma permissions used with `MCP_PERMISSION_DEFAULT`.
 - `MCP_HEADLESS` — set to `1` for headless mode, `0` for visible window (default: `1`).
 - `MCP_WINDOW_SIZE` — initial window size in visible mode, format `width,height` (default: `1280,900`).
 

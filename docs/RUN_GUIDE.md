@@ -30,6 +30,7 @@ Use this when you want the fewest MCP calls per scenario. Start here, then drill
 - Feed inside a scrollable container? Use `auto_scroll={container_selector:"...", ...}` or `scroll(container_selector="...")`.
 - Want stronger reliability defaults? Set `heuristic_level=2` (or `3` for diagnostics) and `strict_params=true` using [HEURISTIC_LEVEL] + [STRICT_PARAMS].
 - Lazy-load error banners? Use `extract_content(..., retry_on_error=true, error_texts=[...])` to trigger a bounded recovery loop.
+- Native permission prompts in the way? Configure `MCP_PERMISSION_ALLOW`/`MCP_PERMISSION_DENY` (CDP policy).
 - If `main/links` feel noisy, pass `selector="..."` to `extract_content` to scope the extraction.
 - Debug the content-root heuristic: `extract_content(..., content_root_debug=true)` (returns `contentRootDebug` with selector hints, data-attrs, and domPath).
 - Tabs privacy: default `tabs(action="list")` is session-only; use [TABS_INCLUDE_ALL] if you explicitly need all tabs.

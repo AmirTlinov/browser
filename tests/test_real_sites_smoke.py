@@ -14,7 +14,9 @@ import pytest
 from mcp_servers.browser import tools as cdp
 from mcp_servers.browser.config import BrowserConfig
 from mcp_servers.browser.launcher import BrowserLauncher
+from mcp_servers.browser.permissions import PermissionPolicy, apply_permission_policy
 from mcp_servers.browser.server.registry import create_default_registry
+from mcp_servers.browser.tools.base import get_session
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_BROWSER_INTEGRATION") != "1",
@@ -915,6 +917,35 @@ def test_real_sites_edge_cases_live(browser_env: tuple[BrowserConfig, BrowserLau
             return _run
 
         live_checks.append((name, _mk_scroll_case(url, selector)))
+
+    if _env_flag("RUN_BROWSER_INTEGRATION_PERMISSIONS"):
+        def _permission_notifications() -> None:
+            target_url = "https://example.com"
+            cdp.navigate_to(config, target_url)
+            with get_session(config) as (session, _target):
+                applied = apply_permission_policy(
+                    session,
+                    PermissionPolicy(
+                        default="deny",
+                        default_permissions=["notifications"],
+                    ),
+                    target_url,
+                )
+            if not isinstance(applied, dict) or not applied.get("ok"):
+                pytest.xfail("Permission policy not supported in this environment")
+            result = _run_with_timeout(
+                10.0,
+                lambda: cdp.eval_js(
+                    config,
+                    "navigator.permissions.query({name:'notifications'}).then(r => r.state)",
+                ),
+                on_timeout="permissions notifications timed out",
+            )
+            assert isinstance(result, dict)
+            state = result.get("result")
+            assert state == "denied"
+
+        live_checks.append(("permissions_notifications", _permission_notifications))
 
     if allowlist:
         live_checks = [c for c in live_checks if c[0].lower() in allowlist]

@@ -16,6 +16,7 @@ from typing import Any
 
 from ..config import BrowserConfig
 from ..session import session_manager
+from ..permissions import apply_permission_policy
 from .base import SmartToolError, ensure_allowed_navigation, get_session
 
 
@@ -34,6 +35,8 @@ def navigate_to(config: BrowserConfig, url: str, wait_load: bool = True) -> dict
 
     with get_session(config) as (session, target):
         try:
+            with suppress(Exception):
+                apply_permission_policy(session, config.permission_policy, url)
             session.navigate(url, wait_load=wait_load)
             return {"url": url, "target": target["id"], "sessionTabId": session_manager.tab_id}
         except Exception as e:

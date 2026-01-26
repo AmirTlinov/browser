@@ -40,6 +40,9 @@ DEFAULT_BINARY_CANDIDATES: list[str] = [
 ]
 
 
+from .permissions import PermissionPolicy, permission_policy_from_env
+
+
 def expand_path(raw: str) -> str:
     return str(Path(raw).expanduser())
 
@@ -54,6 +57,7 @@ class BrowserConfig:
     allow_hosts: list[str] = field(default_factory=list)
     http_timeout: float = 10.0
     http_max_bytes: int = 1_000_000
+    permission_policy: PermissionPolicy = field(default_factory=PermissionPolicy)
 
     @staticmethod
     def normalize_mode(raw: str | None) -> str:
@@ -100,6 +104,7 @@ class BrowserConfig:
             allow_hosts=allow_hosts,
             http_timeout=timeout,
             http_max_bytes=max_bytes,
+            permission_policy=permission_policy_from_env(),
         )
 
     def is_host_allowed(self, host: str) -> bool:

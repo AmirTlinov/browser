@@ -162,6 +162,7 @@ run_args={
   "auto_affordances": true
 }
 ```
+Note: `auto_dismiss_overlays=true` will also try Escape when a modal has no close button.
 
 ## Recorder options (from `run(...)`)
 - `record_mode`: `sanitized` (default) or `raw` (use only when you explicitly need literals).

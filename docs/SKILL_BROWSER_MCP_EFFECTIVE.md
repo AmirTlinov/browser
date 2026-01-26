@@ -52,6 +52,11 @@ description: >
 - Вкладки: ставь `auto_tab=true` на click/type/form, если ожидаешь новую вкладку.
 - Диалоги: `auto_dialog="dismiss"` для read-ish шагов.
 - Стабильность локаторов: `auto_affordances=true` (по умолчанию).
+- Оверлеи/баннеры: `auto_dismiss_overlays=true` (включает Escape‑fallback для модалок без кнопок).
+
+## Нативные промпты (permissions)
+- Если мешают системные промпты (Notifications/Geolocation и т.п.), включи CDP‑policy через env:
+  `MCP_PERMISSION_ALLOW` / `MCP_PERMISSION_DENY` / `MCP_PERMISSION_DEFAULT`.
 
 ## One-call extract pack (runbooks)
 Article:
