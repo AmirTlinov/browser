@@ -12,6 +12,9 @@ EXTRACT_PACK = A small pack of ready one-call extract runbooks (articles/tables/
 EXTRACT_ARTICLE = Article-tuned extract variant (main text + headings).
 EXTRACT_TABLES = Tables-tuned extract variant (tables + headings).
 EXTRACT_LISTINGS = Listings-tuned extract variant (links + headings).
+EXTRACT_LISTINGS_PAGINATED = A bounded pagination runbook that extracts links across pages.
+TABLE_INDEX = A follow-up extract that fetches a specific table by index.
+ANTI_FLAKE = Short run_args block for stability (auto_dialog/auto_tab/auto_affordances).
 
 [CONTENT]
 # Runbooks
@@ -25,7 +28,8 @@ Example:
 run(actions=[
   {"navigate": {"url": "https://example.com/login"}},
   {"macro": {"name": "login_basic", "args": {"username": "{{param:username}}", "password": "{{mem:pwd}}"}}}
-], record_memory_key="runbook_login", report="none")
+], record_memory_key="runbook_login", record_mode="sanitized",
+   auto_dialog="auto", auto_tab=true, auto_affordances=true, report="none")
 ```
 The recorder key is provided via [RECORD_MEMORY_KEY].
 
@@ -107,6 +111,30 @@ runbook(action="save", key="runbook_extract_listings", steps=[
 ])
 ```
 
+[EXTRACT_LISTINGS_PAGINATED] (pagination + links):
+```
+runbook(action="save", key="runbook_extract_listings_paginated", steps=[
+  {"navigate": {"url": "{{param:url}}"}},
+  {"repeat": {"max_iters": 6, "steps": [
+    {"macro": {"name": "paginate_next", "args": {"next_text": "{{param:next_text}}"}}},
+    {"extract_content": {"content_type": "links", "limit": 80}}
+  ]}}
+])
+```
+
+Tables with [TABLE_INDEX] (two-step):
+```
+runbook(action="save", key="runbook_extract_table_index", steps=[
+  {"macro": {"name": "auto_expand_scroll_extract", "args": {
+    "url": "{{param:url}}",
+    "expand": true,
+    "scroll": {"max_iters": 10, "stop_on_url_change": true},
+    "extract": {"content_type": "table", "limit": 12}
+  }}},
+  {"extract_content": {"content_type": "table", "table_index": "{{param:table_index}}"}}
+])
+```
+
 ## Inspect or delete runbooks
 Examples:
 ```
@@ -124,6 +152,15 @@ runbook(action="run", key="runbook_login", params={"username": "user@example.com
   "actions_output": "errors",
   "auto_dialog": "auto"
 })
+```
+
+[ANTI_FLAKE] short block:
+```
+run_args={
+  "auto_dialog": "auto",
+  "auto_tab": true,
+  "auto_affordances": true
+}
 ```
 
 ## Recorder options (from `run(...)`)

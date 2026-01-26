@@ -50,6 +50,7 @@ run(actions=[
 - Article: set `extract.content_type="main"` (raise `limit` for long reads).
 - Tables: set `extract.content_type="table"`; follow up with `table_index=N` using the hint.
 - Listings: set `extract.content_type="links"`; raise `limit` or `scroll.max_iters` for infinite feeds.
+- Pagination listings: use the runbook variant `runbook_extract_listings_paginated` (see `docs/RUNBOOKS.md`).
 - Prefer the one-call runbook pack in `docs/RUNBOOKS.md` when you need reuse.
 - Interact: `page(detail="locators")` → `click(...)` / `type(...)` / `form(...)`
 - Iframes/SSO/CAPTCHA layout: `page(detail="frames")` (CDP frame tree) → `page(detail="frames", with_screenshot=true)` (visual boxes)
