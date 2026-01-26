@@ -9,7 +9,7 @@ USE_CASES = When to use this skill in agent runs.
 This doc packages the [SKILL] so it can be versioned in the repo while keeping Codex's loader format intact.
 
 ## [INSTALL]
-Copy the YAML below into the Codex skills directory:
+Copy the YAML below into the Codex skills directory at [SKILL_PATH]:
 ```
 [SKILL_PATH]=/home/amir/.codex/skills/browser-mcp-effective/SKILL.md
 ```
