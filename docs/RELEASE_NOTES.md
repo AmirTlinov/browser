@@ -6,6 +6,7 @@ REL_2026_01_26C = Release 2026-01-26 (update C).
 REL_2026_01_26D = Release 2026-01-26 (update D).
 REL_2026_01_26E = Release 2026-01-26 (update E).
 REL_2026_01_26F = Release 2026-01-26 (update F).
+REL_2026_01_26G = Release 2026-01-26 (update G).
 FEAT_DOWNLOADS = Download capture robustness: browser-level CDP fallback, fallback download dirs, safer download clicks.
 FEAT_SMOKE = Live-site smoke suite expanded with real sites and edge cases.
 FEAT_AUTO_SCROLL = Page tool auto-scroll prepass for lazy-loaded content.
@@ -36,6 +37,7 @@ FIX_DOWNLOAD_BEHAVIOR_VARIANTS = Download behavior setup retries with legacy/alt
 FIX_WHEN_TEXT_SCOPE = wait(text) scans all matching nodes and normalizes ellipsis.
 FIX_MACRO_RETRY_OPTIONAL = auto_expand_scroll_extract retry step no longer fails the macro on repeat exhaustion.
 FEAT_DOWNLOAD_TELEMETRY_HINT = Auto-download uses Content-Disposition network hints as URL fallback.
+FIX_OVERLAY_DISMISS_ESC = Auto-dismiss overlays: dialog/banner detection + Escape fallback for buttonless modals.
 
 [CONTENT]
 ## [REL_2026_01_24]
@@ -81,3 +83,6 @@ FEAT_DOWNLOAD_TELEMETRY_HINT = Auto-download uses Content-Disposition network hi
 
 ## [REL_2026_01_26F]
 - [FEAT_DOWNLOAD_TELEMETRY_HINT]
+
+## [REL_2026_01_26G]
+- [FIX_OVERLAY_DISMISS_ESC]

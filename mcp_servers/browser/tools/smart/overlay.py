@@ -48,6 +48,16 @@ def dismiss_blocking_overlay_best_effort(
         if (!t) { try { t = pick(el.textContent); } catch (e) {} }
         return t.slice(0, 120);
       };
+      const getStyleZ = (el) => {
+        try {
+          const st = window.getComputedStyle(el);
+          let z = Number.parseInt(String(st?.zIndex || '0'), 10);
+          if (!Number.isFinite(z)) z = 0;
+          return { pos: String(st?.position || ''), z };
+        } catch (e) {
+          return { pos: '', z: 0 };
+        }
+      };
       const looksLikeOverlay = (el) => {
         if (!el || !el.getBoundingClientRect) return false;
         const r = el.getBoundingClientRect();
@@ -58,14 +68,7 @@ def dismiss_blocking_overlay_best_effort(
         const vp = vw * vh;
         const coversCenter = (vw * 0.5 >= r.left && vw * 0.5 <= r.right && vh * 0.5 >= r.top && vh * 0.5 <= r.bottom);
 
-        let pos = '';
-        let z = 0;
-        try {
-          const st = window.getComputedStyle(el);
-          pos = String(st?.position || '');
-          z = Number.parseInt(String(st?.zIndex || '0'), 10);
-          if (!Number.isFinite(z)) z = 0;
-        } catch (e) {}
+        const { pos, z } = getStyleZ(el);
 
         const role = String(el.getAttribute?.('role') || '').toLowerCase();
         const ariaModal = String(el.getAttribute?.('aria-modal') || '').toLowerCase();
@@ -79,17 +82,51 @@ def dismiss_blocking_overlay_best_effort(
         return false;
       };
 
+      const overlayCandidates = [];
+      const pushCandidate = (el, reason) => {
+        if (!el || !el.getBoundingClientRect || !isVisible(el)) return;
+        const r = el.getBoundingClientRect();
+        if (!within(r)) return;
+        const area = Math.max(0, r.width) * Math.max(0, r.height);
+        const { pos, z } = getStyleZ(el);
+        overlayCandidates.push({
+          el,
+          area,
+          z,
+          pos,
+          reason,
+          overlay: {
+            tagName: el.tagName,
+            id: el.id || null,
+            className: String(el.className || '').slice(0, 120),
+          }
+        });
+      };
+
       const cx0 = clamp(Math.floor(vw * 0.5), 1, vw - 2);
       const cy0 = clamp(Math.floor(vh * 0.5), 1, vh - 2);
       let el = document.elementFromPoint(cx0, cy0);
       if (!el) return null;
 
-      let overlay = null;
       for (let i = 0; i < 10 && el; i++) {
-        if (looksLikeOverlay(el) && isVisible(el)) { overlay = el; break; }
+        if (looksLikeOverlay(el) && isVisible(el)) { pushCandidate(el, 'center'); break; }
         el = el.parentElement;
       }
-      if (!overlay) return null;
+      if (!overlayCandidates.length) {
+        const dialogs = document.querySelectorAll('[role="dialog"],[role="alertdialog"],[aria-modal="true"]');
+        for (const d of dialogs) pushCandidate(d, 'dialog');
+      }
+      if (!overlayCandidates.length) {
+        const bannerSel = '[id*="cookie" i],[class*="cookie" i],[id*="consent" i],[class*="consent" i],[id*="gdpr" i],[class*="gdpr" i],[id*="privacy" i],[class*="privacy" i]';
+        const banners = document.querySelectorAll(bannerSel);
+        for (const b of banners) {
+          const { pos } = getStyleZ(b);
+          if (pos === 'fixed' || pos === 'sticky') pushCandidate(b, 'banner');
+        }
+      }
+      if (!overlayCandidates.length) return null;
+      overlayCandidates.sort((a, b) => (b.z - a.z) || (b.area - a.area));
+      const overlay = overlayCandidates[0];
 
       const scoreButton = (t, hint) => {
         const s = (String(t || '') + ' ' + String(hint || '')).toLowerCase();
@@ -104,7 +141,7 @@ def dismiss_blocking_overlay_best_effort(
       };
 
       const candidates = [];
-      const nodes = overlay.querySelectorAll('button,[role="button"],a,input[type="button"],input[type="submit"],div[role="button"],span[role="button"]');
+      const nodes = overlay.el.querySelectorAll('button,[role="button"],a,input[type="button"],input[type="submit"],div[role="button"],span[role="button"]');
       for (const b of nodes) {
         if (!b || !isVisible(b) || !b.getBoundingClientRect) continue;
         const r = b.getBoundingClientRect();
@@ -117,7 +154,7 @@ def dismiss_blocking_overlay_best_effort(
         candidates.push({ x, y, label, score, tagName: b.tagName, hint });
       }
 
-      if (!candidates.length) return { overlay: { tagName: overlay.tagName, id: overlay.id || null }, reason: 'overlay_no_buttons' };
+      if (!candidates.length) return { overlay: overlay.overlay, reason: 'overlay_no_buttons' };
       candidates.sort((a, b) => b.score - a.score);
       const best = candidates[0];
 
@@ -127,11 +164,7 @@ def dismiss_blocking_overlay_best_effort(
         score: best.score,
         label: best.label || null,
         reason: 'overlay_click',
-        overlay: {
-          tagName: overlay.tagName,
-          id: overlay.id || null,
-          className: String(overlay.className || '').slice(0, 120),
-        }
+        overlay: overlay.overlay
       };
     })()
     """
@@ -146,13 +179,20 @@ def dismiss_blocking_overlay_best_effort(
             return None
         x = res.get("x")
         y = res.get("y")
-        if x is None or y is None:
-            return None
-        try:
-            sess.click(float(x), float(y), button="left", click_count=1)
-            return {"ok": True, "action": "dismiss_overlay", "clicked": {"x": float(x), "y": float(y)}, "meta": res}
-        except Exception:
-            return None
+        if x is not None and y is not None:
+            try:
+                sess.click(float(x), float(y), button="left", click_count=1)
+                return {"ok": True, "action": "dismiss_overlay", "clicked": {"x": float(x), "y": float(y)}, "meta": res}
+            except Exception:
+                return None
+        reason = res.get("reason") if isinstance(res.get("reason"), str) else ""
+        if reason == "overlay_no_buttons":
+            try:
+                sess.press_key("Escape")
+                return {"ok": True, "action": "dismiss_overlay_escape", "meta": res}
+            except Exception:
+                return None
+        return None
 
     if session is not None:
         return _run(session)

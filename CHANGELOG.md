@@ -6,6 +6,7 @@ REL_2026_01_26C = Release 2026-01-26 (update C).
 REL_2026_01_26D = Release 2026-01-26 (update D).
 REL_2026_01_26E = Release 2026-01-26 (update E).
 REL_2026_01_26F = Release 2026-01-26 (update F).
+REL_2026_01_26G = Release 2026-01-26 (update G).
 REL_2026_01_24 = Release 2026-01-24.
 DOC_RUNBOOK_PACK_V2 = Runbook pack extended with pagination and table-index variants.
 DOC_SKILL_PACK = Skill packaging doc for browser-mcp-effective.
@@ -22,6 +23,7 @@ FIX_DOWNLOAD_BEHAVIOR_VARIANTS = Download behavior setup retries with legacy/alt
 FIX_WHEN_TEXT_SCOPE = wait(text) scans all matching nodes and normalizes ellipsis.
 FIX_MACRO_RETRY_OPTIONAL = auto_expand_scroll_extract retry step no longer fails the macro on repeat exhaustion.
 FEAT_DOWNLOAD_TELEMETRY_HINT = Auto-download can use recent Content-Disposition network hints as fallback URL.
+FIX_OVERLAY_DISMISS_ESC = Auto-dismiss overlays: dialog/banner detection + Escape fallback for buttonless modals.
 TEST_SMOKE_EDGE = Live/edge smoke expanded for macro+when regression checks.
 DOC_MACRO_SYNC = Macro docs updated for DOM wait and selector safety.
 FEAT_DOWNLOADS = Download capture robustness: browser-level CDP fallback, fallback download dirs, safer download clicks.
@@ -69,6 +71,9 @@ DOC_EXTRACT_PACK = Agent playbook + runbook pack expanded with one-call extract 
 
 ## [REL_2026_01_26F]
 - [FEAT_DOWNLOAD_TELEMETRY_HINT]
+
+## [REL_2026_01_26G]
+- [FIX_OVERLAY_DISMISS_ESC]
 
 ## [REL_2026_01_24]
 - [FEAT_DOWNLOADS]

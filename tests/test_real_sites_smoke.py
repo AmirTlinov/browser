@@ -529,6 +529,77 @@ def test_real_sites_edge_cases_local(browser_env: tuple[BrowserConfig, BrowserLa
         )
         assert isinstance(visible, dict) and visible.get("result") is True
 
+        # Overlay (no buttons): should be dismissed via Escape when auto_dismiss_overlays is enabled.
+        cdp.eval_js(
+            config,
+            "(() => {"
+            " const existing = document.getElementById('mcp-overlay');"
+            " if (existing) existing.remove();"
+            " const overlay = document.createElement('div');"
+            " overlay.id = 'mcp-overlay';"
+            " overlay.style.position = 'fixed';"
+            " overlay.style.left = '0';"
+            " overlay.style.top = '0';"
+            " overlay.style.right = '0';"
+            " overlay.style.bottom = '0';"
+            " overlay.style.zIndex = '9999';"
+            " overlay.style.background = 'rgba(0,0,0,0.3)';"
+            " overlay.style.pointerEvents = 'auto';"
+            " const box = document.createElement('div');"
+            " box.textContent = 'Overlay';"
+            " box.style.position = 'absolute';"
+            " box.style.left = '50%';"
+            " box.style.top = '50%';"
+            " box.style.transform = 'translate(-50%, -50%)';"
+            " box.style.background = '#fff';"
+            " box.style.padding = '12px 16px';"
+            " overlay.appendChild(box);"
+            " document.body.appendChild(overlay);"
+            " const handler = (ev) => {"
+            "   if (ev.key === 'Escape') {"
+            "     const el = document.getElementById('mcp-overlay');"
+            "     if (el) el.remove();"
+            "     document.removeEventListener('keydown', handler);"
+            "   }"
+            " };"
+            " document.addEventListener('keydown', handler);"
+            " const hidden = document.getElementById('mcp-hidden');"
+            " if (hidden) hidden.style.display = 'none';"
+            " const btn = document.getElementById('mcp-expand');"
+            " if (btn) btn.setAttribute('aria-expanded', 'false');"
+            "})()",
+        )
+        res = _run_with_timeout(
+            20.0,
+            lambda: flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"click": {"selector": "#mcp-expand"}},
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "auto_dismiss_overlays": True,
+                    "step_proof": False,
+                    "action_timeout": 10.0,
+                },
+            ),
+            on_timeout="overlay escape edge-case timed out",
+        )
+        assert not res.is_error
+        visible = cdp.eval_js(
+            config,
+            "(() => {"
+            " const el = document.querySelector('#mcp-hidden');"
+            " if (!el) return false;"
+            " const style = getComputedStyle(el);"
+            " return style.display !== 'none';"
+            "})()",
+        )
+        assert isinstance(visible, dict) and visible.get("result") is True
+
         # Redirect: local 302 should land on index.html.
         cdp.navigate_to(config, redirect_url)
         info = _page_info_retry(config)

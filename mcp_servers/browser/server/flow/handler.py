@@ -690,6 +690,17 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     return !!(r && within(r));
                   };
 
+                  const getStyleZ = (el) => {
+                    try {
+                      const st = window.getComputedStyle(el);
+                      let z = Number.parseInt(String(st?.zIndex || '0'), 10);
+                      if (!Number.isFinite(z)) z = 0;
+                      return { pos: String(st?.position || ''), z };
+                    } catch (e) {
+                      return { pos: '', z: 0 };
+                    }
+                  };
+
                   const looksLikeOverlay = (el) => {
                     if (!el || !el.getBoundingClientRect) return false;
                     const r = el.getBoundingClientRect();
@@ -698,15 +709,7 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     const vp = vw * vh;
                     const coversCenter = (vw * 0.5 >= r.left && vw * 0.5 <= r.right && vh * 0.5 >= r.top && vh * 0.5 <= r.bottom);
 
-                    let pos = '';
-                    let z = 0;
-                    try {
-                      const st = window.getComputedStyle(el);
-                      pos = String(st?.position || '');
-                      z = Number.parseInt(String(st?.zIndex || '0'), 10);
-                      if (!Number.isFinite(z)) z = 0;
-                    } catch (e) {}
-
+                    const { pos, z } = getStyleZ(el);
                     const role = String(el.getAttribute?.('role') || '').toLowerCase();
                     const ariaModal = String(el.getAttribute?.('aria-modal') || '').toLowerCase();
                     const hint = (String(el.id || '') + ' ' + String(el.className || '')).toLowerCase();
@@ -719,17 +722,53 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     return false;
                   };
 
+                  const candidates = [];
+                  const pushCandidate = (el, reason) => {
+                    if (!el || !el.getBoundingClientRect || !isVisible(el)) return;
+                    const r = el.getBoundingClientRect();
+                    if (!within(r)) return;
+                    const area = Math.max(0, r.width) * Math.max(0, r.height);
+                    const { pos, z } = getStyleZ(el);
+                    candidates.push({
+                      el,
+                      area,
+                      z,
+                      pos,
+                      reason,
+                      overlay: {
+                        tagName: el.tagName,
+                        id: el.id || null,
+                        className: String(el.className || '').slice(0, 120),
+                      }
+                    });
+                  };
+
                   const cx0 = clamp(Math.floor(vw * 0.5), 1, vw - 2);
                   const cy0 = clamp(Math.floor(vh * 0.5), 1, vh - 2);
                   let el = document.elementFromPoint(cx0, cy0);
-                  if (!el) return null;
-
-                  let overlay = null;
                   for (let i = 0; i < 10 && el; i++) {
-                    if (looksLikeOverlay(el) && isVisible(el)) { overlay = el; break; }
+                    if (looksLikeOverlay(el) && isVisible(el)) { pushCandidate(el, 'center'); break; }
                     el = el.parentElement;
                   }
-                  if (!overlay) return null;
+
+                  if (!candidates.length) {
+                    const dialogs = document.querySelectorAll('[role="dialog"],[role="alertdialog"],[aria-modal="true"]');
+                    for (const d of dialogs) pushCandidate(d, 'dialog');
+                  }
+
+                  if (!candidates.length) {
+                    const bannerSel = '[id*="cookie" i],[class*="cookie" i],[id*="consent" i],[class*="consent" i],[id*="gdpr" i],[class*="gdpr" i],[id*="privacy" i],[class*="privacy" i]';
+                    const banners = document.querySelectorAll(bannerSel);
+                    for (const b of banners) {
+                      const { pos } = getStyleZ(b);
+                      if (pos === 'fixed' || pos === 'sticky') pushCandidate(b, 'banner');
+                    }
+                  }
+
+                  if (!candidates.length) return null;
+                  candidates.sort((a, b) => (b.z - a.z) || (b.area - a.area));
+                  const overlay = candidates[0];
+                  if (!overlay || !overlay.el) return null;
 
                   const labelOf = (b) => {
                     const pick = (s) => String(s || '').replace(/\\s+/g, ' ').trim();
@@ -749,7 +788,7 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     return 0;
                   };
 
-                  const nodes = overlay.querySelectorAll('button,[role="button"],a,input[type="button"],input[type="submit"],div[role="button"],span[role="button"]');
+                  const nodes = overlay.el.querySelectorAll('button,[role="button"],a,input[type="button"],input[type="submit"],div[role="button"],span[role="button"]');
                   let best = null;
                   let bestScore = 0;
                   for (const b of nodes) {
@@ -761,12 +800,12 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     const sc = score(label, hint);
                     if (sc > bestScore) { bestScore = sc; best = b; }
                   }
-                  if (!best || bestScore < 25) return null;
+                  if (!best || bestScore < 25) return { reason: 'overlay_no_buttons', overlay: overlay.overlay };
 
                   const r = best.getBoundingClientRect();
                   const x = clamp(r.left + r.width * 0.5, 5, vw - 5);
                   const y = clamp(r.top + r.height * 0.5, 5, vh - 5);
-                  return { x, y, score: bestScore, label: labelOf(best) || null };
+                  return { x, y, score: bestScore, label: labelOf(best) || null, reason: 'overlay_click', overlay: overlay.overlay };
                 })()
                 """
                 try:
@@ -778,14 +817,22 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     return False
                 x = res.get("x")
                 y = res.get("y")
-                if x is None or y is None:
-                    return False
-                try:
-                    shared_sess.click(float(x), float(y), button="left", click_count=1)
-                    _time.sleep(0.08)
-                    return True
-                except Exception:
-                    return False
+                if x is not None and y is not None:
+                    try:
+                        shared_sess.click(float(x), float(y), button="left", click_count=1)
+                        _time.sleep(0.08)
+                        return True
+                    except Exception:
+                        return False
+                reason = res.get("reason") if isinstance(res.get("reason"), str) else ""
+                if reason == "overlay_no_buttons":
+                    try:
+                        shared_sess.press_key("Escape")
+                        _time.sleep(0.05)
+                        return True
+                    except Exception:
+                        return False
+                return False
 
             def _handle_net_internal(step_args: dict[str, Any]) -> ToolResult:
                 """Internal Tier-0 network/telemetry helper (no new top-level tools).
