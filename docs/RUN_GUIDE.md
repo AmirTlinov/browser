@@ -6,6 +6,8 @@ EXPORTS = The `export` field on a step that captures outputs for later steps wit
 STEP_REUSE = Reusing a stored step list (runbook) via `runbook(...)` or `include_memory_steps`.
 AUTO_TAB = Auto-switch to a newly opened tab after click-like actions.
 AUTO_AFFORDANCES = Auto-refresh affordances when `act(ref/label)` looks stale.
+HEURISTIC_LEVEL = Reliability tuning for `run(...)`: 0 strict/minimal, 1 balanced (default), 2 robust, 3 diagnostic.
+STRICT_PARAMS = When true, invalid `run(...)` params fail fast instead of being coerced.
 
  [CONTENT]
 # run() minimal-call guide
@@ -24,6 +26,7 @@ Use this when you want the fewest MCP calls per scenario. Start here, then drill
 - Need a one-call extract pass? Use `auto_expand_scroll_extract` (macro) or the runbook template in `docs/RUNBOOKS.md`.
 - Need navigate+extract in one tool call? Use `extract_content(url="...", auto_expand=true, auto_scroll=true)`.
 - Feed inside a scrollable container? Use `auto_scroll={container_selector:"...", ...}` or `scroll(container_selector="...")`.
+- Want stronger reliability defaults? Set `heuristic_level=2` (or `3` for diagnostics) and `strict_params=true` using [HEURISTIC_LEVEL] + [STRICT_PARAMS].
 - Lazy-load error banners? Use `extract_content(..., retry_on_error=true, error_texts=[...])` to trigger a bounded recovery loop.
 - If `main/links` feel noisy, pass `selector="..."` to `extract_content` to scope the extraction.
 - Debug the content-root heuristic: `extract_content(..., content_root_debug=true)` (returns `contentRootDebug` with selector hints, data-attrs, and domPath).

@@ -9,6 +9,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from ..types import ToolResult
+from ..reliability import parse_policy_args, policy_summary
 
 if TYPE_CHECKING:
     from ...config import BrowserConfig
@@ -35,6 +36,16 @@ def make_run_handler(flow_handler: "HandlerFunc") -> "HandlerFunc":
                 tool="run",
                 suggestion="Provide actions=[{tool:'navigate', args:{url:'...'}}, ...] or actions=[{navigate:{url:'...'}}, ...]",
             )
+
+        policy, args_norm, warnings, errors = parse_policy_args(args)
+        if errors:
+            return ToolResult.error(
+                "Invalid run parameters (strict_params=true)",
+                tool="run",
+                suggestion="; ".join(errors),
+                details={"errors": errors},
+            )
+        args = args_norm
 
         # Default report selection:
         # - v1/default toolset: observe (Tier-0, low noise, fast)
@@ -280,6 +291,10 @@ def make_run_handler(flow_handler: "HandlerFunc") -> "HandlerFunc":
                     "error": str(exc) or "record failed",
                     "suggestion": "Prefer {{mem:...}} / {{param:...}} placeholders and keep runbooks small",
                 }
+
+        policy_info = policy_summary(policy, warnings)
+        if policy_info:
+            out["policy"] = policy_info
 
         # Preserve screenshot if the final flow attempt attached one.
         if len(flow_res.content) >= 2 and flow_res.content[1].type == "image":

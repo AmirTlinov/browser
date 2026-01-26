@@ -997,7 +997,10 @@ DETAIL MODES with pagination:
                                 "description": "Phrases to match (show more/read more/etc.)",
                             },
                             "selectors": {
-                                "type": ["string", "array"],
+                                "oneOf": [
+                                    {"type": "string"},
+                                    {"type": "array", "items": {"type": "string"}},
+                                ],
                                 "description": "Selectors to scan for expandable controls.",
                             },
                             "include_links": {
@@ -1382,6 +1385,17 @@ OUTPUT:
         "type": "object",
         "properties": {
             "goal": {"type": "string", "description": "Human goal (optional, for logging/traceability)"},
+            "heuristic_level": {
+                "type": "integer",
+                "enum": [0, 1, 2, 3],
+                "default": 1,
+                "description": "Reliability heuristic level: 0 strict/minimal, 1 balanced (default), 2 robust, 3 diagnostic.",
+            },
+            "strict_params": {
+                "type": "boolean",
+                "default": False,
+                "description": "Fail fast on invalid params when true; otherwise coerce with warnings.",
+            },
             "actions": {
                 "type": "array",
                 "minItems": 1,
