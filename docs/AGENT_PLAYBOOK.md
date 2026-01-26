@@ -15,6 +15,8 @@ AUTO_TAB = Auto-switch to a newly opened tab after click-like actions.
 AUTO_AFFORDANCES = Auto-refresh affordances when `act(ref/label)` looks stale.
 ONE_CALL_EXTRACT = A single `run(...)` pipeline that expands → scrolls → extracts in one call.
 EXTRACT_VARIANTS = Pre-tuned one-call extract variants for articles, tables, and listings.
+HEURISTIC_LEVEL = Reliability tuning for `run(...)`: 0 strict/minimal, 1 balanced (default), 2 robust, 3 diagnostic.
+STRICT_PARAMS = When true, invalid `run(...)` params fail fast instead of being coerced.
 
  [CONTENT]
 This is the [PLAYBOOK] for using the MCP browser server with minimal [NOISE|LEGEND.md].
@@ -121,6 +123,10 @@ Robustness defaults (cognitive-cheap):
 - `auto_recover=true` (default): if CDP bricks (timeouts/unreachable), attempt recovery and stop with a clear re-run hint.
 - Resume lever: if a run stops after recovery at step `i`, re-run with `start_at=i` to continue from that action index.
 Legacy: `flow(...)` exists for v1/back-compat; in v2 prefer `run(...)`.
+
+## Reliability levels (L0–L3)
+- Use [HEURISTIC_LEVEL] on `run(...)` to bias for strictness vs robustness. Example: `heuristic_level=2` for noisy, dynamic sites; `heuristic_level=0` for deterministic steps.
+- Use [STRICT_PARAMS] when validating new or generated runs so invalid options fail fast instead of being coerced.
 
 ## Canvas apps (Miro/Figma): avoid chatty loops
 Some sites are [CANVAS_APP|LEGEND.md]s: meaningful UI state is not DOM-driven.
