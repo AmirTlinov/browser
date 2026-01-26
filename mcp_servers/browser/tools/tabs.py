@@ -25,6 +25,7 @@ def list_tabs(
     offset: int = 0,
     limit: int = 20,
     url_filter: str | None = None,
+    include_all: bool = False,
 ) -> dict[str, Any]:
     """List browser tabs with pagination and filtering.
 
@@ -33,6 +34,7 @@ def list_tabs(
         offset: Starting index for paginated results (default: 0)
         limit: Maximum tabs to return (default: 20, max: 50)
         url_filter: Filter tabs by URL substring (optional, case-insensitive)
+        include_all: When true, include all user tabs (default: session-only)
 
     Returns:
         Dict containing:
@@ -42,6 +44,7 @@ def list_tabs(
         - limit: Current limit
         - hasMore: Whether more tabs exist beyond current page
         - sessionTabId: ID of the current session's tab
+        - scope: "session" or "all"
         - navigation: Hints for prev/next pagination (if applicable)
 
     The current session's tab is marked with 'current': True.
@@ -51,6 +54,17 @@ def list_tabs(
 
     try:
         all_tabs = session_manager.list_tabs(config)
+
+        if not include_all:
+            session_ids = session_manager.get_session_tab_ids()
+            if session_ids:
+                all_tabs = [t for t in all_tabs if isinstance(t, dict) and t.get("id") in session_ids]
+            elif session_manager.tab_id:
+                all_tabs = [
+                    t
+                    for t in all_tabs
+                    if isinstance(t, dict) and t.get("id") == session_manager.tab_id
+                ]
 
         # Apply URL filter if provided
         if url_filter:
@@ -67,6 +81,7 @@ def list_tabs(
             "limit": limit,
             "hasMore": offset + limit < total,
             "sessionTabId": session_manager.tab_id,
+            "scope": "all" if include_all else "session",
         }
 
         # Navigation hints

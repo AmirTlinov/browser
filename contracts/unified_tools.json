@@ -1479,7 +1479,7 @@
     },
     {
       "name": "tabs",
-      "description": "Manage browser tabs: list, switch, open, close.\nUSAGE:\n- List tabs: tabs(action=\"list\")\n- Switch by ID: tabs(action=\"switch\", tab_id=\"ABC123\")\n- Switch by URL: tabs(action=\"switch\", url_contains=\"github\")\n- Open new tab: tabs(action=\"new\", url=\"https://example.com\")\n- Rescue (fresh tab, no restart): tabs(action=\"rescue\")\n- Close current: tabs(action=\"close\")\n- Close by ID: tabs(action=\"close\", tab_id=\"ABC123\")\n\nRESPONSE EXAMPLE (list):\n{\n  \"action\": \"list\",\n  \"tabs\": [\n    {\"id\": \"ABC123\", \"url\": \"https://example.com\", \"title\": \"Example\", \"active\": true}\n  ],\n  \"total\": 1\n}",
+      "description": "Manage browser tabs: list, switch, open, close.\nUSAGE:\n- List tabs: tabs(action=\"list\")\n- List all tabs (opt-out privacy): tabs(action=\"list\", include_all=true)\n- Switch by ID: tabs(action=\"switch\", tab_id=\"ABC123\")\n- Switch by URL: tabs(action=\"switch\", url_contains=\"github\")\n- Open new tab: tabs(action=\"new\", url=\"https://example.com\")\n- Rescue (fresh tab, no restart): tabs(action=\"rescue\")\n- Close current: tabs(action=\"close\")\n- Close by ID: tabs(action=\"close\", tab_id=\"ABC123\")\n\nRESPONSE EXAMPLE (list):\n{\n  \"action\": \"list\",\n  \"tabs\": [\n    {\"id\": \"ABC123\", \"url\": \"https://example.com\", \"title\": \"Example\", \"active\": true}\n  ],\n  \"total\": 1\n}",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1512,6 +1512,21 @@
             "type": "boolean",
             "default": true,
             "description": "For rescue: close the previous session tab (best-effort) (default: true)"
+          },
+          "include_all": {
+            "type": "boolean",
+            "default": false,
+            "description": "For list: include all user tabs (default: session-only)"
+          },
+          "offset": {
+            "type": "integer",
+            "default": 0,
+            "description": "For list: starting offset"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 20,
+            "description": "For list: maximum tabs to return"
           }
         },
         "additionalProperties": false
@@ -1919,7 +1934,7 @@
     },
     {
       "name": "download",
-      "description": "Wait for a download to complete and optionally store it as an artifact.\nUSAGE:\n- Store as artifact (default): download(timeout=30)\n- Metadata only: download(store=false)\n\nNOTES:\n- Designed to be used after triggering a download (click).\n- Keeps output cognitive-cheap: returns an artifact id + minimal metadata.",
+      "description": "Wait for a download to complete and optionally store it as an artifact.\nUSAGE:\n- Store as artifact (default): download(timeout=30)\n- Metadata only: download(store=false)\n\nNOTES:\n- Designed to be used after triggering a download (click).\n- Keeps output cognitive-cheap: returns an artifact id + minimal metadata.\n- If CDP download behavior is unavailable, can fall back to default download dirs when allow_fallback_dirs=true.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -1953,6 +1968,11 @@
             "type": "integer",
             "default": 209715200,
             "description": "Max bytes to hash for sha256 (default: 200MB). Larger files skip hashing."
+          },
+          "allow_fallback_dirs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow fallback to default OS download dirs if CDP download behavior is unavailable."
           }
         },
         "additionalProperties": false

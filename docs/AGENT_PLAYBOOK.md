@@ -18,6 +18,7 @@ EXTRACT_VARIANTS = Pre-tuned one-call extract variants for articles, tables, and
 HEURISTIC_LEVEL = Reliability tuning for `run(...)`: 0 strict/minimal, 1 balanced (default), 2 robust, 3 diagnostic.
 STRICT_PARAMS = When true, invalid `run(...)` params fail fast instead of being coerced.
 AUTO_DISMISS_OVERLAYS = Best-effort auto-dismiss of blocking modals before click/type/form.
+TABS_INCLUDE_ALL = `tabs(action="list", include_all=true)` to opt out of session-only tab listing.
 
  [CONTENT]
 This is the [PLAYBOOK] for using the MCP browser server with minimal [NOISE|LEGEND.md].
@@ -56,6 +57,7 @@ run(actions=[
 - Interact: `page(detail="locators")` → `click(...)` / `type(...)` / `form(...)`
 - Iframes/SSO/CAPTCHA layout: `page(detail="frames")` (CDP frame tree) → `page(detail="frames", with_screenshot=true)` (visual boxes)
 - Blocking modals: set `auto_dismiss_overlays=true` ([AUTO_DISMISS_OVERLAYS]) or use `macro: dismiss_overlays` before interaction.
+- Tabs privacy: default `tabs(action="list")` returns session-only tabs; use [TABS_INCLUDE_ALL] to include all user tabs.
 
 Tips:
 - Use `auto_tab=true` when a click is expected to open a new tab ([AUTO_TAB]).

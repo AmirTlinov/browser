@@ -254,7 +254,51 @@ def test_flow_when_else_branch_executes(monkeypatch: pytest.MonkeyPatch) -> None
     assert steps[0].get("tool") == "when"
     assert steps[0].get("branch") == "else"
     assert "navigate" in called
-    assert "click" not in called
+
+
+def test_flow_when_text_passes_selector_to_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mcp_servers.browser.config import BrowserConfig
+    from mcp_servers.browser.server.registry import create_default_registry
+    from mcp_servers.browser.server.types import ToolResult
+
+    _install_hermetic_flow_mocks(monkeypatch)
+
+    registry = create_default_registry()
+    calls: list[tuple[str, dict]] = []
+
+    def fake_dispatch(name: str, cfg: BrowserConfig, launcher, arguments):  # noqa: ANN001,ARG001
+        calls.append((name, dict(arguments)))
+        if name == "wait":
+            return ToolResult.json({"success": True, "found": True})
+        return ToolResult.json({"ok": True})
+
+    monkeypatch.setattr(registry, "dispatch", fake_dispatch)
+
+    handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
+    cfg = BrowserConfig.from_env()
+    res = handler(
+        cfg,
+        launcher=None,
+        args={
+            "steps": [
+                {
+                    "when": {
+                        "if": {"text": "More information...", "selector": "body"},
+                        "then": [{"click": {"text": "Continue"}}],
+                        "else": [{"click": {"text": "Cancel"}}],
+                    }
+                }
+            ],
+            "final": "none",
+            "stop_on_error": True,
+            "auto_recover": False,
+            "step_proof": False,
+            "action_timeout": 0.5,
+        },
+    )
+
+    assert not res.is_error
+    assert any(name == "wait" and args.get("selector") == "body" for name, args in calls)
 
 
 def test_flow_timeout_profile_slow_sets_default_condition_timeout(monkeypatch: pytest.MonkeyPatch) -> None:

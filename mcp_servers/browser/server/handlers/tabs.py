@@ -20,6 +20,7 @@ def handle_list_tabs(config: BrowserConfig, launcher: BrowserLauncher, args: dic
         offset=args.get("offset", 0),
         limit=args.get("limit", 20),
         url_filter=args.get("url_filter"),
+        include_all=bool(args.get("include_all", False)),
     )
     return ToolResult.json(result)
 

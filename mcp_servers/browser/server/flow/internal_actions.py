@@ -63,11 +63,9 @@ class FlowInternalActions:
     def _note_first_error(self, *, i: int, tool: str, error: str) -> None:
         if self._first_error is None:
             self._first_error = {"i": i, "tool": tool, "error": error}
-
     @staticmethod
     def _is_optional(meta: dict[str, Any] | None) -> bool:
         return bool(meta and bool(meta.get("optional")))
-
     def _fail(
         self,
         *,
@@ -82,7 +80,6 @@ class FlowInternalActions:
             entry["optional"] = True
             step_summaries.append(entry)
             return InternalActionResult(consumed=True, should_break=False, first_error=self._first_error)
-
         err = entry.get("error")
         self._note_first_error(i=i, tool=tool, error=str(err) if err is not None else "error")
         step_summaries.append(entry)
@@ -105,7 +102,6 @@ class FlowInternalActions:
         """Return (matched, details, error, suggestion)."""
         if not isinstance(cond, dict):
             return False, None, "Invalid condition", "Provide if={...} as an object"
-
         url = cond.get("url")
         title = cond.get("title")
         selector = cond.get("selector")
@@ -146,6 +142,8 @@ class FlowInternalActions:
                 return False, details, "Condition wait failed", "Retry or reduce selector scope"
             payload = tr.data if isinstance(tr.data, dict) else {}
             found = payload.get("found")
+            if found is None:
+                found = payload.get("success")
             details["selector"] = {"selector": selector.strip(), "found": bool(found)}
             if found is not True:
                 return False, details, None, None
@@ -155,7 +153,12 @@ class FlowInternalActions:
                 "wait",
                 self._config,
                 self._launcher,
-                {"for": "text", "text": text.strip(), "timeout": float(timeout_s)},
+                {
+                    "for": "text",
+                    "text": text.strip(),
+                    "timeout": float(timeout_s),
+                    **({"selector": selector.strip()} if isinstance(selector, str) and selector.strip() else {}),
+                },
             )
             if tr.is_error:
                 return False, details, "Condition wait failed", "Retry or reduce text scope"

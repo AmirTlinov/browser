@@ -1998,7 +1998,21 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                 download_result_payload: dict[str, Any] | None = None
                 download_error: str | None = None
                 download_suggestion: str | None = None
-                if want_download and not tool_result.is_error:
+                tool_error_text: str | None = None
+                if tool_result.is_error:
+                    if tool_result.content and tool_result.content[0].type == "text":
+                        err_text = tool_result.content[0].text or ""
+                        tool_error_text = _extract_ctx_field(err_text or "", "error") or err_text
+                    elif isinstance(tool_result.data, dict) and isinstance(tool_result.data.get("error"), str):
+                        tool_error_text = tool_result.data.get("error")
+
+                download_on_error = False
+                if want_download and tool_error_text:
+                    m = tool_error_text.lower()
+                    if "err_aborted" in m or "net::err_aborted" in m or ("aborted" in m and "download" in m):
+                        download_on_error = True
+
+                if want_download and (not tool_result.is_error or download_on_error):
                     try:
                         dl_args: dict[str, Any] = {
                             "timeout": float(download_timeout_s),
@@ -2093,12 +2107,17 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                             },
                         )
 
+                suppress_tool_error = False
                 ok = not tool_result.is_error
                 download_detected = False
                 if isinstance(download_result_payload, dict) and isinstance(
                     download_result_payload.get("download"), dict
                 ):
                     download_detected = True
+                if tool_result.is_error and download_on_error and download_detected:
+                    # Download-triggering clicks can surface ERR_ABORTED; treat as ok if download captured.
+                    suppress_tool_error = True
+                    ok = True
                 if ok and want_download and download_required and not download_detected:
                     ok = False
                 note_args = tool_args_note if isinstance(tool_args_note, dict) else tool_args
@@ -2146,7 +2165,7 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                         for k, v in exported.items():
                             flow_vars[k] = v
 
-                if tool_result.is_error:
+                if tool_result.is_error and not suppress_tool_error:
                     err_text = None
                     if tool_result.content and tool_result.content[0].type == "text":
                         err_text = tool_result.content[0].text or ""
@@ -2155,6 +2174,13 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     entry["error"] = message
                     if suggestion:
                         entry["suggestion"] = suggestion
+                if suppress_tool_error:
+                    prev_note = entry.get("note")
+                    entry["note"] = (
+                        f"{prev_note}; download captured after navigation abort"
+                        if isinstance(prev_note, str) and prev_note
+                        else "download captured after navigation abort"
+                    )
 
                     is_optional = bool(meta and bool(meta.get("optional")))
                     if is_optional:

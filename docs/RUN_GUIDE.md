@@ -9,6 +9,7 @@ AUTO_AFFORDANCES = Auto-refresh affordances when `act(ref/label)` looks stale.
 HEURISTIC_LEVEL = Reliability tuning for `run(...)`: 0 strict/minimal, 1 balanced (default), 2 robust, 3 diagnostic.
 STRICT_PARAMS = When true, invalid `run(...)` params fail fast instead of being coerced.
 AUTO_DISMISS_OVERLAYS = Best-effort dismissal of blocking DOM overlays before click/type/form.
+TABS_INCLUDE_ALL = `tabs(action="list", include_all=true)` to list all user tabs.
 
  [CONTENT]
 # run() minimal-call guide
@@ -31,6 +32,7 @@ Use this when you want the fewest MCP calls per scenario. Start here, then drill
 - Lazy-load error banners? Use `extract_content(..., retry_on_error=true, error_texts=[...])` to trigger a bounded recovery loop.
 - If `main/links` feel noisy, pass `selector="..."` to `extract_content` to scope the extraction.
 - Debug the content-root heuristic: `extract_content(..., content_root_debug=true)` (returns `contentRootDebug` with selector hints, data-attrs, and domPath).
+- Tabs privacy: default `tabs(action="list")` is session-only; use [TABS_INCLUDE_ALL] if you explicitly need all tabs.
 
 ## [ONE_CALL_FLOW] patterns
 Basic form:

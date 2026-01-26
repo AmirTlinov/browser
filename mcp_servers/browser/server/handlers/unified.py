@@ -728,14 +728,18 @@ def handle_form(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
 def handle_tabs(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     """Tab management: list, switch, new, close."""
     action = args.get("action", "list")
 
     if action == "list":
-        result = tools.list_tabs(config, url_filter=args.get("url_contains"))
+        result = tools.list_tabs(
+            config,
+            offset=args.get("offset", 0),
+            limit=args.get("limit", 20),
+            url_filter=args.get("url_contains"),
+            include_all=bool(args.get("include_all", False)),
+        )
         result["action"] = "list"
 
     elif action == "switch":
@@ -746,11 +750,9 @@ def handle_tabs(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
         else:
             return ToolResult.error("'tab_id' or 'url_contains' required for switch")
         result["action"] = "switch"
-
     elif action == "new":
         result = tools.new_tab(config, url=args.get("url", "about:blank"))
         result["action"] = "new"
-
     elif action == "close":
         result = tools.close_tab(config, tab_id=args.get("tab_id"))
         result["action"] = "close"
@@ -2186,7 +2188,6 @@ def handle_upload(config: BrowserConfig, launcher: BrowserLauncher, args: dict[s
     )
     return ToolResult.json(result)
 
-
 def handle_download(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     """Wait for a download to complete and store it as an artifact (cognitive-cheap)."""
     try:
@@ -2214,11 +2215,11 @@ def handle_download(config: BrowserConfig, launcher: BrowserLauncher, args: dict
         poll_interval=args.get("poll_interval", 0.2),
         stable_ms=args.get("stable_ms", 500),
         baseline=baseline,
+        allow_fallback_dirs=bool(args.get("allow_fallback_dirs", True)),
     )
 
     if not store:
         return ToolResult.json(result)
-
     dl = result.get("download") if isinstance(result, dict) else None
     if not isinstance(dl, dict):
         return ToolResult.json(result)

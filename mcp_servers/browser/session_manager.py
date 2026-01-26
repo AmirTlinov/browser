@@ -63,6 +63,7 @@ class SessionManager:
             inst._nav_graph_lock = threading.Lock()
             inst._agent_memory = {}
             inst._agent_memory_lock = threading.Lock()
+            inst._session_tab_ids = set()
             inst._download_state = {}
             inst._download_lock = threading.Lock()
             inst._captcha_state = {}
@@ -114,6 +115,10 @@ class SessionManager:
                 for bus in list(buses.values()):
                     if isinstance(bus, _Tier0EventBus):
                         bus.stop()
+            except Exception:
+                pass
+            try:
+                inst._session_tab_ids.clear()
             except Exception:
                 pass
         cls._instance = None
@@ -368,6 +373,7 @@ class SessionManager:
                 url = str(info.get("url") or "") if isinstance(info, dict) else ""
                 if url and not (url.startswith("chrome://") or url.startswith("chrome-extension://")):
                     self._session_tab_id = focused
+                    self._remember_session_tab(focused)
                     return self._session_tab_id
 
             created = gw.rpc_call(
@@ -382,6 +388,7 @@ class SessionManager:
             if not new_id_s:
                 raise HttpClientError("Failed to create browser tab (extension mode)")
             self._session_tab_id = new_id_s
+            self._remember_session_tab(new_id_s)
             return self._session_tab_id
 
         # Check if current tab still exists
@@ -394,6 +401,7 @@ class SessionManager:
 
         # Create new isolated tab
         self._session_tab_id = self._create_tab(config, "about:blank")
+        self._remember_session_tab(self._session_tab_id)
         return self._session_tab_id
 
     def ensure_diagnostics(self, session: BrowserSession) -> dict[str, Any]:
@@ -1737,6 +1745,7 @@ class SessionManager:
                 return False
 
             self._session_tab_id = str(tab_id)
+            self._remember_session_tab(self._session_tab_id)
 
             # Keep Tier-0 bus focused on the current session tab (avoid leaking threads).
             if old_id and old_id != tab_id:
@@ -1761,6 +1770,7 @@ class SessionManager:
         if not ws_url:
             return False
         self._session_tab_id = tab_id
+        self._remember_session_tab(tab_id)
 
         # Keep Tier-0 bus focused on the current session tab (avoid leaking threads).
         if old_id and old_id != tab_id:
@@ -1783,6 +1793,19 @@ class SessionManager:
         except OSError:
             pass  # Connection failures are acceptable for UI activation
         return True
+
+    def _remember_session_tab(self, tab_id: str | None) -> None:
+        if isinstance(tab_id, str) and tab_id.strip():
+            try:
+                self._session_tab_ids.add(tab_id.strip())
+            except Exception:
+                pass
+
+    def get_session_tab_ids(self) -> set[str]:
+        try:
+            return set(self._session_tab_ids)
+        except Exception:
+            return set()
 
     def list_tabs(self, config: BrowserConfig) -> list:
         """List all browser tabs with current session marked."""
@@ -1839,6 +1862,7 @@ class SessionManager:
                 raise HttpClientError("Failed to create browser tab (extension mode)")
 
             self._session_tab_id = tab_id
+            self._remember_session_tab(tab_id)
 
             if old_id and old_id != tab_id:
                 with suppress(Exception):
@@ -1860,6 +1884,7 @@ class SessionManager:
         old_id = self._session_tab_id
         tab_id = self._create_tab(config, url)
         self._session_tab_id = tab_id
+        self._remember_session_tab(tab_id)
 
         # Keep Tier-0 bus focused on the current session tab (avoid leaking threads).
         if old_id and old_id != tab_id:

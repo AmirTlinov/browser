@@ -83,6 +83,7 @@ def wait_for_download(
     poll_interval: float = 0.2,
     stable_ms: int = 500,
     baseline: list[str] | None = None,
+    allow_fallback_dirs: bool = True,
 ) -> dict[str, Any]:
     """Wait for a new download to complete and return metadata (no artifact storage here).
 
@@ -108,12 +109,15 @@ def wait_for_download(
 
     with get_session(config) as (session, target):
         dl_cfg = session_manager.ensure_downloads(session)
-        if not (isinstance(dl_cfg, dict) and dl_cfg.get("enabled") is True and dl_cfg.get("available") is True):
+        downloads_available = (
+            isinstance(dl_cfg, dict) and dl_cfg.get("enabled") is True and dl_cfg.get("available") is True
+        )
+        if not downloads_available and not allow_fallback_dirs:
             raise SmartToolError(
                 tool="download",
                 action="configure",
                 reason="Downloads are not available (CDP download behavior could not be set)",
-                suggestion="Try again, or run in permissive policy; if it persists, update Chrome/Chromium to a version that supports Page.setDownloadBehavior.",
+                suggestion="Re-run with allow_fallback_dirs=true, or update Chrome/Chromium to a version that supports Page.setDownloadBehavior.",
                 details={"downloadConfig": dl_cfg if isinstance(dl_cfg, dict) else {}},
             )
 
@@ -198,7 +202,11 @@ def wait_for_download(
                 action="wait",
                 reason="Timed out waiting for a new download",
                 suggestion="Trigger the download (click) then call download wait with a longer timeout",
-                details={"timeoutSec": timeout_f},
+                details={
+                    "timeoutSec": timeout_f,
+                    "downloadConfig": dl_cfg if isinstance(dl_cfg, dict) else {},
+                    "fallbackDirs": [str(p) for p in fallback_dirs],
+                },
             )
 
         path = candidate.path
@@ -226,6 +234,7 @@ def wait_for_download(
                 **({"ext": ext} if ext else {}),
                 "path": rel_path,
                 **({"startedFromTemp": True} if candidate.started_from_temp else {}),
+                **({"unmanaged": True} if not downloads_available else {}),
             },
             "target": target["id"],
             "sessionTabId": session_manager.tab_id,

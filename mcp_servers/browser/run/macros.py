@@ -259,9 +259,11 @@ def expand_macro(
         if isinstance(navigate_spec, dict):
             steps.append({"navigate": dict(navigate_spec)})
             plan_args["navigate"] = list(navigate_spec.keys())[:8]
+            steps.append({"wait": {"for": "domcontentloaded", "timeout": 6}})
         elif isinstance(url_spec, str) and url_spec.strip():
             steps.append({"navigate": {"url": url_spec.strip()}})
             plan_args["navigate"] = ["url"]
+            steps.append({"wait": {"for": "domcontentloaded", "timeout": 6}})
 
         if expand_spec not in (None, False):
             exp_args: dict[str, Any] | None = None
@@ -331,6 +333,10 @@ def expand_macro(
                 "suggestion": "Use extract={...}",
                 "details": {"name": name},
             }
+        if "selector" in extract_args:
+            sel = extract_args.get("selector")
+            if not (isinstance(sel, str) and sel.strip()):
+                extract_args.pop("selector", None)
 
         retry_on_error = a.get("retry_on_error", True)
         retry_enabled = False

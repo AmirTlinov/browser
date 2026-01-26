@@ -2,6 +2,7 @@
 REL_2026_01_24 = Release 2026-01-24.
 REL_2026_01_26 = Release 2026-01-26.
 REL_2026_01_26B = Release 2026-01-26 (update B).
+REL_2026_01_26C = Release 2026-01-26 (update C).
 FEAT_DOWNLOADS = Download capture robustness: browser-level CDP fallback, fallback download dirs, safer download clicks.
 FEAT_SMOKE = Live-site smoke suite expanded with real sites and edge cases.
 FEAT_AUTO_SCROLL = Page tool auto-scroll prepass for lazy-loaded content.
@@ -20,6 +21,11 @@ DOC_SKILL_PACK = Skill packaging doc for browser-mcp-effective.
 DOC_ANTI_FLAKE = Runbook anti-flakiness defaults (auto_dialog/auto_tab/auto_affordances).
 FEAT_AUTO_DISMISS_OVERLAYS = Auto-dismiss blocking overlays before click/type/form (run/flow).
 DOC_AUTO_DISMISS_OVERLAYS = Docs: auto_dismiss_overlays guidance.
+FEAT_DOWNLOAD_FALLBACK = Download wait can fall back to default OS download dirs when CDP behavior is unavailable.
+FEAT_AUTO_DOWNLOAD_ABORT = Auto-download can proceed after ERR_ABORTED if a download is captured.
+FEAT_TABS_SESSION_SCOPE = tabs list defaults to session-only; include_all opt-out.
+FIX_WHEN_TEXT = when text matcher normalizes and can scope by selector.
+FIX_MACRO_EXTRACT_SYNC = auto_expand_scroll_extract inserts DOM ready wait and avoids selector=null.
 
 [CONTENT]
 ## [REL_2026_01_24]
@@ -45,3 +51,10 @@ DOC_AUTO_DISMISS_OVERLAYS = Docs: auto_dismiss_overlays guidance.
 ## [REL_2026_01_26B]
 - [FEAT_AUTO_DISMISS_OVERLAYS]
 - [DOC_AUTO_DISMISS_OVERLAYS]
+
+## [REL_2026_01_26C]
+- [FEAT_DOWNLOAD_FALLBACK]
+- [FEAT_AUTO_DOWNLOAD_ABORT]
+- [FEAT_TABS_SESSION_SCOPE]
+- [FIX_WHEN_TEXT]
+- [FIX_MACRO_EXTRACT_SYNC]

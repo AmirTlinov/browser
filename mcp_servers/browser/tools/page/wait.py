@@ -409,8 +409,31 @@ def _check_condition(
             }
 
     elif condition == "text" and text:
+        js = f"""
+        (() => {{
+            {DEEP_QUERY_JS}
+            const norm = (s) => String(s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+            const needle = norm({json.dumps(text)});
+            if (!needle) return false;
+            let root = document.body;
+            const sel = {json.dumps(selector)};
+            if (sel && typeof sel === 'string') {{
+                try {{
+                    const nodes = __mcpQueryAllDeep(sel, 5);
+                    if (nodes && nodes.length) root = nodes[0];
+                }} catch (e) {{}}
+            }}
+            if (!root) return false;
+            let hay = '';
+            try {{ hay = String(root.innerText || ''); }} catch (e) {{}}
+            if (!hay) {{
+                try {{ hay = String(root.textContent || ''); }} catch (e) {{}}
+            }}
+            return norm(hay).includes(needle);
+        }})()
+        """
         try:
-            found = session.eval_js(f"document.body.innerText.includes({json.dumps(text)})")
+            found = session.eval_js(js)
         except Exception:
             found = False
         if found:
@@ -418,6 +441,7 @@ def _check_condition(
                 "success": True,
                 "condition": condition,
                 "text": text,
+                **({"selector": selector} if selector else {}),
                 "elapsed": round(elapsed, 2),
                 "target": target["id"],
             }
@@ -433,6 +457,7 @@ def _check_condition(
                 "success": True,
                 "condition": condition,
                 "selector": selector,
+                "found": True,
                 "elapsed": round(elapsed, 2),
                 "target": target["id"],
             }

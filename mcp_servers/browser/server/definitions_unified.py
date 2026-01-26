@@ -13,6 +13,7 @@ from typing import Any
 
 from .definitions_extract_retry import EXTRACT_RETRY_PROPERTIES
 from .definitions_policy import RELIABILITY_POLICY_PROPERTIES
+from .definitions_tabs import TABS_TOOL
 # ═══════════════════════════════════════════════════════════════════════════════
 # NAVIGATION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -434,55 +435,6 @@ RESPONSE EXAMPLE:
                 "type": "number",
                 "default": 10,
                 "description": "Timeout for wait_for in seconds",
-            },
-        },
-        "additionalProperties": False,
-    },
-}
-# ═══════════════════════════════════════════════════════════════════════════════
-# TABS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-TABS_TOOL: dict[str, Any] = {
-    "name": "tabs",
-    "description": """Manage browser tabs: list, switch, open, close.
-USAGE:
-- List tabs: tabs(action="list")
-- Switch by ID: tabs(action="switch", tab_id="ABC123")
-- Switch by URL: tabs(action="switch", url_contains="github")
-- Open new tab: tabs(action="new", url="https://example.com")
-- Rescue (fresh tab, no restart): tabs(action="rescue")
-- Close current: tabs(action="close")
-- Close by ID: tabs(action="close", tab_id="ABC123")
-
-RESPONSE EXAMPLE (list):
-{
-  "action": "list",
-  "tabs": [
-    {"id": "ABC123", "url": "https://example.com", "title": "Example", "active": true}
-  ],
-  "total": 1
-}""",
-    "inputSchema": {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "type": "object",
-        "properties": {
-            "action": {
-                "type": "string",
-                "enum": ["list", "switch", "new", "close", "rescue"],
-                "default": "list",
-                "description": "Tab action",
-            },
-            "tab_id": {"type": "string", "description": "Tab ID for switch/close"},
-            "url_contains": {
-                "type": "string",
-                "description": "Switch to tab containing this URL substring",
-            },
-            "url": {"type": "string", "description": "URL for new tab"},
-            "close_old": {
-                "type": "boolean",
-                "default": True,
-                "description": "For rescue: close the previous session tab (best-effort) (default: true)",
             },
         },
         "additionalProperties": False,
@@ -1860,7 +1812,8 @@ USAGE:
 
 NOTES:
 - Designed to be used after triggering a download (click).
-- Keeps output cognitive-cheap: returns an artifact id + minimal metadata.""",
+- Keeps output cognitive-cheap: returns an artifact id + minimal metadata.
+- If CDP download behavior is unavailable, can fall back to default download dirs when allow_fallback_dirs=true.""",
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
@@ -1894,6 +1847,11 @@ NOTES:
                     "type": "integer",
                     "default": 209715200,
                     "description": "Max bytes to hash for sha256 (default: 200MB). Larger files skip hashing.",
+                },
+                "allow_fallback_dirs": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Allow fallback to default OS download dirs if CDP download behavior is unavailable.",
                 },
             },
             "additionalProperties": False,
