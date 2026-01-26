@@ -22,6 +22,17 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name) == "1"
+
+
+def _parse_allowlist(name: str) -> set[str]:
+    raw = os.environ.get(name, "")
+    if not raw:
+        return set()
+    return {item.strip().lower() for item in raw.split(",") if item.strip()}
+
+
 @pytest.fixture(scope="session")
 def browser_env() -> tuple[BrowserConfig, BrowserLauncher]:
     config = BrowserConfig.from_env()
@@ -658,9 +669,17 @@ def test_real_sites_edge_cases_live(browser_env: tuple[BrowserConfig, BrowserLau
     config, launcher = browser_env
     registry = create_default_registry()
     flow_handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
-
-    # Content root debug on a real article.
+    strict_live = _env_flag("RUN_BROWSER_INTEGRATION_LIVE_STRICT")
+    allowlist = _parse_allowlist("RUN_BROWSER_INTEGRATION_LIVE_ALLOWLIST")
+    min_pass_env = os.environ.get("RUN_BROWSER_INTEGRATION_LIVE_MIN_PASS")
     try:
+        min_pass = float(min_pass_env) if min_pass_env else (1.0 if strict_live else 0.0)
+    except Exception:
+        min_pass = 1.0 if strict_live else 0.0
+
+    live_checks: list[tuple[str, callable]] = []
+
+    def _content_root_debug() -> None:
         cdp.navigate_to(config, "https://en.wikipedia.org/wiki/Alan_Turing")
         extracted = _run_with_timeout(
             20.0,
@@ -673,11 +692,8 @@ def test_real_sites_edge_cases_live(browser_env: tuple[BrowserConfig, BrowserLau
         )
         assert isinstance(extracted, dict)
         assert isinstance(extracted.get("contentRootDebug"), dict)
-    except Exception as exc:  # noqa: BLE001
-        pytest.xfail(f"content_root_debug edge-case failed: {exc}")
 
-    # Table index extraction (rows).
-    try:
+    def _table_index() -> None:
         cdp.navigate_to(
             config,
             "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
@@ -696,43 +712,69 @@ def test_real_sites_edge_cases_live(browser_env: tuple[BrowserConfig, BrowserLau
         assert extracted.get("contentType") == "table"
         rows = extracted.get("rows")
         assert isinstance(rows, list) and rows
-    except Exception as exc:  # noqa: BLE001
-        pytest.xfail(f"table_index edge-case failed: {exc}")
 
-    # Container-scroll on real sites (social/market/news). Best-effort: pass if any succeed.
+    live_checks.append(("content_root_debug", _content_root_debug))
+    live_checks.append(("table_index", _table_index))
+
     container_cases = [
-        ("news", "https://news.ycombinator.com/", "#hnmain"),
-        ("market", "https://www.ebay.com/sch/i.html?_nkw=headphones", "body"),
-        ("social", "https://github.com/trending", "main"),
-        ("docs", "https://developer.mozilla.org/en-US/docs/Web/JavaScript", "main"),
-        ("reference", "https://en.wikipedia.org/wiki/Alan_Turing", "#content"),
+        ("container_news", "https://news.ycombinator.com/", "#hnmain"),
+        ("container_market", "https://www.ebay.com/sch/i.html?_nkw=headphones", "body"),
+        ("container_social", "https://github.com/trending", "main"),
+        ("container_docs", "https://developer.mozilla.org/en-US/docs/Web/JavaScript", "main"),
+        ("container_reference", "https://en.wikipedia.org/wiki/Alan_Turing", "#content"),
     ]
-    ok_cases = 0
-    for _name, url, selector in container_cases:
-        try:
-            res = _run_with_timeout(
-                30.0,
-                lambda: flow_handler(
-                    config,
-                    launcher,
-                    args={
-                        "steps": [
-                            {"navigate": {"url": url}},
-                            {"scroll": {"direction": "down", "amount": 400, "container_selector": selector}},
-                        ],
-                        "final": "none",
-                        "stop_on_error": True,
-                        "auto_recover": False,
-                        "step_proof": False,
-                        "action_timeout": 20.0,
-                    },
-                ),
-                on_timeout=f"container scroll timed out: {_name}",
-            )
-            assert not res.is_error
-            ok_cases += 1
-        except Exception:
-            continue
+    for name, url, selector in container_cases:
+        def _mk_scroll_case(case_url: str, case_selector: str) -> callable:
+            def _run() -> None:
+                res = _run_with_timeout(
+                    30.0,
+                    lambda: flow_handler(
+                        config,
+                        launcher,
+                        args={
+                            "steps": [
+                                {"navigate": {"url": case_url}},
+                                {"scroll": {"direction": "down", "amount": 400, "container_selector": case_selector}},
+                            ],
+                            "final": "none",
+                            "stop_on_error": True,
+                            "auto_recover": False,
+                            "step_proof": False,
+                            "action_timeout": 20.0,
+                        },
+                    ),
+                    on_timeout=f"container scroll timed out: {case_url}",
+                )
+                assert not res.is_error
 
-    if ok_cases == 0:
-        pytest.xfail("container scroll live smoke failed on all sites")
+            return _run
+
+        live_checks.append((name, _mk_scroll_case(url, selector)))
+
+    if allowlist:
+        live_checks = [c for c in live_checks if c[0].lower() in allowlist]
+        if not live_checks:
+            pytest.skip("Live allowlist filtered out all cases")
+
+    ok_cases = 0
+    failures: list[str] = []
+    for name, check in live_checks:
+        try:
+            check()
+            ok_cases += 1
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"{name}: {exc}")
+
+    total = len(live_checks)
+    pass_rate = (ok_cases / total) if total else 0.0
+    print(f"[live pass-rate] ok={ok_cases} total={total} rate={pass_rate:.2%}")
+
+    if strict_live:
+        if pass_rate < min_pass:
+            pytest.fail(
+                f"Strict live pass-rate {pass_rate:.2%} < {min_pass:.2%}. "
+                f"Failures: {failures}"
+            )
+    else:
+        if ok_cases == 0:
+            pytest.xfail("live smoke failed on all cases")
