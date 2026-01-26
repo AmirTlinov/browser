@@ -57,7 +57,16 @@ def _local_download_server() -> str:
         index_path = tmp_path / "index.html"
         index_path.write_text(
             "<a id='mcp-newtab' href='https://example.com/?mcp-newtab=1' target='_blank'>"
-            "MCP New Tab</a> <a id='mcp-download' href='mcp-hello.txt'>MCP Download</a>",
+            "MCP New Tab</a> <a id='mcp-download' href='mcp-hello.txt'>MCP Download</a>"
+            "<button id='mcp-expand' aria-expanded='false'>Show more</button>"
+            "<div id='mcp-hidden' style='display:none'>Hidden content</div>"
+            "<script>"
+            "document.getElementById('mcp-expand').addEventListener('click', () => {"
+            "  const hidden = document.getElementById('mcp-hidden');"
+            "  hidden.style.display = 'block';"
+            "  document.getElementById('mcp-expand').setAttribute('aria-expanded', 'true');"
+            "});"
+            "</script>",
             encoding="utf-8",
         )
 
@@ -405,6 +414,50 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
         except Exception as exc:  # noqa: BLE001
             pytest.xfail(f"download edge-case failed: {exc}")
 
+        # Auto-expand: local show-more should reveal hidden content.
+        try:
+            res = _run_with_timeout(
+                20.0,
+                lambda: flow_handler(
+                    config,
+                    launcher,
+                    args={
+                        "steps": [
+                            {"navigate": {"url": page_url}},
+                            {
+                                "macro": {
+                                    "name": "auto_expand",
+                                    "args": {
+                                        "phrases": ["show more"],
+                                        "selectors": ["#mcp-expand"],
+                                        "max_iters": 2,
+                                    },
+                                }
+                            },
+                        ],
+                        "final": "none",
+                        "stop_on_error": True,
+                        "auto_recover": False,
+                        "step_proof": False,
+                        "action_timeout": 10.0,
+                    },
+                ),
+                on_timeout="auto-expand edge-case timed out",
+            )
+            assert not res.is_error
+            visible = cdp.eval_js(
+                config,
+                "(() => {"
+                " const el = document.querySelector('#mcp-hidden');"
+                " if (!el) return false;"
+                " const style = getComputedStyle(el);"
+                " return style.display !== 'none';"
+                "})()",
+            )
+            assert isinstance(visible, dict) and visible.get("result") is True
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"auto-expand edge-case failed: {exc}")
+
     # Dialog handling: inject alert and rely on auto_dialog dismissal for read-ish step.
     try:
         res = _run_with_timeout(
@@ -432,11 +485,53 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
     except Exception as exc:  # noqa: BLE001
         pytest.xfail(f"dialog edge-case failed: {exc}")
 
+    # Content root debug on a real article.
+    try:
+        cdp.navigate_to(config, "https://en.wikipedia.org/wiki/Alan_Turing")
+        extracted = _run_with_timeout(
+            20.0,
+            lambda: cdp.extract_content(
+                config,
+                content_type="overview",
+                content_root_debug=True,
+            ),
+            on_timeout="content_root_debug timed out",
+        )
+        assert isinstance(extracted, dict)
+        assert isinstance(extracted.get("contentRootDebug"), dict)
+    except Exception as exc:  # noqa: BLE001
+        pytest.xfail(f"content_root_debug edge-case failed: {exc}")
+
+    # Table index extraction (rows).
+    try:
+        cdp.navigate_to(
+            config,
+            "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
+        )
+        extracted = _run_with_timeout(
+            25.0,
+            lambda: cdp.extract_content(
+                config,
+                content_type="table",
+                table_index=0,
+                limit=5,
+            ),
+            on_timeout="table_index edge-case timed out",
+        )
+        assert isinstance(extracted, dict)
+        assert extracted.get("contentType") == "table"
+        rows = extracted.get("rows")
+        assert isinstance(rows, list) and rows
+    except Exception as exc:  # noqa: BLE001
+        pytest.xfail(f"table_index edge-case failed: {exc}")
+
     # Container-scroll on real sites (social/market/news). Best-effort: pass if any succeed.
     container_cases = [
         ("news", "https://news.ycombinator.com/", "#hnmain"),
         ("market", "https://www.ebay.com/sch/i.html?_nkw=headphones", "body"),
         ("social", "https://github.com/trending", "main"),
+        ("docs", "https://developer.mozilla.org/en-US/docs/Web/JavaScript", "main"),
+        ("reference", "https://en.wikipedia.org/wiki/Alan_Turing", "#content"),
     ]
     ok_cases = 0
     for _name, url, selector in container_cases:
