@@ -2038,6 +2038,19 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                             dl_name = tool_result.data.get("download")
                             if isinstance(dl_name, str) and dl_name.strip():
                                 download_hint_name = dl_name.strip()
+                        if not download_hint_url:
+                            with suppress(Exception):
+                                tab_id = _session_manager.tab_id or getattr(shared_sess, "tab_id", None)
+                                if isinstance(tab_id, str) and tab_id:
+                                    cand = _session_manager.get_recent_download_candidate(tab_id, max_age_ms=5000)
+                                    if isinstance(cand, dict):
+                                        url = cand.get("url")
+                                        if isinstance(url, str) and url.strip():
+                                            download_hint_url = url.strip()
+                                        if not download_hint_name:
+                                            fname = cand.get("fileName")
+                                            if isinstance(fname, str) and fname.strip():
+                                                download_hint_name = fname.strip()
                         dl_args: dict[str, Any] = {
                             "timeout": float(download_timeout_s),
                             "store": bool(download_store),

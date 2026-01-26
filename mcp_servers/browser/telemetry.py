@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from typing import Any
+import re
 
 from .server.redaction import redact_url_brief as redact_url
 
@@ -55,7 +56,15 @@ def _select_headers(
     def _want_value(lk: str) -> bool:
         if lk.startswith("x-"):
             return True
-        return lk in {"content-type", "accept", "accept-language", "origin", "referer", "user-agent"}
+        return lk in {
+            "content-type",
+            "content-disposition",
+            "accept",
+            "accept-language",
+            "origin",
+            "referer",
+            "user-agent",
+        }
 
     for k, v in headers.items():
         lk = str(k or "").strip().lower()
@@ -206,6 +215,23 @@ def _header_value(headers: dict[str, Any], name: str) -> str | None:
     return None
 
 
+def _filename_from_cd(header: str | None) -> str | None:
+    if not isinstance(header, str) or not header:
+        return None
+    # Try RFC 5987 filename*= first.
+    m = re.search(r"filename\\*=([^;]+)", header, flags=re.IGNORECASE)
+    if m:
+        raw = m.group(1).strip().strip("\"'")
+        if raw.lower().startswith("utf-8''"):
+            raw = raw[7:]
+        return raw
+    m = re.search(r"filename=([^;]+)", header, flags=re.IGNORECASE)
+    if m:
+        raw = m.group(1).strip().strip("\"'")
+        return raw
+    return None
+
+
 @dataclass(slots=True)
 class Tier0Telemetry:
     """Bounded, high-signal CDP event buffers for one tab."""
@@ -234,6 +260,50 @@ class Tier0Telemetry:
         buf.append(item)
         if len(buf) > self.max_events:
             del buf[: len(buf) - self.max_events]
+
+    def recent_downloads(self, *, max_age_ms: int = 5000, limit: int = 3) -> list[dict[str, Any]]:
+        """Return recent download-like responses (content-disposition) from the trace buffer."""
+        try:
+            max_age_ms_i = int(max_age_ms)
+        except Exception:
+            max_age_ms_i = 5000
+        max_age_ms_i = max(0, min(max_age_ms_i, 60_000))
+
+        try:
+            limit_i = int(limit)
+        except Exception:
+            limit_i = 3
+        limit_i = max(1, min(limit_i, 10))
+
+        now = _now_ms()
+        out: list[dict[str, Any]] = []
+        # _req_done preserves insertion order: newest at end.
+        for meta in reversed(list(self._req_done.values())):
+            if not isinstance(meta, dict):
+                continue
+            ts = meta.get("endTs") if isinstance(meta.get("endTs"), int) else meta.get("ts")
+            if not isinstance(ts, int):
+                continue
+            if now - ts > max_age_ms_i:
+                continue
+            cd = meta.get("contentDisposition")
+            if not isinstance(cd, str) or not cd:
+                continue
+            url = meta.get("urlFull") if isinstance(meta.get("urlFull"), str) else meta.get("url")
+            if not isinstance(url, str) or not url:
+                continue
+            out.append(
+                {
+                    "url": url,
+                    "fileName": meta.get("downloadFileName"),
+                    "mimeType": meta.get("contentType"),
+                    "status": meta.get("status"),
+                    "ts": ts,
+                }
+            )
+            if len(out) >= limit_i:
+                break
+        return out
 
     def _remember_request(self, request_id: str, meta: dict[str, Any]) -> None:
         if not request_id:
@@ -391,6 +461,12 @@ class Tier0Telemetry:
                         ct = _header_value(headers, "content-type")
                         if isinstance(ct, str) and ct:
                             meta["contentType"] = _str(ct, max_len=200)
+                        cd = _header_value(headers, "content-disposition")
+                        if isinstance(cd, str) and cd:
+                            meta["contentDisposition"] = _str(cd, max_len=240)
+                            fname = _filename_from_cd(cd)
+                            if isinstance(fname, str) and fname:
+                                meta["downloadFileName"] = _str(fname, max_len=180)
 
                         # Keep a small response header preview for XHR/Fetch.
                         if meta.get("type") in {"XHR", "Fetch"}:
@@ -623,6 +699,7 @@ class Tier0Telemetry:
             if limit:
                 out = out[:limit]
             return out
+
 
         console = filt(self.console)
         errors = filt(self.errors)

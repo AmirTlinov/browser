@@ -139,3 +139,40 @@ def test_tier0_telemetry_trace_buffer_completed_request() -> None:
     assert done.get("url") == "https://api.example.com/v1/user"
     assert isinstance(done.get("urlFull"), str) and "token=secret" in done.get("urlFull")
     assert done.get("contentType") == "application/json"
+
+
+def test_tier0_recent_downloads() -> None:
+    t = Tier0Telemetry(max_events=50)
+
+    t.ingest(
+        {
+            "method": "Network.requestWillBeSent",
+            "params": {
+                "requestId": "r2",
+                "request": {"url": "https://files.example.com/report.csv?token=secret", "method": "GET"},
+                "type": "Document",
+            },
+        }
+    )
+    t.ingest(
+        {
+            "method": "Network.responseReceived",
+            "params": {
+                "requestId": "r2",
+                "type": "Document",
+                "response": {
+                    "url": "https://files.example.com/report.csv?token=secret",
+                    "status": 200,
+                    "mimeType": "text/csv",
+                    "headers": {"Content-Disposition": "attachment; filename=\"report.csv\""},
+                },
+            },
+        }
+    )
+    t.ingest({"method": "Network.loadingFinished", "params": {"requestId": "r2", "encodedDataLength": 42}})
+
+    recent = t.recent_downloads(max_age_ms=10_000, limit=1)
+    assert isinstance(recent, list) and recent
+    item = recent[0]
+    assert "report.csv" in str(item.get("fileName") or "")
+    assert "report.csv" in str(item.get("url") or "")

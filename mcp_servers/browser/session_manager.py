@@ -700,6 +700,24 @@ class SessionManager:
                 return None
             return telemetry.snapshot(**kwargs)
 
+    def get_recent_download_candidate(self, tab_id: str, *, max_age_ms: int = 5000) -> dict[str, Any] | None:
+        """Return a recent download candidate from Tier-0 telemetry (best-effort)."""
+        if not isinstance(tab_id, str) or not tab_id:
+            return None
+        with self._telemetry_lock:
+            telemetry = self._telemetry.get(tab_id)
+            if not isinstance(telemetry, Tier0Telemetry):
+                return None
+            if not hasattr(telemetry, "recent_downloads"):
+                return None
+            try:
+                items = telemetry.recent_downloads(max_age_ms=max_age_ms, limit=1)
+            except Exception:
+                return None
+        if isinstance(items, list) and items:
+            return items[0] if isinstance(items[0], dict) else None
+        return None
+
     # ─────────────────────────────────────────────────────────────────────────
     # Auto-dialog (best-effort)
     # ─────────────────────────────────────────────────────────────────────────
