@@ -17,6 +17,7 @@ from ... import tools
 from ...tools.base import SmartToolError
 from ..artifacts import artifact_store
 from ..hints import artifact_export_hint, artifact_get_hint, artifact_list_hint
+from ..reliability import parse_policy_args, policy_summary
 from ..types import ToolResult
 from .extract_retry import (
     DEFAULT_ERROR_TEXTS as _DEFAULT_ERROR_TEXTS,
@@ -1679,6 +1680,17 @@ def handle_page(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str
 
 def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, args: dict[str, Any]) -> ToolResult:
     """Extract structured page content with pagination."""
+    policy, args_norm, warnings, errors = parse_policy_args(args)
+    if errors:
+        return ToolResult.error(
+            "Invalid extract_content parameters (strict_params=true)",
+            tool="extract_content",
+            suggestion="; ".join(errors),
+            details={"errors": errors},
+        )
+    args = args_norm
+    strict_params = bool(policy.strict_params)
+
     nav_url = args.get("url")
     if isinstance(nav_url, str) and nav_url.strip():
         try:
@@ -1732,6 +1744,13 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
                     "suggestion": "Use auto_expand=true|false or auto_expand={...}",
                     "ignored": True,
                 }
+                if strict_params:
+                    return ToolResult.error(
+                        auto_expand_info.get("error") or "auto_expand invalid",
+                        tool="extract_content",
+                        suggestion=auto_expand_info.get("suggestion"),
+                        details={"auto_expand": auto_expand_arg},
+                    )
         if exp_spec is not None:
             auto_expand_info = tools.auto_expand_page(config, exp_spec)
             if auto_expand_required and isinstance(auto_expand_info, dict) and not auto_expand_info.get("ok"):
@@ -1760,6 +1779,13 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
                     "suggestion": "Use auto_scroll=true|false or auto_scroll={...}",
                     "ignored": True,
                 }
+                if strict_params:
+                    return ToolResult.error(
+                        auto_scroll_info.get("error") or "auto_scroll invalid",
+                        tool="extract_content",
+                        suggestion=auto_scroll_info.get("suggestion"),
+                        details={"auto_scroll": auto_scroll_arg},
+                    )
         if spec is not None:
             auto_scroll_info = tools.auto_scroll_page(config, spec)
             if auto_scroll_required and isinstance(auto_scroll_info, dict) and not auto_scroll_info.get("ok"):
@@ -1784,6 +1810,13 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
                 "suggestion": "Use retry_on_error=true|false",
                 "ignored": True,
             }
+            if strict_params:
+                return ToolResult.error(
+                    retry_info.get("error") or "retry_on_error invalid",
+                    tool="extract_content",
+                    suggestion=retry_info.get("suggestion"),
+                    details={"retry_on_error": raw_retry},
+                )
 
     if retry_enabled:
         if not error_texts:
@@ -1791,6 +1824,12 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
         try:
             max_error_retries = int(args.get("max_error_retries", 2))
         except Exception:
+            if strict_params:
+                return ToolResult.error(
+                    "max_error_retries must be an integer",
+                    tool="extract_content",
+                    suggestion="Use max_error_retries=1..5",
+                )
             max_error_retries = 2
         max_error_retries = max(1, min(max_error_retries, 5))
 
@@ -1902,6 +1941,9 @@ def handle_extract_content(config: BrowserConfig, launcher: BrowserLauncher, arg
         result["autoScroll"] = auto_scroll_info
     if retry_info is not None and isinstance(result, dict):
         result["errorRetry"] = retry_info
+    policy_info = policy_summary(policy, warnings)
+    if policy_info and isinstance(result, dict):
+        result["policy"] = policy_info
 
     if bool(args.get("store", False)):
         _attach_artifact_ref(config, result, args, kind="extract_content")

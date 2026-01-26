@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 from ..dispatch import ToolRegistry
 from ..redaction import redact_url
 from ..types import ToolResult
+from ..reliability import parse_policy_args, policy_summary
 
 if TYPE_CHECKING:
     from ...config import BrowserConfig
@@ -171,6 +172,16 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                 tool="flow",
                 suggestion="Provide steps=[{tool:'navigate', args:{url:'...'}}, ...] or steps=[{navigate:{url:'...'}}, ...]",
             )
+
+        policy, args_norm, warnings, errors = parse_policy_args(args)
+        if errors:
+            return ToolResult.error(
+                "Invalid flow parameters (strict_params=true)",
+                tool="flow",
+                suggestion="; ".join(errors),
+                details={"errors": errors},
+            )
+        args = args_norm
 
         stop_on_error = bool(args.get("stop_on_error", True))
         final = str(args.get("final", "observe") or "observe")
@@ -2391,6 +2402,14 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                     "stopped_on_error": bool(first_error and stop_on_error),
                 },
             }
+            if first_error and stop_on_error:
+                out["flow"]["stopped_reason"] = "error"
+            elif first_error and not stop_on_error:
+                out["flow"]["stopped_reason"] = "completed_with_errors"
+            elif executed < planned_total:
+                out["flow"]["stopped_reason"] = "aborted"
+            else:
+                out["flow"]["stopped_reason"] = "completed"
             if tool_counts:
                 out["flow"]["toolCounts"] = tool_counts
 
@@ -2404,6 +2423,13 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
             if first_error:
                 out["error"] = first_error.get("error")
                 out["failed_step"] = {"i": first_error.get("i"), "tool": first_error.get("tool")}
+                failed_i = first_error.get("i")
+                if stop_on_error and isinstance(failed_i, int):
+                    out["flow"]["resume_hint"] = {"start_at": failed_i + 1}
+
+            policy_info = policy_summary(policy, warnings)
+            if policy_info:
+                out["policy"] = policy_info
 
             if steps_output == "compact":
                 # If there are many steps, store the full list off-context and keep

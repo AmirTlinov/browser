@@ -9,10 +9,10 @@ Design principles:
 """
 
 from __future__ import annotations
-
 from typing import Any
 
 from .definitions_extract_retry import EXTRACT_RETRY_PROPERTIES
+from .definitions_policy import RELIABILITY_POLICY_PROPERTIES
 # ═══════════════════════════════════════════════════════════════════════════════
 # NAVIGATION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -945,6 +945,7 @@ DETAIL MODES with pagination:
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
         "properties": {
+            **RELIABILITY_POLICY_PROPERTIES,
             "url": {
                 "type": "string",
                 "description": "Optional URL to navigate before extraction (one-call navigate+extract).",
@@ -1139,6 +1140,7 @@ OUTPUT:
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
         "properties": {
+            **RELIABILITY_POLICY_PROPERTIES,
             "steps": {
                 "type": "array",
                 "minItems": 1,

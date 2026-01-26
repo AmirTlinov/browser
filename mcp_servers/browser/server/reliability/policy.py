@@ -53,11 +53,15 @@ _BOOLISH_KEYS = {
     "proof",
     "screenshot_on_ambiguity",
     "delta_report",
+    "delta_final",
     "stop_on_error",
     "confirm_irreversible",
     "auto_download",
     "screenshot_on_error",
     "with_screenshot",
+    "triage_on_error",
+    "diagnostics_on_error",
+    "step_proof",
 }
 
 _ENUM_KEYS: dict[str, set[str]] = {

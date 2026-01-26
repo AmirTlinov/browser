@@ -164,3 +164,17 @@ Focused runs:
 ```
 pytest -q --maxfail=1 --cov=mcp_servers --cov-report=term-missing
 ```
+
+Live integration (real sites):
+```
+RUN_BROWSER_INTEGRATION=1 pytest -q tests/test_real_sites_smoke.py
+```
+
+Strict live allowlist (fail on low pass-rate):
+```
+RUN_BROWSER_INTEGRATION=1 RUN_BROWSER_INTEGRATION_EDGE=1 \
+RUN_BROWSER_INTEGRATION_LIVE_STRICT=1 \
+RUN_BROWSER_INTEGRATION_LIVE_ALLOWLIST=content_root_debug,table_index,container_news \
+RUN_BROWSER_INTEGRATION_LIVE_MIN_PASS=1.0 \
+pytest -q tests/test_real_sites_smoke.py
+```
