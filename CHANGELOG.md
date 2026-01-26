@@ -3,6 +3,7 @@ CHANGELOG = A chronological list of user-facing changes.
 REL_2026_01_26 = Release 2026-01-26.
 REL_2026_01_26B = Release 2026-01-26 (update B).
 REL_2026_01_26C = Release 2026-01-26 (update C).
+REL_2026_01_26D = Release 2026-01-26 (update D).
 REL_2026_01_24 = Release 2026-01-24.
 DOC_RUNBOOK_PACK_V2 = Runbook pack extended with pagination and table-index variants.
 DOC_SKILL_PACK = Skill packaging doc for browser-mcp-effective.
@@ -14,6 +15,8 @@ FEAT_AUTO_DOWNLOAD_ABORT = Auto-download can proceed after ERR_ABORTED if a down
 FEAT_TABS_SESSION_SCOPE = tabs list defaults to session-only; include_all opt-out.
 FIX_WHEN_TEXT = when text matcher normalizes and can scope by selector.
 FIX_MACRO_EXTRACT_SYNC = auto_expand_scroll_extract inserts DOM ready wait and avoids selector=null.
+TEST_SMOKE_EDGE = Live/edge smoke expanded for macro+when regression checks.
+DOC_MACRO_SYNC = Macro docs updated for DOM wait and selector safety.
 FEAT_DOWNLOADS = Download capture robustness: browser-level CDP fallback, fallback download dirs, safer download clicks.
 FEAT_SMOKE = Live-site smoke suite expanded with real sites and edge cases.
 FEAT_AUTO_SCROLL = Page tool auto-scroll prepass for lazy-loaded content.
@@ -46,6 +49,10 @@ DOC_EXTRACT_PACK = Agent playbook + runbook pack expanded with one-call extract 
 - [FEAT_TABS_SESSION_SCOPE]
 - [FIX_WHEN_TEXT]
 - [FIX_MACRO_EXTRACT_SYNC]
+
+## [REL_2026_01_26D]
+- [TEST_SMOKE_EDGE]
+- [DOC_MACRO_SYNC]
 
 ## [REL_2026_01_24]
 - [FEAT_DOWNLOADS]

@@ -633,6 +633,36 @@ def test_real_sites_edge_cases_local(browser_env: tuple[BrowserConfig, BrowserLa
         assert isinstance(extracted, dict)
         assert isinstance(extracted.get("counts", {}).get("paragraphs"), int)
 
+        # when(text + selector): should match local content.
+        res = _run_with_timeout(
+            15.0,
+            lambda: flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {
+                            "when": {
+                                "if": {"text": "Local content paragraph", "selector": "body"},
+                                "then": [{"wait": {"for": "domcontentloaded"}}],
+                                "else": [{"navigate": {"url": page_url}}],
+                            }
+                        }
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 8.0,
+                },
+            ),
+            on_timeout="when text edge-case timed out",
+        )
+        assert not res.is_error
+        steps = res.data.get("steps") if isinstance(res.data, dict) else None
+        assert isinstance(steps, list) and steps
+        assert steps[0].get("branch") == "then"
+
         # Dialog handling: inject alert and rely on auto_dialog dismissal for read-ish step.
         try:
             res = _run_with_timeout(
@@ -715,6 +745,70 @@ def test_real_sites_edge_cases_live(browser_env: tuple[BrowserConfig, BrowserLau
 
     live_checks.append(("content_root_debug", _content_root_debug))
     live_checks.append(("table_index", _table_index))
+
+    def _when_text_example() -> None:
+        res = _run_with_timeout(
+            20.0,
+            lambda: flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"navigate": {"url": "https://example.com"}},
+                        {
+                            "when": {
+                                "if": {"text": "More information", "selector": "body"},
+                                "then": [{"wait": {"for": "domcontentloaded"}}],
+                                "else": [{"navigate": {"url": "https://example.com"}}],
+                            }
+                        },
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 10.0,
+                },
+            ),
+            on_timeout="when text live timed out",
+        )
+        assert not res.is_error
+        steps = res.data.get("steps") if isinstance(res.data, dict) else None
+        assert isinstance(steps, list) and steps
+        assert steps[1].get("branch") == "then"
+
+    def _macro_mcp_page() -> None:
+        res = _run_with_timeout(
+            30.0,
+            lambda: flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"navigate": {"url": "https://en.wikipedia.org/wiki/Model_Context_Protocol"}},
+                        {
+                            "macro": {
+                                "name": "auto_expand_scroll_extract",
+                                "args": {"expand": True, "scroll": {"max_iters": 3}, "extract": {"content_type": "overview", "limit": 6}},
+                            }
+                        },
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 25.0,
+                },
+            ),
+            on_timeout="macro auto_expand_scroll_extract timed out",
+        )
+        assert not res.is_error
+        extracted = cdp.extract_content(config, content_type="overview", limit=6)
+        assert isinstance(extracted, dict)
+        assert isinstance(extracted.get("counts", {}).get("paragraphs"), int)
+
+    live_checks.append(("when_text_example", _when_text_example))
+    live_checks.append(("macro_mcp_page", _macro_mcp_page))
 
     container_cases = [
         ("container_news", "https://news.ycombinator.com/", "#hnmain"),

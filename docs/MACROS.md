@@ -232,6 +232,8 @@ Args:
 - `expand` (optional boolean/object) — auto-expand config (`true`/`false` or args for `auto_expand`).
 - `scroll` (optional boolean/object) — auto-scroll config (`true`/`false` or args for `scroll_to_end`).
 - `extract` (optional object) — arguments for `extract_content` (e.g., `content_type`, `selector`, `limit`).
+- The macro inserts a bounded `wait(for="domcontentloaded")` after navigate (if url provided).
+- If `extract.selector` is empty/None, it is omitted to avoid selector=null failures.
 
 Example:
 ```
