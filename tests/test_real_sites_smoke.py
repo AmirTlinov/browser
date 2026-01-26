@@ -55,6 +55,11 @@ def _local_download_server() -> str:
         file_path = tmp_path / "mcp-hello.txt"
         file_path.write_text("hello", encoding="utf-8")
         index_path = tmp_path / "index.html"
+        page1_path = tmp_path / "page1.html"
+        page2_path = tmp_path / "page2.html"
+        iframe_host_path = tmp_path / "iframe_host.html"
+        iframe_inner_path = tmp_path / "iframe_inner.html"
+        table_path = tmp_path / "table.html"
         html = "".join(
             [
                 "<a id='mcp-newtab' href='https://example.com/?mcp-newtab=1' target='_blank'>",
@@ -93,10 +98,41 @@ def _local_download_server() -> str:
             ]
         )
         index_path.write_text(html, encoding="utf-8")
+        page1_path.write_text(
+            "<a id='next' href='page2.html'>Next</a>",
+            encoding="utf-8",
+        )
+        page2_path.write_text(
+            "<p>Page 2</p>",
+            encoding="utf-8",
+        )
+        iframe_inner_path.write_text(
+            "<p>Iframe content</p>",
+            encoding="utf-8",
+        )
+        iframe_host_path.write_text(
+            "<iframe src='iframe_inner.html'></iframe>",
+            encoding="utf-8",
+        )
+        table_path.write_text(
+            "<table>"
+            "<thead><tr><th>Col1</th><th>Col2</th></tr></thead>"
+            "<tbody><tr><td>A</td><td>1</td></tr><tr><td>B</td><td>2</td></tr></tbody>"
+            "</table>",
+            encoding="utf-8",
+        )
 
         class _Handler(http.server.SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):  # noqa: ANN001
                 super().__init__(*args, directory=str(tmp_path), **kwargs)
+
+            def do_GET(self) -> None:  # noqa: N802
+                if self.path.startswith("/redirect"):
+                    self.send_response(302)
+                    self.send_header("Location", "/index.html")
+                    self.end_headers()
+                    return
+                super().do_GET()
 
             def end_headers(self) -> None:
                 if self.path.endswith("mcp-hello.txt"):
@@ -373,6 +409,11 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
     with _local_download_server() as page_url:
         registry = create_default_registry()
         flow_handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
+        base_url = page_url.rsplit("/", 1)[0]
+        page1_url = f"{base_url}/page1.html"
+        iframe_url = f"{base_url}/iframe_host.html"
+        table_url = f"{base_url}/table.html"
+        redirect_url = f"{base_url}/redirect"
 
         # Auto-tab: click a target=_blank link and switch automatically.
         try:
@@ -481,6 +522,43 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
             assert isinstance(visible, dict) and visible.get("result") is True
         except Exception as exc:  # noqa: BLE001
             pytest.xfail(f"auto-expand edge-case failed: {exc}")
+
+        # Redirect: local 302 should land on index.html.
+        try:
+            cdp.navigate_to(config, redirect_url)
+            info = _page_info_retry(config)
+            assert str(info.get("url", "")).endswith("/index.html")
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"redirect edge-case failed: {exc}")
+
+        # Pagination: local page1 -> page2 via click.
+        try:
+            cdp.navigate_to(config, page1_url)
+            cdp.dom_action_click(config, "#next")
+            info = _page_info_retry(config)
+            assert str(info.get("url", "")).endswith("/page2.html")
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"pagination edge-case failed: {exc}")
+
+        # Iframe: local iframe should appear in frames map.
+        try:
+            cdp.navigate_to(config, iframe_url)
+            frames = cdp.get_page_frames(config, limit=10)
+            summary = frames.get("frames", {}).get("summary", {}) if isinstance(frames, dict) else {}
+            assert isinstance(summary.get("total"), int) and summary.get("total") >= 1
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"iframe edge-case failed: {exc}")
+
+        # Table extraction: local table rows.
+        try:
+            cdp.navigate_to(config, table_url)
+            extracted = cdp.extract_content(config, content_type="table", table_index=0, limit=5)
+            assert isinstance(extracted, dict)
+            assert extracted.get("contentType") == "table"
+            rows = extracted.get("rows")
+            assert isinstance(rows, list) and rows
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"local table edge-case failed: {exc}")
 
         # Container-scroll on local feed should append items.
         try:
