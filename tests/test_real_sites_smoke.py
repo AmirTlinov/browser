@@ -67,8 +67,9 @@ def _local_download_server() -> str:
                 "<button id='mcp-expand' aria-expanded='false'>Show more</button>",
                 "<div id='mcp-hidden' style='display:none'>Hidden content</div>",
                 "<div id='mcp-error'>error while loading</div>",
+                "<style>#mcp-feed .item{height:40px;}</style>",
                 "<div id='mcp-feed' style='height:200px; overflow:auto; border:1px solid #ccc'>",
-                *[f"<div class='item'>Item {i}</div>" for i in range(1, 9)],
+                *[f"<div class='item'>Item {i}</div>" for i in range(1, 21)],
                 "</div>",
                 "<p>Local content paragraph.</p>",
                 "<script>",
@@ -78,7 +79,7 @@ def _local_download_server() -> str:
                 "  document.getElementById('mcp-expand').setAttribute('aria-expanded', 'true');",
                 "});",
                 "const feed = document.getElementById('mcp-feed');",
-                "let feedCount = 8;",
+                "let feedCount = 20;",
                 "feed.addEventListener('scroll', () => {",
                 "  if (feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 4) {",
                 "    for (let i = 0; i < 4; i++) {",
@@ -403,7 +404,7 @@ def test_real_sites_macro_expand_scroll_extract(browser_env: tuple[BrowserConfig
     os.environ.get("RUN_BROWSER_INTEGRATION_EDGE") != "1",
     reason="Edge-case live tests. Set RUN_BROWSER_INTEGRATION_EDGE=1 to enable.",
 )
-def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher]) -> None:
+def test_real_sites_edge_cases_local(browser_env: tuple[BrowserConfig, BrowserLauncher]) -> None:
     config, launcher = browser_env
 
     with _local_download_server() as page_url:
@@ -416,33 +417,30 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
         redirect_url = f"{base_url}/redirect"
 
         # Auto-tab: click a target=_blank link and switch automatically.
-        try:
-            res = _run_with_timeout(
-                25.0,
-                lambda: flow_handler(
-                    config,
-                    launcher,
-                    args={
-                        "steps": [
-                            {"navigate": {"url": page_url}},
-                            {"click": {"selector": "#mcp-newtab"}, "auto_tab": True},
-                        ],
-                        "final": "none",
-                        "stop_on_error": True,
-                        "auto_recover": False,
-                        "step_proof": False,
-                        "action_timeout": 10.0,
-                    },
-                ),
-                on_timeout="auto-tab edge-case timed out",
-            )
-            assert not res.is_error
-            assert isinstance(res.data, dict)
-            steps = res.data.get("steps")
-            assert isinstance(steps, list) and steps
-            assert steps[1].get("autoTab", {}).get("switched") is True
-        except Exception as exc:  # noqa: BLE001
-            pytest.xfail(f"auto-tab edge-case failed: {exc}")
+        res = _run_with_timeout(
+            25.0,
+            lambda: flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"navigate": {"url": page_url}},
+                        {"click": {"selector": "#mcp-newtab"}, "auto_tab": True},
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 10.0,
+                },
+            ),
+            on_timeout="auto-tab edge-case timed out",
+        )
+        assert not res.is_error
+        assert isinstance(res.data, dict)
+        steps = res.data.get("steps")
+        assert isinstance(steps, list) and steps
+        assert steps[1].get("autoTab", {}).get("switched") is True
 
         # Download: click local server file and require capture.
         try:
@@ -480,198 +478,186 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
             pytest.xfail(f"download edge-case failed: {exc}")
 
         # Auto-expand: local show-more should reveal hidden content.
-        try:
-            res = _run_with_timeout(
-                20.0,
-                lambda: flow_handler(
-                    config,
-                    launcher,
-                    args={
-                        "steps": [
-                            {"navigate": {"url": page_url}},
-                            {
-                                "macro": {
-                                    "name": "auto_expand",
-                                    "args": {
-                                        "phrases": ["show more"],
-                                        "selectors": ["#mcp-expand"],
-                                        "max_iters": 2,
-                                    },
-                                }
-                            },
-                        ],
-                        "final": "none",
-                        "stop_on_error": True,
-                        "auto_recover": False,
-                        "step_proof": False,
-                        "action_timeout": 10.0,
-                    },
-                ),
-                on_timeout="auto-expand edge-case timed out",
-            )
-            assert not res.is_error
-            visible = cdp.eval_js(
-                config,
-                "(() => {"
-                " const el = document.querySelector('#mcp-hidden');"
-                " if (!el) return false;"
-                " const style = getComputedStyle(el);"
-                " return style.display !== 'none';"
-                "})()",
-            )
-            assert isinstance(visible, dict) and visible.get("result") is True
-        except Exception as exc:  # noqa: BLE001
-            pytest.xfail(f"auto-expand edge-case failed: {exc}")
-
-        # Redirect: local 302 should land on index.html.
-        try:
-            cdp.navigate_to(config, redirect_url)
-            info = _page_info_retry(config)
-            assert str(info.get("url", "")).endswith("/index.html")
-        except Exception as exc:  # noqa: BLE001
-            pytest.xfail(f"redirect edge-case failed: {exc}")
-
-        # Pagination: local page1 -> page2 via click.
-        try:
-            cdp.navigate_to(config, page1_url)
-            cdp.dom_action_click(config, "#next")
-            info = _page_info_retry(config)
-            assert str(info.get("url", "")).endswith("/page2.html")
-        except Exception as exc:  # noqa: BLE001
-            pytest.xfail(f"pagination edge-case failed: {exc}")
-
-        # Iframe: local iframe should appear in frames map.
-        try:
-            cdp.navigate_to(config, iframe_url)
-            frames = cdp.get_page_frames(config, limit=10)
-            summary = frames.get("frames", {}).get("summary", {}) if isinstance(frames, dict) else {}
-            assert isinstance(summary.get("total"), int) and summary.get("total") >= 1
-        except Exception as exc:  # noqa: BLE001
-            pytest.xfail(f"iframe edge-case failed: {exc}")
-
-        # Table extraction: local table rows.
-        try:
-            cdp.navigate_to(config, table_url)
-            extracted = cdp.extract_content(config, content_type="table", table_index=0, limit=5)
-            assert isinstance(extracted, dict)
-            assert extracted.get("contentType") == "table"
-            rows = extracted.get("rows")
-            assert isinstance(rows, list) and rows
-        except Exception as exc:  # noqa: BLE001
-            pytest.xfail(f"local table edge-case failed: {exc}")
-
-        # Container-scroll on local feed should append items.
-        try:
-            res = _run_with_timeout(
-                20.0,
-                lambda: flow_handler(
-                    config,
-                    launcher,
-                    args={
-                        "steps": [
-                            {"navigate": {"url": page_url}},
-                            {
-                                "scroll": {
-                                    "direction": "down",
-                                    "amount": 400,
-                                    "container_selector": "#mcp-feed",
-                                }
-                            },
-                        ],
-                        "final": "none",
-                        "stop_on_error": True,
-                        "auto_recover": False,
-                        "step_proof": False,
-                        "action_timeout": 10.0,
-                    },
-                ),
-                on_timeout="local container scroll timed out",
-            )
-            assert not res.is_error
-            metrics = cdp.eval_js(
-                config,
-                "(() => {"
-                " const feed = document.querySelector('#mcp-feed');"
-                " const items = document.querySelectorAll('#mcp-feed .item');"
-                " return {"
-                "   scrollTop: feed ? feed.scrollTop : -1,"
-                "   count: items ? items.length : 0"
-                " };"
-                "})()",
-            )
-            assert isinstance(metrics, dict)
-            result = metrics.get("result", {})
-            assert isinstance(result, dict)
-            assert result.get("scrollTop", 0) > 0
-            assert result.get("count", 0) >= 8
-        except Exception as exc:  # noqa: BLE001
-            pytest.xfail(f"local container scroll edge-case failed: {exc}")
-
-        # Retry-on-error: error banner should clear before extraction.
-        try:
-            res = _run_with_timeout(
-                25.0,
-                lambda: flow_handler(
-                    config,
-                    launcher,
-                    args={
-                        "steps": [
-                            {"navigate": {"url": page_url}},
-                            {
-                                "macro": {
-                                    "name": "auto_expand_scroll_extract",
-                                    "args": {
-                                        "expand": False,
-                                        "scroll": {"max_iters": 2},
-                                        "extract": {"content_type": "overview", "limit": 5},
-                                        "retry_on_error": True,
-                                        "error_texts": ["error while loading"],
-                                    },
-                                }
-                            },
-                        ],
-                        "final": "none",
-                        "stop_on_error": True,
-                        "auto_recover": False,
-                        "step_proof": False,
-                        "action_timeout": 15.0,
-                    },
-                ),
-                on_timeout="retry_on_error edge-case timed out",
-            )
-            assert not res.is_error
-            extracted = cdp.extract_content(config, content_type="overview", limit=5)
-            assert isinstance(extracted, dict)
-            assert isinstance(extracted.get("counts", {}).get("paragraphs"), int)
-        except Exception as exc:  # noqa: BLE001
-            pytest.xfail(f"retry_on_error edge-case failed: {exc}")
-
-    # Dialog handling: inject alert and rely on auto_dialog dismissal for read-ish step.
-    try:
         res = _run_with_timeout(
-            15.0,
-            lambda: (
-                cdp.eval_js(config, "setTimeout(() => alert('mcp-dialog'), 0)"),
-                time.sleep(0.2),
-                flow_handler(
-                    config,
-                    launcher,
-                    args={
-                        "steps": [{"js": {"code": "1 + 1"}}],
-                        "final": "none",
-                        "stop_on_error": True,
-                        "auto_dialog": "dismiss",
-                        "auto_recover": False,
-                        "step_proof": False,
-                        "action_timeout": 10.0,
-                    },
-                ),
-            )[-1],
-            on_timeout="dialog edge-case timed out",
+            20.0,
+            lambda: flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"navigate": {"url": page_url}},
+                        {
+                            "macro": {
+                                "name": "auto_expand",
+                                "args": {
+                                    "phrases": ["show more"],
+                                    "selectors": ["#mcp-expand"],
+                                    "max_iters": 2,
+                                },
+                            }
+                        },
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 10.0,
+                },
+            ),
+            on_timeout="auto-expand edge-case timed out",
         )
         assert not res.is_error
-    except Exception as exc:  # noqa: BLE001
-        pytest.xfail(f"dialog edge-case failed: {exc}")
+        visible = cdp.eval_js(
+            config,
+            "(() => {"
+            " const el = document.querySelector('#mcp-hidden');"
+            " if (!el) return false;"
+            " const style = getComputedStyle(el);"
+            " return style.display !== 'none';"
+            "})()",
+        )
+        assert isinstance(visible, dict) and visible.get("result") is True
+
+        # Redirect: local 302 should land on index.html.
+        cdp.navigate_to(config, redirect_url)
+        info = _page_info_retry(config)
+        assert str(info.get("url", "")).endswith("/index.html")
+
+        # Pagination: local page1 -> page2 via click.
+        cdp.navigate_to(config, page1_url)
+        cdp.dom_action_click(config, "#next")
+        info = _page_info_retry(config)
+        assert str(info.get("url", "")).endswith("/page2.html")
+
+        # Iframe: local iframe should appear in frames map.
+        cdp.navigate_to(config, iframe_url)
+        frames = cdp.get_page_frames(config, limit=10)
+        summary = frames.get("frames", {}).get("summary", {}) if isinstance(frames, dict) else {}
+        assert isinstance(summary.get("total"), int) and summary.get("total") >= 1
+
+        # Table extraction: local table rows.
+        cdp.navigate_to(config, table_url)
+        extracted = cdp.extract_content(config, content_type="table", table_index=0, limit=5)
+        assert isinstance(extracted, dict)
+        assert extracted.get("contentType") == "table"
+        rows = extracted.get("rows")
+        assert isinstance(rows, list) and rows
+
+        # Container-scroll on local feed should append items.
+        res = _run_with_timeout(
+            20.0,
+            lambda: flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"navigate": {"url": page_url}},
+                        {
+                            "scroll": {
+                                "direction": "down",
+                                "amount": 400,
+                                "container_selector": "#mcp-feed",
+                            }
+                        },
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 10.0,
+                },
+            ),
+            on_timeout="local container scroll timed out",
+        )
+        assert not res.is_error
+        metrics = cdp.eval_js(
+            config,
+            "(() => {"
+            " const feed = document.querySelector('#mcp-feed');"
+            " const items = document.querySelectorAll('#mcp-feed .item');"
+            " return {"
+            "   scrollTop: feed ? feed.scrollTop : -1,"
+            "   count: items ? items.length : 0"
+            " };"
+            "})()",
+        )
+        assert isinstance(metrics, dict)
+        result = metrics.get("result", {})
+        assert isinstance(result, dict)
+        assert result.get("scrollTop", 0) > 0 or result.get("count", 0) > 20
+
+        # Retry-on-error: error banner should clear before extraction.
+        res = _run_with_timeout(
+            25.0,
+            lambda: flow_handler(
+                config,
+                launcher,
+                args={
+                    "steps": [
+                        {"navigate": {"url": page_url}},
+                        {
+                            "macro": {
+                                "name": "auto_expand_scroll_extract",
+                                "args": {
+                                    "expand": False,
+                                    "scroll": {"max_iters": 2},
+                                    "extract": {"content_type": "overview", "limit": 5},
+                                    "retry_on_error": True,
+                                    "error_texts": ["error while loading"],
+                                },
+                            }
+                        },
+                    ],
+                    "final": "none",
+                    "stop_on_error": True,
+                    "auto_recover": False,
+                    "step_proof": False,
+                    "action_timeout": 15.0,
+                },
+            ),
+            on_timeout="retry_on_error edge-case timed out",
+        )
+        assert not res.is_error
+        extracted = cdp.extract_content(config, content_type="overview", limit=5)
+        assert isinstance(extracted, dict)
+        assert isinstance(extracted.get("counts", {}).get("paragraphs"), int)
+
+        # Dialog handling: inject alert and rely on auto_dialog dismissal for read-ish step.
+        try:
+            res = _run_with_timeout(
+                15.0,
+                lambda: (
+                    cdp.eval_js(config, "setTimeout(() => alert('mcp-dialog'), 0)"),
+                    time.sleep(0.2),
+                    flow_handler(
+                        config,
+                        launcher,
+                        args={
+                            "steps": [{"js": {"code": "1 + 1"}}],
+                            "final": "none",
+                            "stop_on_error": True,
+                            "auto_dialog": "dismiss",
+                            "auto_recover": False,
+                            "step_proof": False,
+                            "action_timeout": 10.0,
+                        },
+                    ),
+                )[-1],
+                on_timeout="dialog edge-case timed out",
+            )
+            assert not res.is_error
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"dialog edge-case failed: {exc}")
+
+
+@pytest.mark.skipif(
+    os.environ.get("RUN_BROWSER_INTEGRATION_EDGE") != "1",
+    reason="Edge-case live tests. Set RUN_BROWSER_INTEGRATION_EDGE=1 to enable.",
+)
+def test_real_sites_edge_cases_live(browser_env: tuple[BrowserConfig, BrowserLauncher]) -> None:
+    config, launcher = browser_env
+    registry = create_default_registry()
+    flow_handler, _requires_browser = registry.get("flow")  # type: ignore[assignment]
 
     # Content root debug on a real article.
     try:
