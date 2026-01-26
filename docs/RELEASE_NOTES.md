@@ -1,5 +1,6 @@
 [LEGEND]
 REL_2026_01_24 = Release 2026-01-24.
+REL_2026_01_26 = Release 2026-01-26.
 FEAT_DOWNLOADS = Download capture robustness: browser-level CDP fallback, fallback download dirs, safer download clicks.
 FEAT_SMOKE = Live-site smoke suite expanded with real sites and edge cases.
 FEAT_AUTO_SCROLL = Page tool auto-scroll prepass for lazy-loaded content.
@@ -13,6 +14,9 @@ FEAT_EXPAND_SEMANTIC = Auto-expand heuristics extended with semantic aria/data h
 FEAT_EXTRACT_UNIFIED = Unified extract_content tool exposed for run/flow.
 FEAT_SMOKE_EXTRACT = Live-site smoke for auto_expand_scroll_extract (feature-flagged).
 DOC_EXTRACT_PACK = Agent playbook + runbook pack expanded with one-call extract variants.
+DOC_RUNBOOK_PACK_V2 = Runbook pack extended with pagination and table-index variants.
+DOC_SKILL_PACK = Skill packaging doc for browser-mcp-effective.
+DOC_ANTI_FLAKE = Runbook anti-flakiness defaults (auto_dialog/auto_tab/auto_affordances).
 
 [CONTENT]
 ## [REL_2026_01_24]
@@ -29,3 +33,8 @@ DOC_EXTRACT_PACK = Agent playbook + runbook pack expanded with one-call extract 
 - [FEAT_EXTRACT_UNIFIED]
 - [FEAT_SMOKE_EXTRACT]
 - [DOC_EXTRACT_PACK]
+
+## [REL_2026_01_26]
+- [DOC_RUNBOOK_PACK_V2]
+- [DOC_SKILL_PACK]
+- [DOC_ANTI_FLAKE]
