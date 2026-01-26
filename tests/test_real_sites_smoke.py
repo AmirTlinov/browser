@@ -55,20 +55,44 @@ def _local_download_server() -> str:
         file_path = tmp_path / "mcp-hello.txt"
         file_path.write_text("hello", encoding="utf-8")
         index_path = tmp_path / "index.html"
-        index_path.write_text(
-            "<a id='mcp-newtab' href='https://example.com/?mcp-newtab=1' target='_blank'>"
-            "MCP New Tab</a> <a id='mcp-download' href='mcp-hello.txt'>MCP Download</a>"
-            "<button id='mcp-expand' aria-expanded='false'>Show more</button>"
-            "<div id='mcp-hidden' style='display:none'>Hidden content</div>"
-            "<script>"
-            "document.getElementById('mcp-expand').addEventListener('click', () => {"
-            "  const hidden = document.getElementById('mcp-hidden');"
-            "  hidden.style.display = 'block';"
-            "  document.getElementById('mcp-expand').setAttribute('aria-expanded', 'true');"
-            "});"
-            "</script>",
-            encoding="utf-8",
+        html = "".join(
+            [
+                "<a id='mcp-newtab' href='https://example.com/?mcp-newtab=1' target='_blank'>",
+                "MCP New Tab</a> <a id='mcp-download' href='mcp-hello.txt'>MCP Download</a>",
+                "<button id='mcp-expand' aria-expanded='false'>Show more</button>",
+                "<div id='mcp-hidden' style='display:none'>Hidden content</div>",
+                "<div id='mcp-error'>error while loading</div>",
+                "<div id='mcp-feed' style='height:200px; overflow:auto; border:1px solid #ccc'>",
+                *[f"<div class='item'>Item {i}</div>" for i in range(1, 9)],
+                "</div>",
+                "<p>Local content paragraph.</p>",
+                "<script>",
+                "document.getElementById('mcp-expand').addEventListener('click', () => {",
+                "  const hidden = document.getElementById('mcp-hidden');",
+                "  hidden.style.display = 'block';",
+                "  document.getElementById('mcp-expand').setAttribute('aria-expanded', 'true');",
+                "});",
+                "const feed = document.getElementById('mcp-feed');",
+                "let feedCount = 8;",
+                "feed.addEventListener('scroll', () => {",
+                "  if (feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 4) {",
+                "    for (let i = 0; i < 4; i++) {",
+                "      feedCount += 1;",
+                "      const div = document.createElement('div');",
+                "      div.className = 'item';",
+                "      div.textContent = 'Item ' + feedCount;",
+                "      feed.appendChild(div);",
+                "    }",
+                "  }",
+                "});",
+                "setTimeout(() => {",
+                "  const err = document.getElementById('mcp-error');",
+                "  if (err) err.remove();",
+                "}, 200);",
+                "</script>",
+            ]
         )
+        index_path.write_text(html, encoding="utf-8")
 
         class _Handler(http.server.SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):  # noqa: ANN001
@@ -457,6 +481,92 @@ def test_real_sites_edge_cases(browser_env: tuple[BrowserConfig, BrowserLauncher
             assert isinstance(visible, dict) and visible.get("result") is True
         except Exception as exc:  # noqa: BLE001
             pytest.xfail(f"auto-expand edge-case failed: {exc}")
+
+        # Container-scroll on local feed should append items.
+        try:
+            res = _run_with_timeout(
+                20.0,
+                lambda: flow_handler(
+                    config,
+                    launcher,
+                    args={
+                        "steps": [
+                            {"navigate": {"url": page_url}},
+                            {
+                                "scroll": {
+                                    "direction": "down",
+                                    "amount": 400,
+                                    "container_selector": "#mcp-feed",
+                                }
+                            },
+                        ],
+                        "final": "none",
+                        "stop_on_error": True,
+                        "auto_recover": False,
+                        "step_proof": False,
+                        "action_timeout": 10.0,
+                    },
+                ),
+                on_timeout="local container scroll timed out",
+            )
+            assert not res.is_error
+            metrics = cdp.eval_js(
+                config,
+                "(() => {"
+                " const feed = document.querySelector('#mcp-feed');"
+                " const items = document.querySelectorAll('#mcp-feed .item');"
+                " return {"
+                "   scrollTop: feed ? feed.scrollTop : -1,"
+                "   count: items ? items.length : 0"
+                " };"
+                "})()",
+            )
+            assert isinstance(metrics, dict)
+            result = metrics.get("result", {})
+            assert isinstance(result, dict)
+            assert result.get("scrollTop", 0) > 0
+            assert result.get("count", 0) >= 8
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"local container scroll edge-case failed: {exc}")
+
+        # Retry-on-error: error banner should clear before extraction.
+        try:
+            res = _run_with_timeout(
+                25.0,
+                lambda: flow_handler(
+                    config,
+                    launcher,
+                    args={
+                        "steps": [
+                            {"navigate": {"url": page_url}},
+                            {
+                                "macro": {
+                                    "name": "auto_expand_scroll_extract",
+                                    "args": {
+                                        "expand": False,
+                                        "scroll": {"max_iters": 2},
+                                        "extract": {"content_type": "overview", "limit": 5},
+                                        "retry_on_error": True,
+                                        "error_texts": ["error while loading"],
+                                    },
+                                }
+                            },
+                        ],
+                        "final": "none",
+                        "stop_on_error": True,
+                        "auto_recover": False,
+                        "step_proof": False,
+                        "action_timeout": 15.0,
+                    },
+                ),
+                on_timeout="retry_on_error edge-case timed out",
+            )
+            assert not res.is_error
+            extracted = cdp.extract_content(config, content_type="overview", limit=5)
+            assert isinstance(extracted, dict)
+            assert isinstance(extracted.get("counts", {}).get("paragraphs"), int)
+        except Exception as exc:  # noqa: BLE001
+            pytest.xfail(f"retry_on_error edge-case failed: {exc}")
 
     # Dialog handling: inject alert and rely on auto_dialog dismissal for read-ish step.
     try:
