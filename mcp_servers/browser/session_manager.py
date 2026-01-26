@@ -1519,21 +1519,37 @@ class SessionManager:
         method = None
         err: str | None = None
 
-        params = {"behavior": "allow", "downloadPath": str(dl_dir), "eventsEnabled": True}
+        params_variants = [
+            {"behavior": "allow", "downloadPath": str(dl_dir), "eventsEnabled": True},
+            {"behavior": "allow", "downloadPath": str(dl_dir)},
+            {"behavior": "allowAndName", "downloadPath": str(dl_dir)},
+        ]
+        # Best-effort: enable Page domain before setting download behavior.
+        with suppress(Exception):
+            session.enable_domains(page=True, runtime=False, network=False, log=False, strict=False)
+
         # Try Page domain first (more likely to be available on a tab target).
-        try:
-            session.send("Page.setDownloadBehavior", params)
-            ok = True
-            method = "Page.setDownloadBehavior"
-        except Exception as exc:
-            err = str(exc)
-            # Fallback: Browser domain (may not exist on target WS).
+        for params in params_variants:
             try:
-                session.send("Browser.setDownloadBehavior", params)
+                session.send("Page.setDownloadBehavior", params)
                 ok = True
-                method = "Browser.setDownloadBehavior"
-            except Exception as exc2:
-                err = str(exc2)
+                method = "Page.setDownloadBehavior"
+                err = None
+                break
+            except Exception as exc:
+                err = str(exc)
+
+        if not ok:
+            # Fallback: Browser domain (may not exist on target WS).
+            for params in params_variants:
+                try:
+                    session.send("Browser.setDownloadBehavior", params)
+                    ok = True
+                    method = "Browser.setDownloadBehavior"
+                    err = None
+                    break
+                except Exception as exc2:
+                    err = str(exc2)
 
         if not ok:
             def _browser_ws_from_session(sess: BrowserSession) -> str | None:
@@ -1558,10 +1574,15 @@ class SessionManager:
                 conn: CdpConnection | None = None
                 try:
                     conn = CdpConnection(browser_ws, timeout=5.0)
-                    conn.send("Browser.setDownloadBehavior", params)
-                    ok = True
-                    method = "Browser.setDownloadBehavior(browser)"
-                    err = None
+                    for params in params_variants:
+                        try:
+                            conn.send("Browser.setDownloadBehavior", params)
+                            ok = True
+                            method = "Browser.setDownloadBehavior(browser)"
+                            err = None
+                            break
+                        except Exception as exc4:
+                            err = str(exc4)
                 except Exception as exc3:
                     err = str(exc3)
                 finally:

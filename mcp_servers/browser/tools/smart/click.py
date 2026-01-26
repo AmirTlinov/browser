@@ -495,6 +495,7 @@ def _build_click_js(text: str | None, role: str | None, near_text: str | None, i
             tagName: element.tagName,
             text: getCleanText(element).substring(0, 60),
             href: element.href || null,
+            download: (element.getAttribute && element.getAttribute('download')) || null,
             type: element.type || null,
             matchesFound: matches.length,
             bounds: (() => {{

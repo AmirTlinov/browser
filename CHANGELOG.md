@@ -4,6 +4,7 @@ REL_2026_01_26 = Release 2026-01-26.
 REL_2026_01_26B = Release 2026-01-26 (update B).
 REL_2026_01_26C = Release 2026-01-26 (update C).
 REL_2026_01_26D = Release 2026-01-26 (update D).
+REL_2026_01_26E = Release 2026-01-26 (update E).
 REL_2026_01_24 = Release 2026-01-24.
 DOC_RUNBOOK_PACK_V2 = Runbook pack extended with pagination and table-index variants.
 DOC_SKILL_PACK = Skill packaging doc for browser-mcp-effective.
@@ -15,6 +16,10 @@ FEAT_AUTO_DOWNLOAD_ABORT = Auto-download can proceed after ERR_ABORTED if a down
 FEAT_TABS_SESSION_SCOPE = tabs list defaults to session-only; include_all opt-out.
 FIX_WHEN_TEXT = when text matcher normalizes and can scope by selector.
 FIX_MACRO_EXTRACT_SYNC = auto_expand_scroll_extract inserts DOM ready wait and avoids selector=null.
+FIX_DOWNLOAD_URL_FALLBACK = Download tool can fall back to direct URL/file fetch when CDP capture fails.
+FIX_DOWNLOAD_BEHAVIOR_VARIANTS = Download behavior setup retries with legacy/alt params.
+FIX_WHEN_TEXT_SCOPE = wait(text) scans all matching nodes and normalizes ellipsis.
+FIX_MACRO_RETRY_OPTIONAL = auto_expand_scroll_extract retry step no longer fails the macro on repeat exhaustion.
 TEST_SMOKE_EDGE = Live/edge smoke expanded for macro+when regression checks.
 DOC_MACRO_SYNC = Macro docs updated for DOM wait and selector safety.
 FEAT_DOWNLOADS = Download capture robustness: browser-level CDP fallback, fallback download dirs, safer download clicks.
@@ -53,6 +58,12 @@ DOC_EXTRACT_PACK = Agent playbook + runbook pack expanded with one-call extract 
 ## [REL_2026_01_26D]
 - [TEST_SMOKE_EDGE]
 - [DOC_MACRO_SYNC]
+
+## [REL_2026_01_26E]
+- [FIX_DOWNLOAD_URL_FALLBACK]
+- [FIX_DOWNLOAD_BEHAVIOR_VARIANTS]
+- [FIX_WHEN_TEXT_SCOPE]
+- [FIX_MACRO_RETRY_OPTIONAL]
 
 ## [REL_2026_01_24]
 - [FEAT_DOWNLOADS]

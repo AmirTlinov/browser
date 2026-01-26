@@ -412,24 +412,36 @@ def _check_condition(
         js = f"""
         (() => {{
             {DEEP_QUERY_JS}
-            const norm = (s) => String(s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+            const norm = (s) => String(s || '')
+                .replace(/\\u2026/g, '...')
+                .replace(/\\.{3,}/g, '...')
+                .replace(/\\s+/g, ' ')
+                .trim()
+                .toLowerCase();
             const needle = norm({json.dumps(text)});
             if (!needle) return false;
-            let root = document.body;
             const sel = {json.dumps(selector)};
+            let roots = [];
             if (sel && typeof sel === 'string') {{
                 try {{
-                    const nodes = __mcpQueryAllDeep(sel, 5);
-                    if (nodes && nodes.length) root = nodes[0];
+                    const nodes = __mcpQueryAllDeep(sel, 5) || [];
+                    const visible = nodes.filter((n) => (typeof __mcpIsVisible === 'function' ? __mcpIsVisible(n) : true));
+                    roots = visible.length ? visible : nodes;
                 }} catch (e) {{}}
             }}
-            if (!root) return false;
-            let hay = '';
-            try {{ hay = String(root.innerText || ''); }} catch (e) {{}}
-            if (!hay) {{
-                try {{ hay = String(root.textContent || ''); }} catch (e) {{}}
+            if (!roots.length) {{
+                roots = [document.body];
             }}
-            return norm(hay).includes(needle);
+            for (const root of roots) {{
+                if (!root) continue;
+                let hay = '';
+                try {{ hay = String(root.innerText || ''); }} catch (e) {{}}
+                if (!hay) {{
+                    try {{ hay = String(root.textContent || ''); }} catch (e) {{}}
+                }}
+                if (norm(hay).includes(needle)) return true;
+            }}
+            return false;
         }})()
         """
         try:

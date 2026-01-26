@@ -40,7 +40,7 @@ from .captcha import (
 from .cookies import delete_cookie, get_all_cookies, set_cookie, set_cookies_batch
 from .dialog import handle_dialog
 from .dom import get_dom, get_element_info, screenshot
-from .downloads import wait_for_download
+from .downloads import wait_for_download, wait_for_download_or_fetch
 from .forms import clear_input, focus_element, select_option, wait_for_element
 from .input import (
     click_at_pixel,
@@ -193,6 +193,7 @@ __all__ = [
     "handle_dialog",
     # Downloads
     "wait_for_download",
+    "wait_for_download_or_fetch",
     # Storage
     "storage_action",
     # Upload

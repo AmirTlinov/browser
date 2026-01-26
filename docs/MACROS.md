@@ -234,6 +234,7 @@ Args:
 - `extract` (optional object) — arguments for `extract_content` (e.g., `content_type`, `selector`, `limit`).
 - The macro inserts a bounded `wait(for="domcontentloaded")` after navigate (if url provided).
 - If `extract.selector` is empty/None, it is omitted to avoid selector=null failures.
+- The retry-on-error loop is optional; if it exhausts, the macro continues to `extract_content`.
 
 Example:
 ```

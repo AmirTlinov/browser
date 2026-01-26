@@ -1853,6 +1853,18 @@ NOTES:
                     "default": True,
                     "description": "Allow fallback to default OS download dirs if CDP download behavior is unavailable.",
                 },
+                "url": {
+                    "type": "string",
+                    "description": "Optional fallback URL to fetch if CDP download capture fails (http/https or file).",
+                },
+                "file_name": {
+                    "type": "string",
+                    "description": "Optional filename hint for fallback URL downloads.",
+                },
+                "max_bytes": {
+                    "type": "integer",
+                    "description": "Max bytes to fetch when using URL fallback (default: MCP_DOWNLOAD_MAX_BYTES or 50MB).",
+                },
             },
             "additionalProperties": False,
         },

@@ -1822,6 +1822,23 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                 else:
                     want_download = bool(auto_download and tool_name in {"click"})
 
+                download_hint_url: str | None = None
+                download_hint_name: str | None = None
+                if want_download and tool_name == "click":
+                    selector_hint = tool_args.get("selector") if isinstance(tool_args, dict) else None
+                    if isinstance(selector_hint, str) and selector_hint.strip():
+                        with suppress(Exception):
+                            el_info = _tools.get_element_info(config, selector_hint.strip())
+                            el = el_info.get("element") if isinstance(el_info, dict) else None
+                            attrs = el.get("attributes") if isinstance(el, dict) else None
+                            if isinstance(attrs, dict):
+                                href = attrs.get("href")
+                                if isinstance(href, str) and href.strip():
+                                    download_hint_url = href.strip()
+                                download_attr = attrs.get("download")
+                                if isinstance(download_attr, str) and download_attr.strip():
+                                    download_hint_name = download_attr.strip()
+
                 # Never attempt auto-download after an explicit download step.
                 if tool_name == "download":
                     want_download = False
@@ -2014,6 +2031,13 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
 
                 if want_download and (not tool_result.is_error or download_on_error):
                     try:
+                        if isinstance(tool_result.data, dict):
+                            href = tool_result.data.get("href")
+                            if isinstance(href, str) and href.strip():
+                                download_hint_url = href.strip()
+                            dl_name = tool_result.data.get("download")
+                            if isinstance(dl_name, str) and dl_name.strip():
+                                download_hint_name = dl_name.strip()
                         dl_args: dict[str, Any] = {
                             "timeout": float(download_timeout_s),
                             "store": bool(download_store),
@@ -2023,6 +2047,10 @@ def make_flow_handler(registry: ToolRegistry) -> "HandlerFunc":
                             "stable_ms": int(download_stable_ms),
                             "_baseline": download_baseline or [],
                         }
+                        if isinstance(download_hint_url, str) and download_hint_url:
+                            dl_args["url"] = download_hint_url
+                        if isinstance(download_hint_name, str) and download_hint_name:
+                            dl_args["file_name"] = download_hint_name
                         wd_dl = _watchdog_start(_step_timeout_seconds("download", {"timeout": download_timeout_s}))
                         try:
                             dl_tr = registry.dispatch("download", config, launcher, dl_args)

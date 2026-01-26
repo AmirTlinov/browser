@@ -4,6 +4,7 @@ REL_2026_01_26 = Release 2026-01-26.
 REL_2026_01_26B = Release 2026-01-26 (update B).
 REL_2026_01_26C = Release 2026-01-26 (update C).
 REL_2026_01_26D = Release 2026-01-26 (update D).
+REL_2026_01_26E = Release 2026-01-26 (update E).
 FEAT_DOWNLOADS = Download capture robustness: browser-level CDP fallback, fallback download dirs, safer download clicks.
 FEAT_SMOKE = Live-site smoke suite expanded with real sites and edge cases.
 FEAT_AUTO_SCROLL = Page tool auto-scroll prepass for lazy-loaded content.
@@ -29,6 +30,10 @@ FIX_WHEN_TEXT = when text matcher normalizes and can scope by selector.
 FIX_MACRO_EXTRACT_SYNC = auto_expand_scroll_extract inserts DOM ready wait and avoids selector=null.
 TEST_SMOKE_EDGE = Live/edge smoke expanded for macro+when regression checks.
 DOC_MACRO_SYNC = Macro docs updated for DOM wait and selector safety.
+FIX_DOWNLOAD_URL_FALLBACK = Download can fall back to direct URL/file fetch when CDP capture fails.
+FIX_DOWNLOAD_BEHAVIOR_VARIANTS = Download behavior setup retries with legacy/alt params.
+FIX_WHEN_TEXT_SCOPE = wait(text) scans all matching nodes and normalizes ellipsis.
+FIX_MACRO_RETRY_OPTIONAL = auto_expand_scroll_extract retry step no longer fails the macro on repeat exhaustion.
 
 [CONTENT]
 ## [REL_2026_01_24]
@@ -65,3 +70,9 @@ DOC_MACRO_SYNC = Macro docs updated for DOM wait and selector safety.
 ## [REL_2026_01_26D]
 - [TEST_SMOKE_EDGE]
 - [DOC_MACRO_SYNC]
+
+## [REL_2026_01_26E]
+- [FIX_DOWNLOAD_URL_FALLBACK]
+- [FIX_DOWNLOAD_BEHAVIOR_VARIANTS]
+- [FIX_WHEN_TEXT_SCOPE]
+- [FIX_MACRO_RETRY_OPTIONAL]

@@ -94,9 +94,43 @@ def _build_error_texts_js(texts: list[str]) -> str:
     return (
         "(() => {"
         f"  const errors = {items};"
-        "  const hay = (document.body && document.body.innerText ? document.body.innerText : '').toLowerCase();"
+        "  const norm = (s) => String(s || '')"
+        "    .replace(/\\u2026/g, '...')"
+        "    .replace(/\\s+/g, ' ')"
+        "    .trim()"
+        "    .toLowerCase();"
+        "  const isVisible = (el) => {"
+        "    try {"
+        "      if (!el) return false;"
+        "      const r = el.getBoundingClientRect();"
+        "      return !!(r && r.width > 0 && r.height > 0);"
+        "    } catch (e) { return false; }"
+        "  };"
+        "  const selectors = ["
+        "    '[role=\"alert\"]',"
+        "    '[aria-live]',"
+        "    '[data-error]',"
+        "    '[data-error-message]',"
+        "    '.error',"
+        "    '.error-message',"
+        "    '.alert',"
+        "    '.notice'"
+        "  ];"
+        "  let hay = '';"
+        "  try {"
+        "    const nodes = document.querySelectorAll(selectors.join(','));"
+        "    for (const el of nodes) {"
+        "      if (!isVisible(el)) continue;"
+        "      const t = el.innerText || el.textContent || '';"
+        "      if (t) hay += ' ' + t;"
+        "    }"
+        "  } catch (e) { hay = ''; }"
+        "  if (!hay) {"
+        "    try { hay = document.body && document.body.innerText ? document.body.innerText : ''; } catch (e) { hay = ''; }"
+        "  }"
         "  if (!hay) return true;"
-        "  return !errors.some((t) => hay.includes(t));"
+        "  const text = norm(hay);"
+        "  return !errors.some((t) => text.includes(t));"
         "})()"
     )
 
@@ -372,7 +406,8 @@ def expand_macro(
                         "until": {"js": _build_error_texts_js(error_texts)},
                         "timeout_s": 0.4,
                         "steps": retry_steps,
-                    }
+                    },
+                    "optional": True,
                 }
             )
             plan_args["retry_on_error"] = True
